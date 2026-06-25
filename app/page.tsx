@@ -138,7 +138,7 @@ const Divider = ({label}: {label?:string}) => (
 )
 
 const WorkflowSteps = ({current}: {current:string}) => {
-  const steps = [{id:'subject',label:'Subject'},{id:'comp-search',label:'Sale Comps'},{id:'avail-search',label:'Availabilities'},{id:'scoring',label:'Scoring'},{id:'analytics',label:'Analytics'},{id:'ai-analysis',label:'AI Analysis'},{id:'opv-report',label:'Report'}]
+  const steps = [{id:'subject',label:'Subject'},{id:'comp-search',label:'Sale Comps'},{id:'avail-search',label:'Availabilities'},{id:'lease-comps',label:'Lease Comps'},{id:'scoring',label:'Scoring'},{id:'analytics',label:'Analytics'},{id:'ai-analysis',label:'AI Analysis'},{id:'opv-report',label:'Report'}]
   const idx = steps.findIndex(s=>s.id===current)
   return (
     <div style={{display:'flex',alignItems:'center',gap:0,marginBottom:28,overflowX:'auto',paddingBottom:4}}>
@@ -419,6 +419,7 @@ const NAV = [
   {id:'database',icon:'🗄',label:'Database Manager',section:'main'},
   {id:'comp-search',icon:'🔎',label:'Sale Comp Search',section:'workflow'},
   {id:'avail-search',icon:'🔍',label:'Availability Search',section:'workflow'},
+  {id:'lease-comps',icon:'📋',label:'Lease Comps',section:'workflow'},
   {id:'folders',icon:'📁',label:'OPV Folders',section:'workflow'},
   {id:'scoring',icon:'⭐',label:'Comp Scoring',section:'workflow'},
   {id:'analytics',icon:'📈',label:'Analytics',section:'workflow'},
@@ -428,6 +429,7 @@ const NAV = [
 const PAGE_TITLES: Record<string,string> = {
   dashboard:'Dashboard',subject:'Subject Property',database:'Database Manager',
   'comp-search':'Sale Comp Search','avail-search':'Market Availability Search',
+  'lease-comps':'Lease Comparable Search',
   folders:'OPV Folders',
   scoring:'Comparable Scoring',analytics:'Analytics & Valuation','ai-analysis':'AI Broker Analysis','opv-report':'OPV Report',
 }
@@ -1142,10 +1144,10 @@ function Dashboard({user,reports,setPage,onRestore}: {user:{name:string},reports
   )
 }
 
-type SubjectForm = {address:string,county:string,type:string,size:string,lot:string,ceiling:string,docks:string,driveIn:string,power:string,heat:string,parking:string,sprinkler:string,sewer:string,zoning:string,taxes:string,yearBuilt:string,officePct:string,construction:string,condition:string,notes:string}
+type SubjectForm = {address:string,city:string,county:string,municipality:string,parcelId:string,type:string,opvType:string,size:string,lot:string,ceiling:string,docks:string,driveIn:string,power:string,heat:string,parking:string,sprinkler:string,sewer:string,zoning:string,taxes:string,yearBuilt:string,officePct:string,construction:string,condition:string,notes:string,highestBestUse:string,capRateLow:string,capRateHigh:string,leasePsfLow:string,leasePsfHigh:string,estimatedValueLow:string,estimatedValueHigh:string,preparedBy:string}
 
 function SubjectProperty({subject,setSubject,setPage,folders,setFolders}: {subject:SubjectForm|null,setSubject:(s:SubjectForm)=>void,setPage:(p:string)=>void,folders:Folder[],setFolders:(f:Folder[]|((prev:Folder[])=>Folder[]))=>void}) {
-  const [form,setForm]=useState<SubjectForm>(subject||{address:'',county:'Nassau',type:'Warehouse',size:'',lot:'',ceiling:'',docks:'',driveIn:'',power:'',heat:'Gas FHA',parking:'',sprinkler:'ESFR',sewer:'Municipal',zoning:'',taxes:'',yearBuilt:'',officePct:'',construction:'Masonry/Steel',condition:'Good',notes:''})
+  const [form,setForm]=useState<SubjectForm>(subject||{address:'',city:'',county:'Nassau',municipality:'',parcelId:'',type:'Warehouse',opvType:'sale',size:'',lot:'',ceiling:'',docks:'',driveIn:'',power:'',heat:'Gas FHA',parking:'',sprinkler:'ESFR',sewer:'Municipal',zoning:'',taxes:'',yearBuilt:'',officePct:'',construction:'Masonry/Steel',condition:'Good',notes:'',highestBestUse:'',capRateLow:'',capRateHigh:'',leasePsfLow:'',leasePsfHigh:'',estimatedValueLow:'',estimatedValueHigh:'',preparedBy:''})
   const set=(k:string,v:string)=>setForm((f:SubjectForm)=>({...f,[k]:v}))
 
   const autoCreateFolders = (address: string) => {
@@ -1166,12 +1168,23 @@ function SubjectProperty({subject,setSubject,setPage,folders,setFolders}: {subje
       <SectionTitle sub="Enter subject property specifications. All fields populate the OPV report.">Subject Property Details</SectionTitle>
       <div style={{display:'grid',gridTemplateColumns:'1.4fr 1fr',gap:20,alignItems:'start'}}>
         <Card>
+          <SL>OPV Type</SL>
+          <div style={{display:'flex',gap:8,marginBottom:16}}>
+            {([['sale','🏷 For Sale'],['investment','📊 Investment Sale'],['lease','📋 Lease']] as [string,string][]).map(([val,lbl])=>(
+              <div key={val} onClick={()=>set('opvType',val)} style={{flex:1,padding:'10px 8px',borderRadius:8,cursor:'pointer',fontSize:11,fontWeight:700,textAlign:'center' as const,background:form.opvType===val?G.goldDim:'transparent',color:form.opvType===val?G.gold:G.muted,border:`1.5px solid ${form.opvType===val?G.gold:G.border}`,transition:'all .15s'}}>
+                {lbl}
+              </div>
+            ))}
+          </div>
           <SL>Location & Classification</SL>
           <Field label="Property Address" full><Input placeholder="e.g. 45 Orville Drive, Bohemia, NY 11716" value={form.address} onChange={e=>set('address',e.target.value)}/></Field>
           <div style={G2}>
+            <Field label="City / Town"><Input placeholder="e.g. Bohemia" value={form.city} onChange={e=>set('city',e.target.value)}/></Field>
+            <Field label="Municipality"><Input placeholder="e.g. Town of Islip" value={form.municipality} onChange={e=>set('municipality',e.target.value)}/></Field>
             <Field label="County"><Sel value={form.county} onChange={e=>set('county',e.target.value)}>{COUNTIES.map(c=><option key={c}>{c}</option>)}</Sel></Field>
             <Field label="Property Type"><Sel value={form.type} onChange={e=>set('type',e.target.value)}>{PROP_TYPES.map(t=><option key={t}>{t}</option>)}</Sel></Field>
           </div>
+          <Field label="Parcel / Section-Block-Lot ID"><Input placeholder="e.g. 0500-046.00-01.00-014.001" value={form.parcelId} onChange={e=>set('parcelId',e.target.value)}/></Field>
           <Divider label="Building Specifications"/>
           <div style={G2}>
             <Field label="Building Size (SF)"><Input type="number" placeholder="28500" value={form.size} onChange={e=>set('size',e.target.value)}/></Field>
@@ -1194,7 +1207,22 @@ function SubjectProperty({subject,setSubject,setPage,folders,setFolders}: {subje
             <Field label="Zoning"><Input placeholder="M1 / Industrial" value={form.zoning} onChange={e=>set('zoning',e.target.value)}/></Field>
             <Field label="Real Estate Taxes ($/yr)"><Input type="number" placeholder="62400" value={form.taxes} onChange={e=>set('taxes',e.target.value)}/></Field>
           </div>
+          <Field label="Highest & Best Use" full><textarea value={form.highestBestUse} onChange={e=>set('highestBestUse',e.target.value)} placeholder="Describe the highest and best use of the property..." style={{...inputStyle as React.CSSProperties,minHeight:64,resize:'vertical' as const,lineHeight:1.6}}/></Field>
           <Field label="Broker Notes / Special Features" full><textarea value={form.notes} onChange={e=>set('notes',e.target.value)} placeholder="Describe any features, renovations, access, or market notes..." style={{...inputStyle as React.CSSProperties,minHeight:80,resize:'vertical' as const,lineHeight:1.6}}/></Field>
+          <Divider label="Value Guidance (Optional)"/>
+          <div style={G2}>
+            <Field label="Est. Value Low ($/SF)" note="For investment sale"><Input placeholder="e.g. 175" value={form.estimatedValueLow} onChange={e=>set('estimatedValueLow',e.target.value)}/></Field>
+            <Field label="Est. Value High ($/SF)"><Input placeholder="e.g. 210" value={form.estimatedValueHigh} onChange={e=>set('estimatedValueHigh',e.target.value)}/></Field>
+            {form.opvType==='investment'&&<>
+              <Field label="Cap Rate Low (%)"><Input placeholder="e.g. 5.5" value={form.capRateLow} onChange={e=>set('capRateLow',e.target.value)}/></Field>
+              <Field label="Cap Rate High (%)"><Input placeholder="e.g. 7.0" value={form.capRateHigh} onChange={e=>set('capRateHigh',e.target.value)}/></Field>
+            </>}
+            {(form.opvType==='lease'||form.opvType==='investment')&&<>
+              <Field label="Lease PSF Low ($/SF/yr)"><Input placeholder="e.g. 14.00" value={form.leasePsfLow} onChange={e=>set('leasePsfLow',e.target.value)}/></Field>
+              <Field label="Lease PSF High ($/SF/yr)"><Input placeholder="e.g. 18.00" value={form.leasePsfHigh} onChange={e=>set('leasePsfHigh',e.target.value)}/></Field>
+            </>}
+          </div>
+          <Field label="Prepared By"><Input placeholder="Broker name" value={form.preparedBy} onChange={e=>set('preparedBy',e.target.value)}/></Field>
           <Btn onClick={()=>{if(!form.address||!form.size){alert('Address and building size are required.');return;}setSubject(form);autoCreateFolders(form.address);setPage('comp-search')}} style={{width:'100%',padding:12,marginTop:4}}>Save & Search Comps →</Btn>
         </Card>
         <div>
@@ -1484,7 +1512,7 @@ function AvailSearch({subject,avails,setAvails,setPage,folders,setFolders}: {sub
           {avails.length>0&&<Card style={{marginTop:14}}>
             <SL>Added to OPV</SL>
             <div style={{fontSize:12,color:G.muted,marginBottom:10}}>{avails.length} listing{avails.length!==1?'s':''} selected</div>
-            <Btn onClick={()=>setPage('scoring')} style={{width:'100%',padding:10,fontSize:12}}>Next: Score Comps →</Btn>
+            <Btn onClick={()=>setPage('lease-comps')} style={{width:'100%',padding:10,fontSize:12}}>Next: Lease Comps →</Btn>
           </Card>}
         </div>
         <div>
@@ -1593,6 +1621,182 @@ function AvailSearch({subject,avails,setAvails,setPage,folders,setFolders}: {sub
                             </div>
                           )}
                         </div>
+                      </div>
+                    </div>
+                  </div>
+                </Card>
+              ))}
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+type LeaseComp = {id:string,address:string,city:string,county:string,building_sf:number,ceiling_height:string,loading_docks:string,drive_ins:string,power:string,sewer:string,zoning:string,lease_price:number,price_per_sf:number,lease_date:string,tenant:string,landlord:string,lease_term:string,annual_escalations:string,landlord_work:string,cap_rate:number,comments:string,taxes_psf:number,office_pct:number,photo_url?:string,loopnet_url?:string}
+
+function LeaseCompSearch({subject,leaseComps,setLeaseComps,setPage}: {subject:SubjectForm|null,leaseComps:LeaseComp[],setLeaseComps:(c:LeaseComp[])=>void,setPage:(p:string)=>void}) {
+  const [results,setResults]=useState<LeaseComp[]>([])
+  const [loading,setLoading]=useState(false)
+  const [searched,setSearched]=useState(false)
+  const [selected,setSelected]=useState<Set<string>>(new Set())
+  const [filters,setFilters]=useState({county:'',city:'',min_sf:'',max_sf:'',min_price:'',max_price:'',min_date:'',max_date:''})
+  const [showManual,setShowManual]=useState(false)
+  const [manual,setManual]=useState<Partial<LeaseComp>>({})
+
+  const search = async () => {
+    setLoading(true); setResults([]); setSearched(false)
+    let q = supabase.from('lease_comps').select('*')
+    if (filters.county) q = q.eq('county', filters.county)
+    if (filters.city) q = q.ilike('city', `%${filters.city}%`)
+    if (filters.min_sf) q = q.gte('building_sf', Number(filters.min_sf))
+    if (filters.max_sf) q = q.lte('building_sf', Number(filters.max_sf))
+    if (filters.min_price) q = q.gte('lease_price', Number(filters.min_price))
+    if (filters.max_price) q = q.lte('lease_price', Number(filters.max_price))
+    if (filters.min_date) q = q.gte('lease_date', filters.min_date)
+    if (filters.max_date) q = q.lte('lease_date', filters.max_date)
+    q = q.order('lease_date', {ascending:false}).limit(200)
+    const {data,error} = await q
+    if (error) { alert('Search error: ' + error.message); setLoading(false); return }
+    setResults(data||[]); setSearched(true); setLoading(false)
+  }
+
+  const toggleSelect = (id:string) => setSelected(prev=>{const n=new Set(prev);n.has(id)?n.delete(id):n.add(id);return n})
+  const addSelected = () => {
+    const toAdd = results.filter(r=>selected.has(r.id) && !leaseComps.find(c=>c.id===r.id))
+    setLeaseComps([...leaseComps, ...toAdd])
+    alert(`${toAdd.length} lease comp${toAdd.length!==1?'s':''} added to your OPV`)
+    setSelected(new Set())
+  }
+  const sf = (k:string,v:string) => setFilters(f=>({...f,[k]:v}))
+  const sm = (k:string,v:string) => setManual(m=>({...m,[k]:v}))
+
+  const addManual = () => {
+    if (!manual.address) { alert('Address required'); return }
+    const id = `manual_${Date.now()}`
+    setLeaseComps([...leaseComps, {...manual, id} as LeaseComp])
+    setManual({}); setShowManual(false)
+    alert('Lease comp added manually.')
+  }
+
+  return (
+    <div className="anim-in">
+      <WorkflowSteps current="lease-comps"/>
+      <SectionTitle sub="Search lease comparables from your database, or add them manually. Optional — only include if relevant to this OPV.">Lease Comparable Search</SectionTitle>
+      {!subject&&<Card style={{textAlign:'center' as const,padding:'48px 20px',marginBottom:20}}><p style={{fontSize:13,color:G.muted,marginBottom:16}}>Save your subject property first.</p><Btn onClick={()=>setPage('subject')}>← Enter Subject Property</Btn></Card>}
+      <div style={{display:'grid',gridTemplateColumns:'280px 1fr',gap:20,alignItems:'start'}}>
+        <div>
+          {subject&&<Card style={{marginBottom:14,border:`1px solid ${G.goldBorder}`}}>
+            <SL>Subject Property</SL>
+            <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:13,color:G.gold,marginBottom:8}}>{subject.address}</div>
+            <div style={{fontSize:11,color:G.muted}}>OPV Type: <strong>{subject.opvType||'sale'}</strong></div>
+          </Card>}
+          <Card>
+            <SL>Search Filters</SL>
+            <Field label="County"><Sel value={filters.county} onChange={e=>sf('county',e.target.value)}><option value="">All Counties</option>{COUNTIES.map(c=><option key={c}>{c}</option>)}</Sel></Field>
+            <Field label="City"><Input placeholder="e.g. Hauppauge" value={filters.city} onChange={e=>sf('city',e.target.value)}/></Field>
+            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8}}>
+              <Field label="Min SF"><Input type="number" placeholder="0" value={filters.min_sf} onChange={e=>sf('min_sf',e.target.value)}/></Field>
+              <Field label="Max SF"><Input type="number" placeholder="Any" value={filters.max_sf} onChange={e=>sf('max_sf',e.target.value)}/></Field>
+              <Field label="Min Rent ($/SF)"><Input type="number" placeholder="0" value={filters.min_price} onChange={e=>sf('min_price',e.target.value)}/></Field>
+              <Field label="Max Rent ($/SF)"><Input type="number" placeholder="Any" value={filters.max_price} onChange={e=>sf('max_price',e.target.value)}/></Field>
+              <Field label="Lease Date From"><Input type="date" value={filters.min_date} onChange={e=>sf('min_date',e.target.value)}/></Field>
+              <Field label="Lease Date To"><Input type="date" value={filters.max_date} onChange={e=>sf('max_date',e.target.value)}/></Field>
+            </div>
+            <Btn onClick={search} disabled={loading} style={{width:'100%',padding:11}}>{loading?'Searching...':'🔎 Search Lease Comps'}</Btn>
+          </Card>
+          {leaseComps.length>0&&<Card style={{marginTop:14}}>
+            <SL>Added to OPV</SL>
+            <div style={{fontSize:12,color:G.muted,marginBottom:10}}>{leaseComps.length} lease comp{leaseComps.length!==1?'s':''} selected</div>
+            <div style={{display:'flex',flexDirection:'column',gap:6}}>
+              {leaseComps.map(c=>(
+                <div key={c.id} style={{display:'flex',alignItems:'center',justifyContent:'space-between',fontSize:11,padding:'5px 0',borderBottom:`1px solid ${G.border}`}}>
+                  <span style={{flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' as const}}>{c.address}</span>
+                  <button onClick={()=>setLeaseComps(leaseComps.filter(x=>x.id!==c.id))} style={{background:'transparent',border:'none',color:G.red,cursor:'pointer',fontSize:13,padding:'0 4px',flexShrink:0}}>×</button>
+                </div>
+              ))}
+            </div>
+            <Btn onClick={()=>setPage('scoring')} style={{width:'100%',padding:10,fontSize:12,marginTop:10}}>Next: Scoring →</Btn>
+          </Card>}
+          <Btn variant="ghost" onClick={()=>setPage('scoring')} style={{width:'100%',padding:10,fontSize:12,marginTop:10}}>Skip — Go to Scoring →</Btn>
+        </div>
+        <div>
+          <div style={{display:'flex',justifyContent:'flex-end',marginBottom:12}}>
+            <Btn variant="blue" size="sm" onClick={()=>setShowManual(!showManual)}>＋ Add Manual Lease Comp</Btn>
+          </div>
+          {showManual&&(
+            <Card style={{marginBottom:16,border:`1px solid ${G.blue}44`}}>
+              <SL style={{color:G.blue}}>Manual Lease Comp Entry</SL>
+              <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10}}>
+                <Field label="Address" full><Input placeholder="Street address" value={manual.address||''} onChange={e=>sm('address',e.target.value)}/></Field>
+                <Field label="City"><Input placeholder="City/Town" value={manual.city||''} onChange={e=>sm('city',e.target.value)}/></Field>
+                <Field label="County"><Sel value={manual.county||'Nassau'} onChange={e=>sm('county',e.target.value)}>{COUNTIES.map(c=><option key={c}>{c}</option>)}</Sel></Field>
+                <Field label="Building SF"><Input type="number" value={manual.building_sf?.toString()||''} onChange={e=>sm('building_sf',e.target.value)}/></Field>
+                <Field label="Ceiling Height"><Input placeholder="22'" value={manual.ceiling_height||''} onChange={e=>sm('ceiling_height',e.target.value)}/></Field>
+                <Field label="Loading Docks"><Input type="number" value={manual.loading_docks||''} onChange={e=>sm('loading_docks',e.target.value)}/></Field>
+                <Field label="Drive-In Doors"><Input type="number" value={manual.drive_ins||''} onChange={e=>sm('drive_ins',e.target.value)}/></Field>
+                <Field label="Power"><Input placeholder="400A/3ph" value={manual.power||''} onChange={e=>sm('power',e.target.value)}/></Field>
+                <Field label="Sewer"><Sel value={manual.sewer||'Municipal'} onChange={e=>sm('sewer',e.target.value)}><option>Municipal</option><option>Septic</option></Sel></Field>
+                <Field label="Zoning"><Input placeholder="M1" value={manual.zoning||''} onChange={e=>sm('zoning',e.target.value)}/></Field>
+                <Field label="Lease Rate ($/SF/yr)"><Input type="number" step="0.01" placeholder="16.00" value={manual.price_per_sf?.toString()||''} onChange={e=>sm('price_per_sf',e.target.value)}/></Field>
+                <Field label="Annual Base Rent ($)"><Input type="number" value={manual.lease_price?.toString()||''} onChange={e=>sm('lease_price',e.target.value)}/></Field>
+                <Field label="Lease Date"><Input type="date" value={manual.lease_date||''} onChange={e=>sm('lease_date',e.target.value)}/></Field>
+                <Field label="Lease Term"><Input placeholder="3 years NNN" value={manual.lease_term||''} onChange={e=>sm('lease_term',e.target.value)}/></Field>
+                <Field label="Tenant"><Input placeholder="Tenant name" value={manual.tenant||''} onChange={e=>sm('tenant',e.target.value)}/></Field>
+                <Field label="Landlord"><Input placeholder="Landlord name" value={manual.landlord||''} onChange={e=>sm('landlord',e.target.value)}/></Field>
+                <Field label="Annual Escalations"><Input placeholder="3% annually" value={manual.annual_escalations||''} onChange={e=>sm('annual_escalations',e.target.value)}/></Field>
+                <Field label="Landlord Work"><Input placeholder="e.g. None" value={manual.landlord_work||''} onChange={e=>sm('landlord_work',e.target.value)}/></Field>
+                <Field label="Taxes PSF ($/SF)"><Input type="number" step="0.01" value={manual.taxes_psf?.toString()||''} onChange={e=>sm('taxes_psf',e.target.value)}/></Field>
+                <Field label="Office %"><Input type="number" value={manual.office_pct?.toString()||''} onChange={e=>sm('office_pct',e.target.value)}/></Field>
+                <Field label="Photo URL"><Input placeholder="https://..." value={manual.photo_url||''} onChange={e=>sm('photo_url',e.target.value)}/></Field>
+                <Field label="Comments" full><textarea value={manual.comments||''} onChange={e=>sm('comments',e.target.value)} placeholder="Any notes..." style={{...inputStyle as React.CSSProperties,minHeight:56,resize:'vertical' as const}}/></Field>
+              </div>
+              <div style={{display:'flex',gap:8,marginTop:8}}>
+                <Btn onClick={addManual} style={{flex:1}}>＋ Add Comp</Btn>
+                <Btn variant="ghost" onClick={()=>{setShowManual(false);setManual({})}} style={{flex:1}}>Cancel</Btn>
+              </div>
+            </Card>
+          )}
+          {loading&&<Card><div style={{textAlign:'center' as const,padding:'40px 20px'}}><div className="spin" style={{width:32,height:32,border:`2px solid ${G.border}`,borderTopColor:G.gold,borderRadius:'50%',margin:'0 auto 16px'}}/><p style={{fontSize:13,color:G.muted}}>Searching lease comps...</p></div></Card>}
+          {!loading&&!searched&&!showManual&&<Card style={{textAlign:'center' as const,padding:'64px 20px'}}><div style={{fontSize:48,opacity:.15,marginBottom:16}}>📋</div><p style={{fontSize:15,fontWeight:600,marginBottom:8}}>Search or Add Manually</p><p style={{fontSize:13,color:G.muted,maxWidth:380,margin:'0 auto'}}>Search your Supabase lease comps database, or add lease comparables manually using the button above.</p></Card>}
+          {!loading&&searched&&(
+            <>
+              <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:14}}>
+                <span style={{fontSize:13,color:G.muted}}>{results.length} results</span>
+                <div style={{display:'flex',gap:8}}>
+                  {results.length>0&&<Btn variant="ghost" size="sm" onClick={()=>setSelected(new Set(results.map(r=>r.id)))}>Select All</Btn>}
+                  {selected.size>0&&<Btn size="sm" onClick={addSelected}>＋ Add {selected.size} to OPV</Btn>}
+                </div>
+              </div>
+              {results.length===0?<Card style={{textAlign:'center' as const,padding:'48px 20px'}}><p style={{color:G.muted}}>No results. Try adding manually.</p></Card>:
+              results.map((r,idx)=>(
+                <Card key={r.id} style={{marginBottom:12,border:`1px solid ${selected.has(r.id)?G.blue+'55':G.border}`}}>
+                  <div style={{display:'flex',gap:14,alignItems:'flex-start'}}>
+                    <input type="checkbox" checked={selected.has(r.id)} onChange={()=>toggleSelect(r.id)} style={{width:16,height:16,cursor:'pointer',accentColor:G.blue,marginTop:3}}/>
+                    <div style={{flex:1,minWidth:0}}>
+                      <div style={{fontSize:13,fontWeight:700,marginBottom:6}}>{r.address}{r.city?`, ${r.city}`:''}</div>
+                      <div style={{display:'flex',gap:6,flexWrap:'wrap' as const,marginBottom:8}}>
+                        {r.price_per_sf>0&&<Tag color={G.blue}>${Number(r.price_per_sf).toFixed(2)}/SF/yr</Tag>}
+                        {r.lease_date&&<Tag color={G.muted}>{fmtDate(r.lease_date)}</Tag>}
+                        {r.lease_term&&<Tag color={G.purple}>{r.lease_term}</Tag>}
+                        {r.tenant&&<Tag color={G.green}>{r.tenant}</Tag>}
+                      </div>
+                      <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(160px,1fr))',gap:'5px 16px',fontSize:11}}>
+                        {([
+                          ['Building SF', r.building_sf ? `${Number(r.building_sf).toLocaleString()} SF` : '—'],
+                          ['Ceiling', r.ceiling_height||'—'],
+                          ['Docks', r.loading_docks||'—'],
+                          ['Drive-In', r.drive_ins||'—'],
+                          ['Power', r.power||'—'],
+                          ['Sewer', r.sewer||'—'],
+                          ['Zoning', r.zoning||'—'],
+                          ['Escalations', r.annual_escalations||'—'],
+                          ['Landlord Work', r.landlord_work||'—'],
+                          ['Comments', r.comments||'—'],
+                        ] as [string,string][]).map(([l,v])=>(
+                          <div key={l}><span style={{color:G.muted,fontWeight:500}}>{l}:</span> <span style={{fontWeight:600}}>{v}</span></div>
+                        ))}
                       </div>
                     </div>
                   </div>
@@ -1812,9 +2016,13 @@ Write a comprehensive broker analysis covering: Market Overview, Location Analys
   )
 }
 
-function OPVReport({subject,comps,avails,analytics,aiText,setPage}: {subject:SubjectForm|null,comps:Comp[],avails:Avail[],analytics:AnalyticsData|null,aiText:string,setPage:(p:string)=>void}) {
+function OPVReport({subject,comps,leaseComps,avails,analytics,aiText,setPage}: {subject:SubjectForm|null,comps:Comp[],leaseComps:LeaseComp[],avails:Avail[],analytics:AnalyticsData|null,aiText:string,setPage:(p:string)=>void}) {
   const today=new Date().toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'})
   const [downloading, setDownloading] = useState(false)
+  const [includeLeaseComps, setIncludeLeaseComps] = useState(leaseComps.length>0)
+  const [includeAvails, setIncludeAvails] = useState(true)
+  const [includeMarketingStrategy, setIncludeMarketingStrategy] = useState(true)
+  const [includePcreProfile, setIncludePcreProfile] = useState(true)
 
   const downloadWord = async () => {
     setDownloading(true)
@@ -1822,7 +2030,7 @@ function OPVReport({subject,comps,avails,analytics,aiText,setPage}: {subject:Sub
       const res = await fetch('/api/generate-opv', {
         method: 'POST',
         headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({subject, comps, avails, analytics})
+        body: JSON.stringify({subject, comps, leaseComps: includeLeaseComps ? leaseComps : [], avails: includeAvails ? avails : [], analytics, aiText, includeLeaseComps, includeAvails, includeMarketingStrategy, includePcreProfile})
       })
       if (!res.ok) { alert('Error generating report: ' + await res.text()); return }
       const blob = await res.blob()
@@ -1851,14 +2059,32 @@ function OPVReport({subject,comps,avails,analytics,aiText,setPage}: {subject:Sub
   return (
     <div className="anim-in">
       <WorkflowSteps current="opv-report"/>
-      <div className="no-print" style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:20}}>
-        <SectionTitle>OPV Report Preview</SectionTitle>
-        <div style={{display:'flex',gap:10}}>
-          <Btn onClick={downloadWord} disabled={downloading} style={{padding:'9px 20px',fontSize:12,background:G.goldDim,color:G.gold,border:`1px solid ${G.goldBorder}`}}>
-            {downloading ? 'Generating...' : '📄 Download Word Report'}
-          </Btn>
-          <Btn variant="ghost" onClick={()=>window.print()} style={{padding:'9px 16px',fontSize:12}}>🖨 Print / Save PDF</Btn>
+      <div className="no-print" style={{marginBottom:20}}>
+        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:12}}>
+          <SectionTitle>OPV Report Preview</SectionTitle>
+          <div style={{display:'flex',gap:10}}>
+            <Btn onClick={downloadWord} disabled={downloading} style={{padding:'9px 20px',fontSize:12,background:G.goldDim,color:G.gold,border:`1px solid ${G.goldBorder}`}}>
+              {downloading ? 'Generating...' : '📄 Download Word Report'}
+            </Btn>
+            <Btn variant="ghost" onClick={()=>window.print()} style={{padding:'9px 16px',fontSize:12}}>🖨 Print / Save PDF</Btn>
+          </div>
         </div>
+        <Card style={{padding:'14px 18px'}}>
+          <div style={{fontSize:10,fontWeight:700,letterSpacing:'.1em',textTransform:'uppercase' as const,color:G.muted,marginBottom:10}}>Word Report Sections</div>
+          <div style={{display:'flex',gap:20,flexWrap:'wrap' as const}}>
+            {([
+              ['Include Lease Comps', includeLeaseComps, setIncludeLeaseComps],
+              ['Include Availabilities', includeAvails, setIncludeAvails],
+              ['Include Marketing Strategy', includeMarketingStrategy, setIncludeMarketingStrategy],
+              ['Include PCRE Profile', includePcreProfile, setIncludePcreProfile],
+            ] as [string,boolean,(v:boolean)=>void][]).map(([lbl,val,setter])=>(
+              <label key={lbl} style={{display:'flex',alignItems:'center',gap:7,cursor:'pointer',fontSize:12,fontWeight:500,color:val?G.white:G.muted}}>
+                <input type="checkbox" checked={val} onChange={e=>setter(e.target.checked)} style={{width:14,height:14,cursor:'pointer',accentColor:G.gold}}/>
+                {lbl}
+              </label>
+            ))}
+          </div>
+        </Card>
       </div>
       <div className="print-area" style={{background:'#fff',borderRadius:10,padding:'48px 56px',color:'#1a1a2e',maxWidth:900,margin:'0 auto',fontFamily:'Georgia,serif',fontSize:13,lineHeight:1.7,boxShadow:'0 4px 24px rgba(0,0,0,.10)'}}>
         <div style={{textAlign:'center' as const,marginBottom:48,paddingBottom:48,borderBottom:'2px solid #1a1a2e'}}>
@@ -1981,6 +2207,10 @@ export default function App() {
     if(typeof window==='undefined') return []
     try{return JSON.parse(localStorage.getItem('opv_avails')||'[]')}catch{return []}
   })
+  const [leaseComps,setLeaseComps]=useState<LeaseComp[]>(()=>{
+    if(typeof window==='undefined') return []
+    try{return JSON.parse(localStorage.getItem('opv_lease_comps')||'[]')}catch{return []}
+  })
   const [scoredComps,setScoredComps]=useState<Comp[]>([])
   const [analytics,setAnalytics]=useState<AnalyticsData|null>(()=>{
     if(typeof window==='undefined') return null
@@ -2006,6 +2236,7 @@ export default function App() {
   useEffect(()=>{try{localStorage.setItem('opv_subject',JSON.stringify(subject))}catch{}},[subject])
   useEffect(()=>{try{localStorage.setItem('opv_comps',JSON.stringify(comps))}catch{}},[comps])
   useEffect(()=>{try{localStorage.setItem('opv_avails',JSON.stringify(avails))}catch{}},[avails])
+  useEffect(()=>{try{localStorage.setItem('opv_lease_comps',JSON.stringify(leaseComps))}catch{}},[leaseComps])
   useEffect(()=>{try{localStorage.setItem('opv_analytics',JSON.stringify(analytics))}catch{}},[analytics])
   useEffect(()=>{try{localStorage.setItem('opv_aitext',aiText)}catch{}},[aiText])
 
@@ -2070,6 +2301,7 @@ export default function App() {
                       {n.id==='subject'&&subject&&<span style={{width:6,height:6,borderRadius:'50%',background:G.green}}/>}
                       {n.id==='comp-search'&&comps.length>0&&<span style={{fontSize:9,background:'rgba(200,135,10,0.18)',color:G.gold2,padding:'2px 6px',borderRadius:4,fontWeight:700}}>{comps.length}</span>}
                       {n.id==='avail-search'&&avails.length>0&&<span style={{fontSize:9,background:'rgba(200,135,10,0.18)',color:G.gold2,padding:'2px 6px',borderRadius:4,fontWeight:700}}>{avails.length}</span>}
+                      {n.id==='lease-comps'&&leaseComps.length>0&&<span style={{fontSize:9,background:'rgba(37,99,235,0.18)',color:G.blue,padding:'2px 6px',borderRadius:4,fontWeight:700}}>{leaseComps.length}</span>}
                       {n.id==='folders'&&folders.length>0&&<span style={{fontSize:9,background:'rgba(200,135,10,0.18)',color:G.gold2,padding:'2px 6px',borderRadius:4,fontWeight:700}}>{folders.length}</span>}
                     </div>
                   )
@@ -2100,11 +2332,12 @@ export default function App() {
             {page==='database'&&<DatabaseManager/>}
             {page==='comp-search'&&<CompSearch subject={subject} comps={comps} setComps={setComps} setPage={handleSetPage} folders={folders} setFolders={updateFolders}/>}
             {page==='avail-search'&&<AvailSearch subject={subject} avails={avails} setAvails={setAvails} setPage={handleSetPage} folders={folders} setFolders={updateFolders}/>}
+            {page==='lease-comps'&&<LeaseCompSearch subject={subject} leaseComps={leaseComps} setLeaseComps={setLeaseComps} setPage={handleSetPage}/>}
             {page==='folders'&&<FolderManager folders={folders} setFolders={updateFolders} setPage={handleSetPage} comps={comps} setComps={setComps} avails={avails} setAvails={setAvails}/>}
             {page==='scoring'&&<Scoring subject={subject} comps={comps} scoredComps={scoredComps} setScoredComps={setScoredComps} setPage={handleSetPage}/>}
             {page==='analytics'&&<Analytics comps={scoredComps.length>0?scoredComps:comps} avails={avails} analytics={analytics} setAnalytics={setAnalytics} setPage={handleSetPage}/>}
             {page==='ai-analysis'&&<AIAnalysis subject={subject} comps={scoredComps.length>0?scoredComps:comps} analytics={analytics} aiText={aiText} setAiText={setAiText} setPage={handleSetPage}/>}
-            {page==='opv-report'&&<OPVReport subject={subject} comps={scoredComps.length>0?scoredComps:comps} avails={avails} analytics={analytics} aiText={aiText} setPage={handleSetPage}/>}
+            {page==='opv-report'&&<OPVReport subject={subject} comps={scoredComps.length>0?scoredComps:comps} leaseComps={leaseComps} avails={avails} analytics={analytics} aiText={aiText} setPage={handleSetPage}/>}
           </div>
         </div>
       </div>
