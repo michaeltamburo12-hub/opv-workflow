@@ -2221,6 +2221,14 @@ export default function App() {
     try{return localStorage.getItem('opv_aitext')||''}catch{return ''}
   })
   const [reports,setReports]=useState<OPVReportData[]>([])
+  const [savedOPVId,setSavedOPVId]=useState<string|null>(()=>{
+    if(typeof window==='undefined') return null
+    return localStorage.getItem('opv_saved_id')||null
+  })
+  const [lastSaved,setLastSaved]=useState<Date|null>(null)
+  const [saving,setSaving]=useState(false)
+  const [savedOPVs,setSavedOPVs]=useState<{id:string,address:string,current_step:string,updated_at:string,saved_by:string}[]>([])
+  const [showSavedPanel,setShowSavedPanel]=useState(false)
   const [folders,setFolders]=useState<Folder[]>(()=>{
     if (typeof window==='undefined') return []
     try { return JSON.parse(localStorage.getItem('opv_folders')||'[]') } catch { return [] }
@@ -2237,6 +2245,7 @@ export default function App() {
   useEffect(()=>{try{localStorage.setItem('opv_comps',JSON.stringify(comps))}catch{}},[comps])
   useEffect(()=>{try{localStorage.setItem('opv_avails',JSON.stringify(avails))}catch{}},[avails])
   useEffect(()=>{try{localStorage.setItem('opv_lease_comps',JSON.stringify(leaseComps))}catch{}},[leaseComps])
+  useEffect(()=>{if(savedOPVId)try{localStorage.setItem('opv_saved_id',savedOPVId)}catch{}},[savedOPVId])
   useEffect(()=>{try{localStorage.setItem('opv_analytics',JSON.stringify(analytics))}catch{}},[analytics])
   useEffect(()=>{try{localStorage.setItem('opv_aitext',aiText)}catch{}},[aiText])
 
@@ -2244,19 +2253,23 @@ export default function App() {
 
   if (!user) return <><style>{css}</style><Auth onLogin={setUser}/></>
 
-  const saveReport=async()=>{
-    if(!subject){alert('No subject property to save.');return}
+  const saveReport=async(silent=false)=>{
+    if(!subject){if(!silent)alert('Enter a subject property address first.');return}
+    setSaving(true)
     try {
       const res = await fetch('/api/opv-history',{
         method:'POST',
         headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({savedBy:user.name, address:subject.address, subject, comps, avails, analytics, aiText})
+        body:JSON.stringify({savedBy:user.name, address:subject.address, subject, comps, leaseComps, avails, analytics, aiText, currentStep:page, existingId:savedOPVId})
       })
       const data = await res.json()
       if(data.error) throw new Error(data.error)
+      setSavedOPVId(data.id)
+      setLastSaved(new Date())
       setReports(r=>[{id:Date.now(),subject,comps,avails,analytics,date:new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})},...r])
-      alert('✓ OPV saved to your history.')
-    } catch(e) { alert('Save failed: '+(e as Error).message) }
+      if(!silent) alert('✓ OPV progress saved.')
+    } catch(e) { if(!silent) alert('Save failed: '+(e as Error).message) }
+    setSaving(false)
   }
 
   const restoreOPV=async(id:string)=>{
@@ -2266,11 +2279,32 @@ export default function App() {
       if(data.error) throw new Error(data.error)
       if(data.subject) setSubject(data.subject)
       if(data.comps?.length) setComps(data.comps)
+      if(data.leaseComps?.length) setLeaseComps(data.leaseComps)
       if(data.avails?.length) setAvails(data.avails)
       if(data.analytics) setAnalytics(data.analytics)
       if(data.aiText) setAiText(data.aiText)
-      alert('✓ OPV restored. Navigating to report...')
-    } catch(e) { alert('Restore failed: '+(e as Error).message) }
+      setSavedOPVId(id)
+      setLastSaved(new Date(data.updatedAt||data.createdAt))
+      setShowSavedPanel(false)
+      setPage(data.currentStep||'subject')
+    } catch(e) { alert('Load failed: '+(e as Error).message) }
+  }
+
+  const loadSavedOPVs=async()=>{
+    try {
+      const res = await fetch('/api/opv-history')
+      const data = await res.json()
+      if(data.error) throw new Error(data.error)
+      setSavedOPVs(data.reports||[])
+    } catch {}
+  }
+
+  const startNewOPV=()=>{
+    if(!confirm('Start a new OPV? Your current progress is saved — you can reload it anytime.')) return
+    setSubject(null); setComps([]); setLeaseComps([]); setAvails([]); setAnalytics(null); setAiText('')
+    setSavedOPVId(null); setLastSaved(null)
+    try{localStorage.removeItem('opv_saved_id')}catch{}
+    setPage('subject')
   }
 
   const accentMap: Record<string,string> = {main:G.cyan,workflow:G.purple,exports:G.green,database:G.orange}
@@ -2309,19 +2343,93 @@ export default function App() {
               </div>
             ))}
           </div>
-          <div style={{padding:'14px',borderTop:'1px solid rgba(255,255,255,0.08)',display:'flex',flexDirection:'column',gap:8}}>
-            <button onClick={saveReport} style={{background:G.gradGold,border:'none',color:'#111111',fontFamily:"'Inter',sans-serif",fontSize:11,fontWeight:700,padding:'10px 12px',borderRadius:7,cursor:'pointer',width:'100%'}}>
-              💾 Save OPV Report
+          <div style={{padding:'14px',borderTop:'1px solid rgba(255,255,255,0.08)',display:'flex',flexDirection:'column',gap:6}}>
+            <button onClick={()=>saveReport(false)} disabled={saving} style={{background:G.gradGold,border:'none',color:'#111111',fontFamily:"'Inter',sans-serif",fontSize:11,fontWeight:700,padding:'10px 12px',borderRadius:7,cursor:saving?'not-allowed':'pointer',width:'100%',opacity:saving?.7:1,display:'flex',alignItems:'center',justifyContent:'center',gap:6}}>
+              {saving?<><span className="spin" style={{display:'inline-block',width:10,height:10,border:'1.5px solid #11111155',borderTopColor:'#111111',borderRadius:'50%'}}/>Saving...</>:'💾 Save Progress'}
             </button>
-            <div onClick={()=>setUser(null)} style={{fontSize:11,color:'rgba(255,255,255,0.35)',cursor:'pointer',display:'flex',alignItems:'center',gap:7,padding:'4px'}}>
+            {lastSaved&&<div style={{fontSize:9,color:'rgba(255,255,255,0.3)',textAlign:'center' as const,lineHeight:1.4}}>
+              Last saved {lastSaved.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'})}
+              {savedOPVId&&<span style={{color:'rgba(255,255,255,0.2)'}}> · #{savedOPVId.slice(0,6)}</span>}
+            </div>}
+            <button onClick={()=>{setShowSavedPanel(true);loadSavedOPVs()}} style={{background:'rgba(255,255,255,0.06)',border:'1px solid rgba(255,255,255,0.1)',color:'rgba(255,255,255,0.55)',fontFamily:"'Inter',sans-serif",fontSize:11,fontWeight:500,padding:'8px 12px',borderRadius:7,cursor:'pointer',width:'100%'}}>
+              📂 Load Saved OPV
+            </button>
+            <button onClick={startNewOPV} style={{background:'transparent',border:'1px solid rgba(255,255,255,0.08)',color:'rgba(255,255,255,0.35)',fontFamily:"'Inter',sans-serif",fontSize:10,fontWeight:500,padding:'7px 12px',borderRadius:7,cursor:'pointer',width:'100%'}}>
+              ＋ New OPV
+            </button>
+            <div onClick={()=>setUser(null)} style={{fontSize:11,color:'rgba(255,255,255,0.28)',cursor:'pointer',display:'flex',alignItems:'center',gap:7,padding:'4px'}}>
               <span>⏻</span> Sign Out
             </div>
           </div>
         </div>
+        {showSavedPanel&&(
+          <div style={{position:'fixed',inset:0,zIndex:200,display:'flex'}}>
+            <div onClick={()=>setShowSavedPanel(false)} style={{flex:1,background:'rgba(0,0,0,0.45)',backdropFilter:'blur(4px)'}}/>
+            <div style={{width:440,background:'#FFFFFF',boxShadow:'-8px 0 40px rgba(0,0,0,0.18)',display:'flex',flexDirection:'column',overflowY:'auto'}}>
+              <div style={{padding:'22px 24px',borderBottom:`1px solid ${G.border}`,display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+                <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:22,fontWeight:600}}>Saved OPVs</div>
+                <button onClick={()=>setShowSavedPanel(false)} style={{background:'transparent',border:'none',fontSize:18,cursor:'pointer',color:G.muted,padding:'4px 8px',borderRadius:6}}>×</button>
+              </div>
+              {savedOPVId&&<div style={{padding:'12px 24px',background:`${G.green}0a`,borderBottom:`1px solid ${G.border}`}}>
+                <div style={{fontSize:11,color:G.green,fontWeight:600,marginBottom:2}}>✓ Current session is saved</div>
+                <div style={{fontSize:11,color:G.muted}}>{lastSaved?`Last saved ${lastSaved.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'})}`:'Saved'} · ID: {savedOPVId.slice(0,8)}…</div>
+              </div>}
+              <div style={{padding:'16px 24px',flex:1}}>
+                {savedOPVs.length===0&&<div style={{textAlign:'center' as const,padding:'48px 20px',color:G.muted,fontSize:13}}>
+                  <div style={{fontSize:36,opacity:.2,marginBottom:12}}>📂</div>
+                  No saved OPVs yet. Hit "Save Progress" to save your current session.
+                </div>}
+                {savedOPVs.map(s=>{
+                  const isCurrent = s.id===savedOPVId
+                  const stepLabel: Record<string,string> = {'subject':'Subject','comp-search':'Sale Comps','avail-search':'Availabilities','lease-comps':'Lease Comps','scoring':'Scoring','analytics':'Analytics','ai-analysis':'AI Analysis','opv-report':'Report'}
+                  const updatedAt = new Date(s.updated_at||'')
+                  const today = new Date()
+                  const diffMs = today.getTime()-updatedAt.getTime()
+                  const diffMins = Math.floor(diffMs/60000)
+                  const timeAgo = diffMins<2?'just now':diffMins<60?`${diffMins}m ago`:diffMins<1440?`${Math.floor(diffMins/60)}h ago`:`${Math.floor(diffMins/1440)}d ago`
+                  return (
+                    <div key={s.id} style={{borderRadius:10,border:`1.5px solid ${isCurrent?G.gold:G.border}`,marginBottom:10,overflow:'hidden'}}>
+                      <div style={{padding:'14px 16px',background:isCurrent?G.goldDim:'transparent'}}>
+                        <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',gap:8,marginBottom:6}}>
+                          <div>
+                            <div style={{fontSize:13,fontWeight:700,marginBottom:2}}>{s.address||'No address'}</div>
+                            <div style={{fontSize:10,color:G.muted}}>By {s.saved_by} · {timeAgo}</div>
+                          </div>
+                          {isCurrent&&<Tag color={G.gold}>Current</Tag>}
+                        </div>
+                        {s.current_step&&<div style={{fontSize:11,color:G.blue,marginBottom:10}}>Saved at: <strong>{stepLabel[s.current_step]||s.current_step}</strong></div>}
+                        <div style={{display:'flex',gap:8}}>
+                          <Btn onClick={()=>restoreOPV(s.id)} style={{flex:1,padding:'8px',fontSize:11}}>
+                            {isCurrent?'✓ Continue':'▶ Load & Resume'}
+                          </Btn>
+                          <Btn variant="danger" size="sm" onClick={async()=>{
+                            if(!confirm('Delete this saved OPV?')) return
+                            await fetch(`/api/opv-history?id=${s.id}`,{method:'DELETE'})
+                            setSavedOPVs(prev=>prev.filter(x=>x.id!==s.id))
+                            if(isCurrent){setSavedOPVId(null);setLastSaved(null)}
+                          }}>Delete</Btn>
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+              <div style={{padding:'16px 24px',borderTop:`1px solid ${G.border}`}}>
+                <Btn onClick={()=>{saveReport(false);setTimeout(loadSavedOPVs,800)}} disabled={saving||!subject} style={{width:'100%',padding:11}}>
+                  {saving?'Saving...':'💾 Save Current Progress'}
+                </Btn>
+              </div>
+            </div>
+          </div>
+        )}
         <div style={{flex:1,minHeight:'100vh',overflowY:'auto',background:G.bg}}>
           <div className="no-print" style={{padding:'14px 32px',borderBottom:'1px solid rgba(0,0,0,0.08)',display:'flex',alignItems:'center',justifyContent:'space-between',background:'rgba(255,255,255,0.92)',position:'sticky',top:0,zIndex:50,backdropFilter:'blur(16px)'}}>
             <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:20,fontWeight:600,color:'#111111'}}>{PAGE_TITLES[page]||page}</div>
             <div style={{display:'flex',alignItems:'center',gap:10}}>
+              {lastSaved&&<span style={{fontSize:10,color:G.muted}}>Saved {lastSaved.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'})}</span>}
+              <button onClick={()=>saveReport(false)} disabled={saving||!subject} style={{fontFamily:"'Inter',sans-serif",fontSize:11,fontWeight:600,padding:'6px 14px',borderRadius:7,cursor:saving||!subject?'not-allowed':'pointer',background:G.goldDim,color:G.gold,border:`1px solid ${G.goldBorder}`,opacity:!subject?.5:1}}>
+                {saving?'Saving…':'💾 Save'}
+              </button>
               {subject&&<span style={{fontSize:10,padding:'3px 10px',borderRadius:999,background:`${G.green}14`,color:G.green,border:`1px solid ${G.green}22`}}>{subject.address?.split(',')[0]}</span>}
               <span style={{fontSize:10,padding:'3px 10px',borderRadius:999,background:`${G.gold}14`,color:G.gold,border:`1px solid ${G.gold}22`}}>LI Industrial</span>
             </div>
