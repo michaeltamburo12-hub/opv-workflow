@@ -5,7 +5,7 @@ import {
   Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell,
   ImageRun, Header, Footer, AlignmentType, BorderStyle, WidthType,
   ShadingType, VerticalAlign, PageNumber, TabStopType, TabStopPosition,
-  LevelFormat, PageBreak, TableOfContents, StyleLevel
+  LevelFormat, PageBreak
 } from 'docx'
 import fs from 'fs'
 import path from 'path'
@@ -179,43 +179,44 @@ function buildCompPage(c: Record<string, unknown>, idx: number, photo: Buffer | 
     : `LEASE COMPARABLE ${idx + 1}  —  ${((c.address as string) || '').toUpperCase()}`
 
   const rows: AnyEl[] = type === 'sale' ? [
-    labelRow('PROPERTY ADDRESS', `${c.address || '—'}${c.city ? ', ' + c.city : ''}${c.state ? ', ' + c.state : ''}`),
-    labelRow('BUILDING SIZE', fmt(c.building_sf as number, '', ' SF')),
-    labelRow('LOT SIZE', fmt(c.lot_size_ac as number, '', ' AC')),
-    labelRow('CEILING HEIGHT', (c.ceiling_height as string) || '—'),
-    labelRow('LOADING DOCKS', (c.loading_docks as string) || '—', true),
-    labelRow('DRIVE-IN DOORS', (c.drive_ins as string) || '—'),
-    labelRow('HEAT', (c.heat as string) || '—', true),
-    labelRow('POWER', (c.power as string) || '—'),
-    labelRow('SPRINKLERS', (c.sprinkler as string) || '—', true),
-    labelRow('SEWER', (c.sewer as string) || '—'),
-    labelRow('PARKING', (c.parking as string) || '—', true),
-    labelRow('SALE PRICE', fmt(c.sale_price as number, '$') + (c.price_per_sf ? ` (${fmt(c.price_per_sf as number, '$')} PSF)` : '')),
-    labelRow('SALE DATE', fmtDate(c.sale_date as string), true),
-    labelRow('REAL ESTATE TAXES', fmt(c.real_estate_taxes as number, '$', '/yr')),
-    ...(c.buyer ? [labelRow('BUYER', c.buyer as string, true)] : []),
-    ...(c.seller ? [labelRow('SELLER', c.seller as string)] : []),
-    ...(c.cap_rate ? [labelRow('CAP RATE', `${c.cap_rate}%`, true)] : []),
-    ...(c.lease_income ? [labelRow('LEASE INCOME', fmt(c.lease_income as number, '$', '/yr'))] : []),
-    ...(c.lease_term ? [labelRow('LEASE TERM', c.lease_term as string, true)] : []),
+    labelRow('PROPERTY ADDRESS', `${c.address || '—'}${c.city ? ', ' + c.city : ''}`),
+    labelRow('BUILDING SIZE', fmt(c.building_sf as number, '+/- ', ' SF')),
+    ...(c.lot_size_ac ? [labelRow('LOT SIZE', fmt(c.lot_size_ac as number, '', ' Acres'), true)] : []),
+    ...(c.office_pct ? [labelRow('OFFICE SQ. FT.', `${c.office_pct}%`)] : []),
+    labelRow('DRIVE INS', (c.drive_ins as string) || '—', !!(c.lot_size_ac)),
+    labelRow('LOADING DOCKS', (c.loading_docks as string) || '—', !(c.lot_size_ac)),
+    labelRow('CEILING HEIGHT', (c.ceiling_height as string) || '—', !!(c.lot_size_ac)),
+    ...(c.heat ? [labelRow('HEAT', c.heat as string, !(c.lot_size_ac))] : []),
+    ...(c.power ? [labelRow('POWER', c.power as string, !!(c.lot_size_ac))] : []),
+    ...(c.sewer ? [labelRow('SEWERS', c.sewer as string, !(c.lot_size_ac))] : []),
+    ...(c.parking ? [labelRow('PARKING', c.parking as string, !!(c.lot_size_ac))] : []),
+    labelRow('SALE PRICE', fmt(c.sale_price as number, '$') + (c.price_per_sf || (c.sale_price && c.building_sf) ? ` ($${(Number(c.price_per_sf) || Number(c.sale_price)/Number(c.building_sf)).toFixed(2)} PSF)` : '')),
+    ...(c.lease_income ? [labelRow('LEASE INCOME', `$${Number(c.lease_income).toLocaleString()} NNN`, true)] : []),
+    ...(c.real_estate_taxes ? [labelRow('REAL ESTATE TAXES', `($${Number(c.real_estate_taxes).toFixed(2)} PSF)`)] : []),
+    ...(c.lease_term ? [labelRow('TERM', c.lease_term as string, true)] : []),
     ...(c.annual_escalations ? [labelRow('ANNUAL ESCALATIONS', c.annual_escalations as string)] : []),
+    ...(c.cap_rate ? [labelRow('CAP RATE', `${c.cap_rate}%`, true)] : []),
+    ...(c.transaction_date ? [labelRow('TRANSACTION DATE', c.transaction_date as string)] : [c.sale_date ? labelRow('TRANSACTION DATE', fmtDate(c.sale_date as string)) : null].filter(Boolean) as AnyEl[]),
+    ...(c.buyer ? [labelRow('BUYER', c.buyer as string, true)] : []),
+    ...(c.seller ? [labelRow('SELLER/TENANT', c.seller as string)] : []),
     ...(c.tenant ? [labelRow('TENANT', c.tenant as string, true)] : []),
+    ...(c.comments ? [labelRow('COMMENTS', c.comments as string)] : []),
   ] : [
-    labelRow('PROPERTY ADDRESS', `${c.address || '—'}${c.city ? ', ' + c.city : ''}${c.state ? ', ' + c.state : ''}`),
-    labelRow('BUILDING SIZE', fmt(c.building_sf as number, '', ' SF')),
-    ...(c.lot_size_ac ? [labelRow('LOT SIZE', fmt(c.lot_size_ac as number, '', ' AC'), true)] : []),
-    labelRow('CEILING HEIGHT', (c.ceiling_height as string) || '—'),
-    labelRow('LOADING DOCKS', (c.loading_docks as string) || '—', true),
-    labelRow('DRIVE-IN DOORS', (c.drive_ins as string) || '—'),
-    ...(c.office_pct ? [labelRow('OFFICE', `${c.office_pct}%`, true)] : []),
-    labelRow('LEASE PRICE', (c.lease_price as string) || fmt(c.asking_price as number, '$', ' PSF')),
-    labelRow('REAL ESTATE TAXES', (c.real_estate_taxes as string) || (c.taxes_psf ? `$${c.taxes_psf} PSF` : '—'), true),
-    ...(c.lease_term ? [labelRow('TERM', c.lease_term as string)] : []),
-    ...(c.annual_escalations ? [labelRow('ANNUAL ESCALATIONS', c.annual_escalations as string, true)] : []),
-    ...(c.tenant ? [labelRow('TENANT', c.tenant as string)] : []),
-    ...(c.transaction_date ? [labelRow('TRANSACTION DATE', c.transaction_date as string, true)] : []),
-    ...(c.landlord_work ? [labelRow('LANDLORD WORK', c.landlord_work as string)] : []),
-    ...(c.comments ? [labelRow('COMMENTS', c.comments as string, true)] : []),
+    labelRow('PROPERTY ADDRESS', `${c.address || '—'}${c.city ? ', ' + c.city : ''}`),
+    labelRow('BUILDING SIZE', fmt(c.building_sf as number, '+/- ', ' SF')),
+    ...(c.lot_size_ac ? [labelRow('PLOT', fmt(c.lot_size_ac as number, '', ' Acres'), true)] : []),
+    ...(c.office_pct ? [labelRow('OFFICE', `${c.office_pct}%`)] : []),
+    labelRow('DRIVE INS', (c.drive_ins as string) || '—', !c.office_pct),
+    labelRow('LOADING DOCKS', (c.loading_docks as string) || '—', !!c.office_pct),
+    labelRow('CEILING HEIGHT', (c.ceiling_height as string) || '—', !c.office_pct),
+    labelRow('LEASE PRICE', (c.lease_price as string) || (c.price_per_sf ? `$${Number(c.price_per_sf).toFixed(2)} PSF NNN` : '—'), !!c.office_pct),
+    labelRow('REAL ESTATE TAXES', (c.taxes_psf ? `$${Number(c.taxes_psf).toFixed(2)} PSF` : (c.real_estate_taxes as string) || '—'), !c.office_pct),
+    ...(c.lease_term ? [labelRow('TERM', c.lease_term as string, !!c.office_pct)] : []),
+    ...(c.annual_escalations ? [labelRow('ESCALATIONS', c.annual_escalations as string, !c.lease_term)] : []),
+    ...(c.landlord_work ? [labelRow('LANDLORD WORK', c.landlord_work as string, !!c.annual_escalations)] : []),
+    ...(c.transaction_date ? [labelRow('TRANSACTION DATE', c.transaction_date as string, !c.landlord_work)] : []),
+    ...(c.tenant ? [labelRow('TENANT', c.tenant as string, !!c.transaction_date)] : []),
+    ...(c.comments ? [labelRow('COMMENTS', c.comments as string, !c.tenant)] : []),
   ]
 
   return [
@@ -231,40 +232,76 @@ function buildCompPage(c: Record<string, unknown>, idx: number, photo: Buffer | 
       columnWidths: [3240, 6120],
       rows,
     }),
-    spacer(120, 80),
-    new Paragraph({
-      children: [new TextRun({ text: 'Additional Comments:', bold: true, size: 18, font: 'Arial', color: DARK })],
-      spacing: { after: 40 },
-    }),
-    bodyText('[ Enter additional comments here ]', { italic: true, color: '888888' }),
+    spacer(80, 40),
   ]
 }
 
 // ── PCRE COMPLETED SALES TABLE ────────────────────────────────────────────────
 function buildRecentSalesTable(): AnyEl[] {
   const sales = [
-    ['128 Spagnoli Rd', 'Melville', 'Redevelopment', '150,000', '$21,000,000', '3rd Q 2025'],
-    ['48 Mall Dr', 'Commack', 'Industrial', '20,000', '$4,700,000', '2nd Q 2025'],
-    ['474 Grand Blvd', 'Westbury', 'Industrial', '71,000', '$14,250,000', '4th Q 2024'],
-    ['145 Kennedy Dr', 'Hauppauge', 'Industrial', '40,000', '$8,150,000', '3rd Q 2024'],
-    ['200 Central Ave', 'Farmingdale', 'Industrial', '25,000', '$5,875,000', '2nd Q 2024'],
-    ['218 Front St', 'Hempstead', 'Industrial', '30,183', '$4,750,000', '1st Q 2024'],
-    ['81 Modular Ave', 'Commack', 'Industrial', '30,000', '$6,150,000', '4th Q 2023'],
-    ['182 Bethpage-SH Rd', 'Old Bethpage', 'Industrial', '48,000', '$7,512,500', '4th Q 2022'],
-    ['10 Ranick Dr S', 'Amityville', 'Industrial', '43,500', '$7,350,000', '3rd Q 2022'],
-    ['5 Park Drive', 'Melville', 'Industrial', '50,000', '$14,500,000', '2nd Q 2022'],
-    ['40 Enter Lane', 'Islandia', 'Industrial', '106,874', '$19,350,000', '4th Q 2021'],
+    ['128 Spagnoli Rd', 'Melville', 'Redevelopment', '150,000', '$21,000,000', '3rd Quarter 2025'],
+    ['48 Mall Dr', 'Commack', 'Industrial', '20,000', '$4,700,000', '2nd Quarter 2025'],
+    ['22 Sutton Place', 'Brewster', 'Industrial', '70,000', 'Undisclosed', '1st Quarter 2025'],
+    ['474 Grand Blvd', 'Westbury', 'Industrial', '71,000', '$14,250,000', '4th Quarter 2024'],
+    ['145 Kennedy Dr', 'Hauppauge', 'Industrial', '40,000', '$8,150,000', '3rd Quarter 2024'],
+    ['200 Central Ave', 'Farmingdale', 'Industrial', '25,000', '$5,875,000', '2nd Quarter 2024'],
+    ['218 Front St', 'Hempstead', 'Industrial', '30,183', '$4,750,000', '1st Quarter 2024'],
+    ['30 Eastern Ave', 'Deer Park', 'Industrial', '11,940', '$2,200,000', '1st Quarter 2024'],
+    ['81 Modular Ave', 'Commack', 'Industrial', '30,000', '$6,150,000', '4th Quarter 2023'],
+    ['19 Power Drive', 'Hauppauge', 'Industrial', '12,000', '$2,050,000', '4th Quarter 2023'],
+    ['182 Bethpage-SH Rd', 'Old Bethpage', 'Industrial', '48,000', '$7,512,500', '4th Quarter 2022'],
+    ['66-70 Austin Blvd', 'Commack', 'Industrial', '40,000', '$10,250,000', '3rd Quarter 2022'],
+    ['40 Ranick Road', 'Hauppauge', 'Industrial', '35,760', '$8,400,000', '3rd Quarter 2022'],
+    ['10 Ranick Dr S', 'Amityville', 'Industrial', '43,500', '$7,350,000', '3rd Quarter 2022'],
+    ['5 Park Drive', 'Melville', 'Industrial', '50,000', '$14,500,000', '2nd Quarter 2022'],
+    ['355 Crooked Hill Rd', 'Brentwood', 'Industrial', '83,000', '$18,150,000', '2nd Quarter 2022'],
+    ['600 Prime Place', 'Hauppauge', 'Industrial', '45,000', '$8,300,000', '1st Quarter 2021'],
+    ['555 Prime Place', 'Hauppauge', 'Industrial', '45,000', '$7,925,000', '1st Quarter 2021'],
   ]
-  const wids = [2200, 1400, 1500, 1200, 1560, 1500]
+  const wids = [2100, 1400, 1500, 1200, 1560, 1600]
   return [
-    subHeading("PCRE'S RECENTLY COMPLETED SALES TRANSACTIONS"),
+    subHeading("PCRE'S SAMPLE OF OUR RECENTLY COMPLETED SALES TRANSACTIONS"),
     spacer(40, 60),
     new Table({
       width: { size: 9360, type: WidthType.DXA },
       columnWidths: wids,
       rows: [
-        darkHeaderRow(['Property Address', 'City', 'Property Type', 'Bldg Size (SF)', 'Sale Price', 'Transaction Date'], wids),
+        darkHeaderRow(['Property Address', 'City', 'Property Type', 'Building Size (SF)', 'Sale Price', 'Transaction Date'], wids),
         ...sales.map((row, i) => dataRow(row, wids, i % 2 === 1)),
+      ],
+    }),
+  ]
+}
+
+// ── PCRE COMPLETED LEASE TRANSACTIONS TABLE ───────────────────────────────────
+function buildRecentLeasesTable(): AnyEl[] {
+  const leases = [
+    ['1460 N Clinton Ave', 'Bay Shore', 'Absolute Home Contracting', '2,000', '$20.00 PSF', '3rd Quarter 2025'],
+    ['99 Seaview Blvd', 'Port Washington', 'Pyramid Flooring', '9,000', '$18.00 PSF', '2nd Quarter 2025'],
+    ['80 13th Ave', 'Ronkonkoma', 'Demil Corp', '7,500', '$15.00 PSF', '2nd Quarter 2025'],
+    ['170 Express St', 'Plainview', 'Life Plus Style Gourmet', '42,000', '$12.00 Gross', '2nd Quarter 2025'],
+    ['40 Rabro Dr', 'Hauppauge', 'Blue Point Dance', '6,900', '$17.40 Gross', '3rd Quarter 2025'],
+    ['260 Spagnoli Rd', 'Melville', 'LIBM Inc.', '54,000', '$17.00 Gross', '2nd Quarter 2025'],
+    ['47 Mall Dr', 'Commack', 'eBizware', '10,000', '$17.50 Gross', '2nd Quarter 2025'],
+    ['1980 New Highway', 'Farmingdale', 'Top Bright Inc.', '26,500', '$16.00 Gross', '1st Quarter 2025'],
+    ['143 Pine Aire Dr', 'Bay Shore', 'Mulligan Restoration', '12,300', '$17.00 Gross', '1st Quarter 2025'],
+    ['1765 Expressway Dr N', 'Hauppauge', 'Capitol Building Supply', '13,500', '$16.36 Gross', '3rd Quarter 2024'],
+    ['50 Wireless Blvd', 'Hauppauge', 'Universal Perfumes & Cosmetics', '15,000', '$16.00 Gross', '3rd Quarter 2024'],
+    ['5005 Veterans Mem Hwy', 'Holbrook', 'Cookies United, LLC', '38,000', '$14.50 Gross', '3rd Quarter 2024'],
+    ['1707 Veterans Mem Hwy', 'Islandia', 'Victims Info Bureau of Suffolk', '18,886', '$21.00 Gross', '3rd Quarter 2024'],
+    ['700 Chettic Avenue', 'Copiague', 'Green Earth Duct Cleaning', '17,500', '$13.50 Gross', '4th Quarter 2024'],
+  ]
+  const wids = [1800, 1300, 2100, 900, 1360, 1900]
+  return [
+    new Paragraph({ children: [new PageBreak()] }),
+    subHeading("PCRE'S SAMPLE OF OUR RECENTLY COMPLETED LEASE TRANSACTIONS"),
+    spacer(40, 60),
+    new Table({
+      width: { size: 9360, type: WidthType.DXA },
+      columnWidths: wids,
+      rows: [
+        darkHeaderRow(['Property Address', 'City', 'Tenant', 'Leased SF', 'Lease Price (PSF)', 'Transaction Date'], wids),
+        ...leases.map((row, i) => dataRow(row, wids, i % 2 === 1)),
       ],
     }),
   ]
@@ -571,54 +608,67 @@ export async function POST(req: NextRequest) {
     ? comps.reduce((s: number, c: Record<string, unknown>) => s + (Number(c.price_per_sf) || 0), 0) / comps.length
     : 0)
 
+  // Calculate total value range from PSF × building SF
+  const bldgSF = Number(subject?.size) || 0
+  const valLowPsf = Number(subject?.estimatedValueLow) || 0
+  const valHighPsf = Number(subject?.estimatedValueHigh) || 0
+  const valLowTotal = bldgSF && valLowPsf ? bldgSF * valLowPsf : 0
+  const valHighTotal = bldgSF && valHighPsf ? bldgSF * valHighPsf : 0
+
   const ovChildren: AnyEl[] = [
     new Paragraph({ children: [new PageBreak()] }),
     sectionHeading('III', 'OPINION OF VALUE'),
     spacer(80, 80),
     bodyText('Based upon the aforementioned assumptions, our knowledge of current market conditions, and a review of the Comparables found in Section IV.'),
-    spacer(80, 80),
+    spacer(80, 60),
+    // Header row: Per SF | Total
     new Table({
       width: { size: 9360, type: WidthType.DXA },
-      columnWidths: [4200, 5160],
+      columnWidths: [1200, 4080, 4080],
       rows: [
         new TableRow({ children: [
-          new TableCell({ width: { size: 4200, type: WidthType.DXA }, borders: bAll, shading: { fill: GRAY_HDR, type: ShadingType.CLEAR }, margins: { top: 120, bottom: 120, left: 140, right: 80 }, children: [new Paragraph({ children: [new TextRun({ text: 'ESTIMATED VALUE FOR SALE', bold: true, size: 20, font: 'Arial', color: WHITE })] })] }),
-          new TableCell({ width: { size: 5160, type: WidthType.DXA }, borders: bAll, shading: { fill: 'FFF8E1', type: ShadingType.CLEAR }, margins: { top: 120, bottom: 120, left: 140, right: 80 }, children: [new Paragraph({ children: [
-            new TextRun({ text: subject?.estimatedValueLow && subject?.estimatedValueHigh
-              ? `$${Number(subject.estimatedValueLow).toLocaleString()} – $${Number(subject.estimatedValueHigh).toLocaleString()}`
-              : avgPsf ? `$${Number(avgPsf).toFixed(2)} PSF (Estimated)` : '[ $ ________________ ]',
-              bold: true, size: 20, font: 'Arial', color: GOLD })] })] }),
+          new TableCell({ width: { size: 1200, type: WidthType.DXA }, borders: bAll, shading: { fill: GRAY_HDR, type: ShadingType.CLEAR }, margins: { top: 100, bottom: 100, left: 120, right: 80 }, children: [new Paragraph({ children: [new TextRun({ text: 'Estimated Value For Sale', bold: true, size: 18, font: 'Arial', color: WHITE })] })] }),
+          new TableCell({ width: { size: 4080, type: WidthType.DXA }, borders: bAll, shading: { fill: GRAY_HDR, type: ShadingType.CLEAR }, margins: { top: 100, bottom: 100, left: 120, right: 80 }, children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: 'Per SF', bold: true, size: 18, font: 'Arial', color: WHITE })] })] }),
+          new TableCell({ width: { size: 4080, type: WidthType.DXA }, borders: bAll, shading: { fill: GRAY_HDR, type: ShadingType.CLEAR }, margins: { top: 100, bottom: 100, left: 120, right: 80 }, children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: 'Total', bold: true, size: 18, font: 'Arial', color: WHITE })] })] }),
         ]}),
         new TableRow({ children: [
-          new TableCell({ width: { size: 4200, type: WidthType.DXA }, borders: bAll, shading: { fill: GRAY_HDR, type: ShadingType.CLEAR }, margins: { top: 120, bottom: 120, left: 140, right: 80 }, children: [new Paragraph({ children: [new TextRun({ text: 'RECOMMENDED ASKING PRICE', bold: true, size: 20, font: 'Arial', color: WHITE })] })] }),
-          new TableCell({ width: { size: 5160, type: WidthType.DXA }, borders: bAll, margins: { top: 120, bottom: 120, left: 140, right: 80 }, children: [new Paragraph({ children: [new TextRun({ text: '[ $ ________________ ]', size: 20, font: 'Arial', color: '888888' })] })] }),
+          new TableCell({ width: { size: 1200, type: WidthType.DXA }, borders: bAll, shading: { fill: MID_GRAY, type: ShadingType.CLEAR }, margins: { top: 140, bottom: 140, left: 120, right: 80 }, children: [new Paragraph({ children: [new TextRun({ text: '', size: 18, font: 'Arial' })] })] }),
+          new TableCell({ width: { size: 4080, type: WidthType.DXA }, borders: bAll, shading: { fill: 'FFF8E1', type: ShadingType.CLEAR }, margins: { top: 140, bottom: 140, left: 120, right: 80 }, children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({
+            text: valLowPsf && valHighPsf ? `$${valLowPsf.toFixed(2)} - $${valHighPsf.toFixed(2)}` : avgPsf ? `$${Number(avgPsf).toFixed(2)}` : '[ __________ ]',
+            bold: true, size: 22, font: 'Arial', color: GOLD })] })] }),
+          new TableCell({ width: { size: 4080, type: WidthType.DXA }, borders: bAll, shading: { fill: 'FFF8E1', type: ShadingType.CLEAR }, margins: { top: 140, bottom: 140, left: 120, right: 80 }, children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({
+            text: valLowTotal && valHighTotal ? `$${valLowTotal.toLocaleString()} - $${valHighTotal.toLocaleString()}` : bldgSF && avgPsf ? `$${Math.round(bldgSF * avgPsf).toLocaleString()}` : '[ __________ ]',
+            bold: true, size: 22, font: 'Arial', color: GOLD })] })] }),
         ]}),
       ],
     }),
     ...(subject?.opvType === 'investment' || subject?.capRateLow ? [
-      spacer(120, 80),
+      spacer(140, 80),
       bodyText('The value shall be established as a function of:'),
       bullet('A "Fair Market" Rental Rate for an acceptable lease term.'),
       bullet('An acceptable Rate of Return (Cap Rate) to the investor/Purchaser.'),
-      spacer(80, 40),
-      bodyText('Given the above, consider:'),
-      spacer(40, 40),
+      spacer(80, 60),
+      bodyText('Given the above, consider;'),
+      spacer(60, 60),
       new Table({
         width: { size: 9360, type: WidthType.DXA },
-        columnWidths: [3600, 5760],
+        columnWidths: [3800, 5560],
         rows: [
           ...(subject?.leasePsfLow || subject?.leasePsfHigh ? [new TableRow({ children: [
-            new TableCell({ width: { size: 3600, type: WidthType.DXA }, borders: bAll, shading: { fill: MID_GRAY, type: ShadingType.CLEAR }, margins: { top: 80, bottom: 80, left: 140, right: 80 }, children: [new Paragraph({ children: [new TextRun({ text: 'Lease/Rental Rate (Year 1)', bold: true, size: 18, font: 'Arial', color: DARK })] })] }),
-            new TableCell({ width: { size: 5760, type: WidthType.DXA }, borders: bAll, margins: { top: 80, bottom: 80, left: 140, right: 80 }, children: [new Paragraph({ children: [new TextRun({ text: `$${subject.leasePsfLow || '—'} to $${subject.leasePsfHigh || '—'} PSF NNN`, size: 18, font: 'Arial', color: DARK })] })] }),
+            new TableCell({ width: { size: 3800, type: WidthType.DXA }, borders: bAll, shading: { fill: MID_GRAY, type: ShadingType.CLEAR }, margins: { top: 100, bottom: 100, left: 140, right: 80 }, children: [new Paragraph({ children: [new TextRun({ text: 'Lease/Rental Rate (Year 1)', bold: true, size: 19, font: 'Arial', color: DARK })] })] }),
+            new TableCell({ width: { size: 5560, type: WidthType.DXA }, borders: bAll, margins: { top: 100, bottom: 100, left: 140, right: 80 }, children: [new Paragraph({ children: [new TextRun({ text: `$${subject.leasePsfLow} to $${subject.leasePsfHigh} PSF NNN`, size: 19, font: 'Arial', color: DARK })] })] }),
           ]})] : []),
           ...(subject?.capRateLow || subject?.capRateHigh ? [new TableRow({ children: [
-            new TableCell({ width: { size: 3600, type: WidthType.DXA }, borders: bAll, shading: { fill: MID_GRAY, type: ShadingType.CLEAR }, margins: { top: 80, bottom: 80, left: 140, right: 80 }, children: [new Paragraph({ children: [new TextRun({ text: 'Cap Rate', bold: true, size: 18, font: 'Arial', color: DARK })] })] }),
-            new TableCell({ width: { size: 5760, type: WidthType.DXA }, borders: bAll, margins: { top: 80, bottom: 80, left: 140, right: 80 }, children: [new Paragraph({ children: [new TextRun({ text: `${subject.capRateLow || '—'}% to ${subject.capRateHigh || '—'}%`, size: 18, font: 'Arial', color: DARK })] })] }),
+            new TableCell({ width: { size: 3800, type: WidthType.DXA }, borders: bAll, shading: { fill: MID_GRAY, type: ShadingType.CLEAR }, margins: { top: 100, bottom: 100, left: 140, right: 80 }, children: [new Paragraph({ children: [new TextRun({ text: 'Cap Rate', bold: true, size: 19, font: 'Arial', color: DARK })] })] }),
+            new TableCell({ width: { size: 5560, type: WidthType.DXA }, borders: bAll, margins: { top: 100, bottom: 100, left: 140, right: 80 }, children: [new Paragraph({ children: [new TextRun({ text: `${subject.capRateLow}% to ${subject.capRateHigh}%`, size: 19, font: 'Arial', color: DARK })] })] }),
           ]})] : []),
-          ...(subject?.estimatedValueLow || subject?.estimatedValueHigh ? [new TableRow({ children: [
-            new TableCell({ width: { size: 3600, type: WidthType.DXA }, borders: bAll, shading: { fill: MID_GRAY, type: ShadingType.CLEAR }, margins: { top: 80, bottom: 80, left: 140, right: 80 }, children: [new Paragraph({ children: [new TextRun({ text: 'Valuation', bold: true, size: 18, font: 'Arial', color: DARK })] })] }),
-            new TableCell({ width: { size: 5760, type: WidthType.DXA }, borders: bAll, margins: { top: 80, bottom: 80, left: 140, right: 80 }, children: [new Paragraph({ children: [new TextRun({ text: `$${Number(subject.estimatedValueLow || 0).toLocaleString()} – $${Number(subject.estimatedValueHigh || 0).toLocaleString()}`, size: 18, font: 'Arial', color: DARK })] })] }),
-          ]})] : []),
+          new TableRow({ children: [
+            new TableCell({ width: { size: 3800, type: WidthType.DXA }, borders: bAll, shading: { fill: MID_GRAY, type: ShadingType.CLEAR }, margins: { top: 100, bottom: 100, left: 140, right: 80 }, children: [new Paragraph({ children: [new TextRun({ text: 'Valuation', bold: true, size: 19, font: 'Arial', color: DARK })] })] }),
+            new TableCell({ width: { size: 5560, type: WidthType.DXA }, borders: bAll, margins: { top: 100, bottom: 100, left: 140, right: 80 }, children: [
+              new Paragraph({ children: [new TextRun({ text: valLowPsf && valHighPsf ? `$${valLowPsf.toFixed(2)} PSF to $${valHighPsf.toFixed(2)} PSF` : '[ __________ ]', size: 19, font: 'Arial', color: DARK })] }),
+              new Paragraph({ children: [new TextRun({ text: valLowTotal && valHighTotal ? `$${valLowTotal.toLocaleString()} - $${valHighTotal.toLocaleString()}` : '', size: 19, font: 'Arial', color: DARK })] }),
+            ]},
+          ]}),
         ],
       }),
     ] : []),
@@ -627,29 +677,34 @@ export async function POST(req: NextRequest) {
   // ── SECTION IV — SALE / INVESTMENT COMPS ─────────────────────────────────────
   const saleCompChildren: AnyEl[] = []
   if ((comps || []).length > 0) {
-    const cWids = [2600, 1200, 1200, 1300, 1300, 900, 860]
+    const isInvestment = subject?.opvType === 'investment'
+    const sectionTitle = isInvestment ? 'RECENT INVESTMENT TRANSACTIONS' : 'RECENT SALE TRANSACTIONS'
+    const cWids = isInvestment ? [2800, 1400, 1560, 1800, 1800] : [2800, 1400, 1560, 1800, 1800]
+    const cHeaders = isInvestment
+      ? ['Property Address', 'City', 'Building Size (SF)', 'Sale Price', 'Cap Rate']
+      : ['Property Address', 'City', 'Building Size (SF)', 'Sale Price', 'Price PSF']
     saleCompChildren.push(
       new Paragraph({ children: [new PageBreak()] }),
-      sectionHeading('IV', 'RECENT INVESTMENT / SALE TRANSACTIONS'),
+      sectionHeading('IV', sectionTitle),
       spacer(80, 60),
       new Table({
         width: { size: 9360, type: WidthType.DXA },
         columnWidths: cWids,
         rows: [
-          darkHeaderRow(['Property Address', 'City', 'Bldg SF', 'Sale Price', 'Price PSF', 'Cap Rate', 'Sale Date'], cWids),
+          darkHeaderRow(cHeaders, cWids),
           ...(comps || []).map((c: Record<string, unknown>, i: number) => dataRow([
             `${c.address || ''}`,
             `${c.city || ''}`,
-            fmt(c.building_sf as number),
+            c.building_sf ? `${Number(c.building_sf).toLocaleString()} SF` : '—',
             fmt(c.sale_price as number, '$'),
-            fmt(c.price_per_sf as number, '$'),
-            c.cap_rate ? `${c.cap_rate}%` : '—',
-            fmtDate(c.sale_date as string),
+            isInvestment
+              ? (c.cap_rate ? `${c.cap_rate}%` : '—')
+              : (c.price_per_sf || (c.sale_price && c.building_sf) ? `$${(Number(c.price_per_sf) || Number(c.sale_price)/Number(c.building_sf)).toFixed(2)}` : '—'),
           ], cWids, i % 2 === 1)),
         ],
       }),
       spacer(80, 60),
-      bodyText('Each comparable sale transaction is detailed on the following pages.'),
+      bodyText('Each comparable transaction is detailed on the following pages.'),
       ...(comps || []).flatMap((c: Record<string, unknown>, i: number) =>
         buildCompPage(c, i, compPhotos[i], 'sale')
       )
@@ -659,7 +714,7 @@ export async function POST(req: NextRequest) {
   // ── SECTION V — LEASE COMPS ───────────────────────────────────────────────────
   const leaseCompChildren: AnyEl[] = []
   if (includeLeaseComps && (leaseComps || []).length > 0) {
-    const lWids = [2600, 1200, 1400, 1560, 1200, 1400]
+    const lWids = [3000, 1600, 2160, 2600]
     leaseCompChildren.push(
       new Paragraph({ children: [new PageBreak()] }),
       sectionHeading('V', 'RECENT LEASE TRANSACTIONS'),
@@ -668,14 +723,12 @@ export async function POST(req: NextRequest) {
         width: { size: 9360, type: WidthType.DXA },
         columnWidths: lWids,
         rows: [
-          darkHeaderRow(['Property Address', 'City', 'Bldg SF', 'Lease Price (PSF)', 'RE Taxes', 'Transaction Date'], lWids),
+          darkHeaderRow(['Property Address', 'City', 'Building Size (SF)', 'Lease Price (PSF)'], lWids),
           ...(leaseComps || []).map((c: Record<string, unknown>, i: number) => dataRow([
             `${c.address || ''}`,
             `${c.city || ''}`,
-            fmt(c.building_sf as number),
-            (c.lease_price as string) || fmt(c.asking_price as number, '$', ' PSF'),
-            (c.taxes_psf as string) || fmt(c.real_estate_taxes as number, '$'),
-            (c.transaction_date as string) || '—',
+            c.building_sf ? `${Number(c.building_sf).toLocaleString()} SF` : '—',
+            (c.lease_price as string) || (c.price_per_sf ? `$${Number(c.price_per_sf).toFixed(2)} PSF NNN` : '—'),
           ], lWids, i % 2 === 1)),
         ],
       }),
@@ -757,6 +810,8 @@ export async function POST(req: NextRequest) {
       bodyText('From property sales and leasing to tax-advantaged 1031 exchanges and portfolio development, Premier applies the full force of its experience, know-how and network to effectively achieve the real estate goals of its clients. This approach, combined with Premier\'s strong work ethic, professional integrity and unwavering commitment to meeting its clients\' needs has made the company one of the region\'s fastest-growing real estate firms.'),
       spacer(120, 80),
       ...buildRecentSalesTable(),
+      spacer(80, 80),
+      ...buildRecentLeasesTable(),
       spacer(160, 80),
       // Jason bio
       new Paragraph({ children: [new PageBreak()] }),

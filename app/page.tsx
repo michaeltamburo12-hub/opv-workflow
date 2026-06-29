@@ -1455,7 +1455,7 @@ function AvailSearch({subject,avails,setAvails,setPage,folders,setFolders}: {sub
 
   const search = async () => {
     setLoading(true); setResults([]); setSearched(false)
-    let q = supabase.from('market_availabilities').select('*').eq('status','Available')
+    let q = supabase.from('market_availabilities').select('*')
     if (filters.county) q = q.eq('county', filters.county)
     if (filters.city) q = q.ilike('city', `%${filters.city}%`)
     if (filters.min_sf) q = q.gte('building_sf', Number(filters.min_sf))
