@@ -730,15 +730,40 @@ function DatabaseManager() {
     setAvailForm({...blankAvail})
   }
 
+  // Maps common CoStar/LoopNet column names to our database column names
+  const COLUMN_ALIASES: Record<string,string> = {
+    'street_address':'address', 'property_address':'address', 'full_address':'address',
+    'property_name':'address', 'building_address':'address',
+    'rentable_building_area_(sf)':'building_sf', 'rentable_building_area':'building_sf',
+    'building_size':'building_sf', 'bldg_sf':'building_sf', 'total_sf':'building_sf',
+    'gla_(sf)':'building_sf', 'building_size_(sf)':'building_sf',
+    'clear_ceiling_height':'ceiling_height', 'clear_height':'ceiling_height',
+    'number_of_loading_docks':'loading_docks', 'dock_doors':'loading_docks', 'docks':'loading_docks',
+    'drive_in_doors':'drive_ins', 'grade_level_doors':'drive_ins', 'drive-in_doors':'drive_ins',
+    'electric_service':'power', 'electrical_service':'power', 'electrical':'power',
+    'sewer_connection':'sewer',
+    'for_sale_price':'asking_price', 'sale_price':'asking_price', 'list_price':'asking_price',
+    'price/sf':'price_per_sf', 'price_/_sf':'price_per_sf', 'asking_price/sf':'price_per_sf',
+    'sprinkler_system':'sprinkler', 'fire_sprinklers':'sprinkler',
+    'real_estate_taxes':'real_estate_taxes', 're_taxes':'real_estate_taxes', 'annual_taxes':'real_estate_taxes',
+    'lot_size_(ac)':'lot_size_ac', 'land_area':'lot_size_ac', 'land_area_(ac)':'lot_size_ac', 'lot_acres':'lot_size_ac',
+    'cap_rate':'actual_cap_rate', 'capitalization_rate':'actual_cap_rate',
+    'transaction_date':'sale_date', 'close_of_escrow':'sale_date',
+    'grantor':'seller', 'grantee':'buyer', 'vendor':'seller', 'purchaser':'buyer',
+    'listing_agent':'listing_broker', 'broker':'listing_broker',
+    'sub_market':'submarket', 'sub-market':'submarket',
+    'zip':'zip_code', 'postal_code':'zip_code',
+  }
   const parseCSV = (text: string) => {
     const lines = text.trim().split('\n').filter(l=>l.trim())
     if (lines.length < 2) return []
     const sep = lines[0].includes('\t') ? '\t' : ','
-    const headers = lines[0].split(sep).map(h=>h.trim().replace(/^"|"$/g,'').toLowerCase().replace(/\s+/g,'_'))
+    const rawHeaders = lines[0].split(sep).map(h=>h.trim().replace(/^"|"$/g,'').toLowerCase().replace(/\s+/g,'_'))
+    const headers = rawHeaders.map(h => COLUMN_ALIASES[h] || h)
     return lines.slice(1).map(line=>{
       const vals = line.split(sep).map(v=>v.trim().replace(/^"|"$/g,''))
       const row: Record<string,string> = {}
-      headers.forEach((h,i)=>{ row[h]=vals[i]||'' })
+      headers.forEach((h,i)=>{ if(vals[i]) row[h]=vals[i] })
       return row
     })
   }
@@ -915,8 +940,11 @@ function DatabaseManager() {
         <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:20,alignItems:'start'}}>
           <Card>
             <SL>Paste CSV or Tab-Separated Data</SL>
-            <p style={{fontSize:12,color:G.muted,marginBottom:14,lineHeight:1.6}}>
+            <p style={{fontSize:12,color:G.muted,marginBottom:8,lineHeight:1.6}}>
               Export from Excel, Numbers, or CoStar and paste below. First row must be a header row. Column names are matched automatically — use names like <span style={{color:G.gold,fontFamily:"'JetBrains Mono',monospace",fontSize:11}}>address, building_sf, sale_price, sale_date, buyer, seller</span>, etc.
+            </p>
+            <p style={{fontSize:11,color:G.faint,marginBottom:14,lineHeight:1.5}}>
+              💡 CoStar &amp; LoopNet exports are supported — common column names like <em>Street Address, Building Size, Clear Ceiling Height, Loading Docks</em> are automatically mapped to the correct database fields.
             </p>
             <Field label="Paste data here" full>
               <textarea value={importText} onChange={e=>setImportText(e.target.value)} placeholder={"address,city,county,building_sf,sale_price,sale_date,buyer,seller\n45 Orville Dr,Bohemia,Suffolk,28500,4250000,2024-03-15,Acme LLC,Smith Realty"} style={{...inputStyle as React.CSSProperties,minHeight:220,resize:'vertical' as const,lineHeight:1.5,fontFamily:"'JetBrains Mono',monospace",fontSize:11}}/>
@@ -1565,7 +1593,7 @@ function AvailSearch({subject,avails,setAvails,setPage,folders,setFolders}: {sub
                       <div style={{width:28,height:28,borderRadius:'50%',background:G.bg4,border:`1.5px solid ${G.border}`,display:'flex',alignItems:'center',justifyContent:'center',fontSize:11,fontWeight:700,color:G.muted}}>#{idx+1}</div>
                     </div>
                     <div style={{flex:1}}>
-                      <div style={{fontSize:13,fontWeight:700,marginBottom:6}}>{r.address}{r.city?`, ${r.city}`:''}</div>
+                      <div style={{fontSize:13,fontWeight:700,marginBottom:6}}>{r.address?`${r.address}${r.city?`, ${r.city}`:''}`:r.city||'(No address on file)'}</div>
                       <div style={{display:'flex',gap:6,flexWrap:'wrap' as const,marginBottom:8}}>
                         {r.price_per_sf>0&&<Tag color={G.blue}>${Number(r.price_per_sf).toFixed(2)}/SF</Tag>}
                         {r.asking_price>0&&<Tag color={G.purple}>${Number(r.asking_price).toLocaleString()}</Tag>}
