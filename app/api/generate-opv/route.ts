@@ -667,7 +667,7 @@ export async function POST(req: NextRequest) {
             new TableCell({ width: { size: 5560, type: WidthType.DXA }, borders: bAll, margins: { top: 100, bottom: 100, left: 140, right: 80 }, children: [
               new Paragraph({ children: [new TextRun({ text: valLowPsf && valHighPsf ? `$${valLowPsf.toFixed(2)} PSF to $${valHighPsf.toFixed(2)} PSF` : '[ __________ ]', size: 19, font: 'Arial', color: DARK })] }),
               new Paragraph({ children: [new TextRun({ text: valLowTotal && valHighTotal ? `$${valLowTotal.toLocaleString()} - $${valHighTotal.toLocaleString()}` : '', size: 19, font: 'Arial', color: DARK })] }),
-            ]},
+            ]}),
           ]}),
         ],
       }),
