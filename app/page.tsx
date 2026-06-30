@@ -129,6 +129,38 @@ const SL = ({children,style={}}: {children:React.ReactNode,style?:React.CSSPrope
   <p style={{fontSize:10,fontWeight:600,letterSpacing:'.12em',textTransform:'uppercase' as const,color:D.textSec,marginBottom:10,...style}}>{children}</p>
 )
 
+// Street View photo component — lazy loads on demand
+function StreetViewPhoto({address, style={}}: {address:string, style?:React.CSSProperties}) {
+  const [state, setState] = useState<'idle'|'loading'|'ok'|'err'>('idle')
+  const [src, setSrc] = useState('')
+  const load = async () => {
+    setState('loading')
+    try {
+      const res = await fetch(`/api/street-view?address=${encodeURIComponent(address)}`)
+      if (!res.ok) { setState('err'); return }
+      const blob = await res.blob()
+      setSrc(URL.createObjectURL(blob)); setState('ok')
+    } catch { setState('err') }
+  }
+  if (state==='idle') return (
+    <button onClick={load} style={{background:`rgba(59,130,246,0.08)`,border:`1px dashed ${D.blue}44`,borderRadius:8,color:D.blue,fontSize:11,fontWeight:600,padding:'8px 14px',cursor:'pointer',fontFamily:"'Inter',sans-serif",display:'flex',alignItems:'center',gap:6,...style}}>
+      📷 Load Street View
+    </button>
+  )
+  if (state==='loading') return (
+    <div style={{display:'flex',alignItems:'center',justifyContent:'center',width:180,height:110,background:D.surface2,borderRadius:8,border:`1px solid ${D.border}`,...style}}>
+      <div className="spin" style={{width:18,height:18,border:`2px solid ${D.border}`,borderTopColor:D.blue,borderRadius:'50%'}}/>
+    </div>
+  )
+  if (state==='err') return (
+    <div style={{display:'flex',flexDirection:'column' as const,alignItems:'center',justifyContent:'center',width:180,height:80,background:D.surface2,borderRadius:8,border:`1px solid ${D.border}`,gap:4,...style}}>
+      <span style={{fontSize:11,color:D.textMuted}}>No photo available</span>
+      <span style={{fontSize:10,color:D.textMuted}}>(Enable Street View API)</span>
+    </div>
+  )
+  return <img src={src} alt={address} style={{width:200,height:130,objectFit:'cover' as const,borderRadius:8,border:`1px solid ${D.border}`,flexShrink:0,...style}}/>
+}
+
 const Divider = ({label}: {label?:string}) => (
   <div style={{display:'flex',alignItems:'center',gap:12,margin:'20px 0'}}>
     <div style={{flex:1,height:'1px',background:`linear-gradient(90deg,transparent,${D.border})`}}/>
@@ -1450,13 +1482,14 @@ function CompSearch({subject,comps,setComps,setPage,folders,setFolders}: {subjec
                           </div>
                           <div style={{flex:1,minWidth:0}}>
                             <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',gap:12,marginBottom:12}}>
-                              <div>
+                              <div style={{flex:1,minWidth:0}}>
                                 <div style={{fontSize:15,fontWeight:700,color:D.text,marginBottom:5}}>{r.address}</div>
-                                <div style={{display:'flex',gap:6,flexWrap:'wrap' as const}}>
+                                <div style={{display:'flex',gap:6,flexWrap:'wrap' as const,marginBottom:10}}>
                                   <Tag color={D.blue}>{r.county||'—'}</Tag>
                                   {r.city&&<Tag color={D.textMuted}>{r.city}</Tag>}
                                   {r.sale_date&&<Tag color={D.textMuted}>{fmtDate(r.sale_date)}</Tag>}
                                 </div>
+                                <StreetViewPhoto address={`${r.address}, ${r.city||''}, NY`}/>
                               </div>
                               {r.score&&<div style={{textAlign:'right' as const,flexShrink:0}}>
                                 <div style={{fontSize:10,color:D.textMuted,letterSpacing:'.06em',marginBottom:2}}>MATCH</div>
@@ -1653,13 +1686,14 @@ function AvailSearch({subject,avails,setAvails,setPage,folders,setFolders}: {sub
                         </div>
                         <div style={{flex:1,minWidth:0}}>
                           <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',gap:12,marginBottom:12}}>
-                            <div>
+                            <div style={{flex:1,minWidth:0}}>
                               <div style={{fontSize:15,fontWeight:700,color:D.text,marginBottom:5}}>{r.address||'—'}</div>
-                              <div style={{display:'flex',gap:6,flexWrap:'wrap' as const}}>
+                              <div style={{display:'flex',gap:6,flexWrap:'wrap' as const,marginBottom:10}}>
                                 <Tag color={D.blue}>{r.county||'—'}</Tag>
                                 {r.city&&<Tag color={D.textMuted}>{r.city}</Tag>}
                                 {r.listing_broker&&<Tag color={D.textMuted}>{r.listing_broker}</Tag>}
                               </div>
+                              <StreetViewPhoto address={`${r.address||''}, ${r.city||''}, NY`}/>
                             </div>
                             {r.asking_price&&<div style={{textAlign:'right' as const,flexShrink:0}}>
                               <div style={{fontSize:10,color:D.textMuted,letterSpacing:'.06em',marginBottom:2}}>ASKING</div>
