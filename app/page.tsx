@@ -138,7 +138,7 @@ const Divider = ({label}: {label?:string}) => (
 )
 
 type VerifyStatus = 'verified'|'needs-review'|'rejected'
-type Folder = {id:string, name:string, type:'comps'|'avails', color:string, items:(Comp|Avail)[], opvAddress?:string, createdAt:number}
+type Folder = {id:string, name:string, type:'comps'|'avails'|'lease-comps', color:string, items:(Comp|Avail|LeaseComp)[], opvAddress?:string, createdAt:number}
 const FOLDER_COLORS = [D.gold, D.blue, D.green, D.purple, '#0891B2', '#DB2777', '#EA580C', D.red]
 
 type SubjectForm = {address:string,city:string,county:string,municipality:string,parcelId:string,type:string,opvType:string,size:string,lot:string,ceiling:string,docks:string,driveIn:string,power:string,heat:string,parking:string,sprinkler:string,sewer:string,zoning:string,taxes:string,yearBuilt:string,officePct:string,construction:string,condition:string,notes:string,highestBestUse:string,capRateLow:string,capRateHigh:string,leasePsfLow:string,leasePsfHigh:string,estimatedValueLow:string,estimatedValueHigh:string,preparedBy:string}
@@ -469,7 +469,7 @@ function FolderManager({folders, setFolders, setPage, comps, setComps, avails, s
   const [activeFolder, setActiveFolder] = useState<string|null>(null)
   const [activeOPV, setActiveOPV] = useState<string|null>(null)
   const [manualName, setManualName] = useState('')
-  const [manualType, setManualType] = useState<'comps'|'avails'>('comps')
+  const [manualType, setManualType] = useState<'comps'|'avails'|'lease-comps'>('comps')
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [fetchingPhoto, setFetchingPhoto] = useState<string|null>(null)
 
@@ -505,7 +505,7 @@ function FolderManager({folders, setFolders, setPage, comps, setComps, avails, s
 
   const deleteFolder = (id:string) => { if(confirm('Delete this folder?')) setFolders(folders.filter(f=>f.id!==id)) }
   const removeItem = (folderId:string, itemId:string) => {
-    setFolders(folders.map(f=>f.id===folderId?{...f,items:f.items.filter((i:Comp|Avail)=>i.id!==itemId)}:f))
+    setFolders(folders.map(f=>f.id===folderId?{...f,items:f.items.filter(i=>i.id!==itemId)}:f))
   }
   const createManual = () => {
     if (!manualName.trim()) { alert('Enter a folder name'); return }
@@ -523,10 +523,10 @@ function FolderManager({folders, setFolders, setPage, comps, setComps, avails, s
           <Card style={{marginBottom:16}}>
             <SL>Add Manual Folder</SL>
             <Field label="Folder Name"><Input placeholder="Custom folder name" value={manualName} onChange={e=>setManualName(e.target.value)} onKeyDown={e=>e.key==='Enter'&&createManual()}/></Field>
-            <div style={{display:'flex',gap:8,marginBottom:12}}>
-              {(['comps','avails'] as const).map(t=>(
-                <div key={t} onClick={()=>setManualType(t)} style={{flex:1,padding:'8px',borderRadius:7,cursor:'pointer',fontSize:11,fontWeight:600,textAlign:'center' as const,background:manualType===t?t==='comps'?`rgba(217,119,6,0.12)`:`rgba(59,130,246,0.12)`:'transparent',color:manualType===t?t==='comps'?D.gold:D.blue:D.textMuted,border:`1px solid ${manualType===t?t==='comps'?`${D.gold}44`:`${D.blue}44`:D.border}`}}>
-                  {t==='comps'?'📊 Sale Comps':'🏭 Availabilities'}
+            <div style={{display:'flex',gap:8,marginBottom:12,flexWrap:'wrap' as const}}>
+              {([['comps','📊 Sale Comps',D.gold],['avails','🏭 Avails',D.blue],['lease-comps','📋 Lease Comps',D.green]] as [string,string,string][]).map(([t,label,color])=>(
+                <div key={t} onClick={()=>setManualType(t as 'comps'|'avails'|'lease-comps')} style={{flex:1,padding:'8px',borderRadius:7,cursor:'pointer',fontSize:11,fontWeight:600,textAlign:'center' as const,background:manualType===t?`${color}1A`:'transparent',color:manualType===t?color:D.textMuted,border:`1px solid ${manualType===t?`${color}44`:D.border}`}}>
+                  {label}
                 </div>
               ))}
             </div>
@@ -556,7 +556,7 @@ function FolderManager({folders, setFolders, setPage, comps, setComps, avails, s
                   <div style={{paddingLeft:8,marginTop:4}}>
                     {grpFolders.map(f=>(
                       <div key={f.id} onClick={()=>{setActiveFolder(activeFolder===f.id?null:f.id);setSelected(new Set())}} style={{display:'flex',alignItems:'center',gap:9,padding:'9px 12px',borderRadius:7,cursor:'pointer',marginBottom:4,border:`1px solid ${activeFolder===f.id?f.color+'66':D.border}`,background:activeFolder===f.id?`${f.color}15`:D.surface,transition:'all .15s'}}>
-                        <div style={{fontSize:14}}>{f.type==='comps'?'📊':'🏭'}</div>
+                        <div style={{fontSize:14}}>{f.type==='comps'?'📊':f.type==='lease-comps'?'📋':'🏭'}</div>
                         <div style={{flex:1,minWidth:0}}>
                           <div style={{fontSize:11,fontWeight:600,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' as const,color:D.text}}>{f.name}</div>
                           <div style={{fontSize:10,color:D.textMuted}}>{f.items.length} item{f.items.length!==1?'s':''}</div>
@@ -1239,7 +1239,8 @@ function SubjectProperty({subject,setSubject,setPage,folders,setFolders,assignme
     const now = Date.now(); const shortAddr = address.split(',')[0]
     setFolders((prev: Folder[]) => [...prev,
       {id:`${now}-comps`, name:`${shortAddr} — Sale Comps`, type:'comps', color, items:[], opvAddress:address, createdAt:now},
-      {id:`${now}-avails`, name:`${shortAddr} — Availabilities`, type:'avails', color, items:[], opvAddress:address, createdAt:now+1}
+      {id:`${now}-avails`, name:`${shortAddr} — Availabilities`, type:'avails', color, items:[], opvAddress:address, createdAt:now+1},
+      {id:`${now}-lease`, name:`${shortAddr} — Lease Comps`, type:'lease-comps', color, items:[], opvAddress:address, createdAt:now+2}
     ])
   }
   const G2={display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}
@@ -1337,6 +1338,8 @@ function CompSearch({subject,comps,setComps,setPage,folders,setFolders}: {subjec
   const [selected,setSelected]=useState<Set<string>>(new Set())
   const [filters,setFilters]=useState({county:'',city:'',min_sf:'',max_sf:'',min_price:'',max_price:'',min_date:'',max_date:'',sewer:'',zoning:''})
   const [folderDropdown, setFolderDropdown] = useState<string|null>(null)
+  const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set())
+  const toggleExpand = (id:string) => setExpandedRows(prev=>{const n=new Set(prev);n.has(id)?n.delete(id):n.add(id);return n})
 
   const scoreComp = (c: Comp, s: SubjectForm): number => {
     const subSF = parseFloat(s.size)||0; const compSF = c.building_sf||0
@@ -1432,7 +1435,7 @@ function CompSearch({subject,comps,setComps,setPage,folders,setFolders}: {subjec
                   <table style={{width:'100%',borderCollapse:'collapse' as const}}>
                     <thead>
                       <tr style={{background:D.surface2}}>
-                        {['','Address','City','SF','$/SF','Sale Date','Cap Rate','Score','Actions'].map(h=>(
+                        {['','Address','City','SF','$/SF','Sale Price','Sale Date','Actions'].map(h=>(
                           <th key={h} style={{padding:'10px 12px',textAlign:'left' as const,fontSize:10,fontWeight:700,color:D.textMuted,letterSpacing:'.08em',textTransform:'uppercase' as const,borderBottom:`1px solid ${D.border}`,whiteSpace:'nowrap' as const}}>{h}</th>
                         ))}
                       </tr>
@@ -1441,23 +1444,31 @@ function CompSearch({subject,comps,setComps,setPage,folders,setFolders}: {subjec
                       {results.map((r,idx)=>{
                         const psf=r.price_per_sf||(r.sale_price&&r.building_sf?Number(r.sale_price)/Number(r.building_sf):0)
                         const isAdded=comps.some(c=>c.id===r.id)
+                        const isExpanded=expandedRows.has(r.id)
+                        const rowBg=selected.has(r.id)?`rgba(59,130,246,0.08)`:idx%2===0?'transparent':D.surface2
+                        const specItem=(label:string,val:unknown)=>(
+                          <div key={label} style={{display:'flex',flexDirection:'column' as const,gap:2}}>
+                            <span style={{fontSize:9,fontWeight:700,letterSpacing:'.08em',textTransform:'uppercase' as const,color:D.textMuted}}>{label}</span>
+                            <span style={{fontSize:12,color:D.text,fontWeight:500}}>{val?String(val):'—'}</span>
+                          </div>
+                        )
                         return (
-                          <tr key={r.id} style={{borderBottom:`1px solid ${D.border}`,background:selected.has(r.id)?`rgba(59,130,246,0.08)`:idx%2===0?'transparent':D.surface2}}>
+                          <>
+                          <tr key={r.id} style={{borderBottom:isExpanded?'none':`1px solid ${D.border}`,background:rowBg}}>
                             <td style={{padding:'10px 12px'}}>
                               <input type="checkbox" checked={selected.has(r.id)} onChange={()=>toggleSelect(r.id)} style={{width:14,height:14,cursor:'pointer',accentColor:D.blue}}/>
                             </td>
-                            <td style={{padding:'10px 12px',fontSize:12,fontWeight:600,color:D.text,maxWidth:180,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' as const}}>{r.address}</td>
+                            <td style={{padding:'10px 12px'}}>
+                              <button onClick={()=>toggleExpand(r.id)} style={{background:'none',border:'none',cursor:'pointer',padding:0,display:'flex',alignItems:'center',gap:6,fontFamily:"'Inter',sans-serif"}}>
+                                <span style={{fontSize:10,color:D.textMuted,transition:'transform .18s',display:'inline-block',transform:isExpanded?'rotate(90deg)':'rotate(0deg)'}}>▶</span>
+                                <span style={{fontSize:12,fontWeight:600,color:D.text,maxWidth:160,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' as const,textAlign:'left' as const}}>{r.address}</span>
+                              </button>
+                            </td>
                             <td style={{padding:'10px 12px',fontSize:12,color:D.textSec,whiteSpace:'nowrap' as const}}>{r.city||'—'}</td>
                             <td style={{padding:'10px 12px',fontSize:12,color:D.textSec,whiteSpace:'nowrap' as const}}>{r.building_sf?Number(r.building_sf).toLocaleString():'—'}</td>
                             <td style={{padding:'10px 12px',fontSize:12,fontWeight:700,color:D.gold,whiteSpace:'nowrap' as const}}>{psf?`$${Number(psf).toFixed(2)}`:'—'}</td>
+                            <td style={{padding:'10px 12px',fontSize:12,color:D.text,whiteSpace:'nowrap' as const}}>{r.sale_price?`$${Number(r.sale_price).toLocaleString()}`:'—'}</td>
                             <td style={{padding:'10px 12px',fontSize:11,color:D.textSec,whiteSpace:'nowrap' as const}}>{r.sale_date?fmtDate(r.sale_date):'—'}</td>
-                            <td style={{padding:'10px 12px',fontSize:12,color:D.textSec}}>{(r as Comp&{actual_cap_rate?:number}).actual_cap_rate?`${(r as Comp&{actual_cap_rate?:number}).actual_cap_rate}%`:'—'}</td>
-                            <td style={{padding:'10px 12px'}}>
-                              {r.score&&<div style={{display:'flex',alignItems:'center',gap:6}}>
-                                <div style={{width:36,height:4,background:D.surface2,borderRadius:2}}><div style={{height:'100%',background:scoreColor(r.score),borderRadius:2,width:`${r.score}%`}}/></div>
-                                <span style={{fontSize:11,fontWeight:700,color:scoreColor(r.score)}}>{r.score}</span>
-                              </div>}
-                            </td>
                             <td style={{padding:'10px 12px'}}>
                               <div style={{display:'flex',gap:6,alignItems:'center'}}>
                                 {isAdded
@@ -1465,15 +1476,15 @@ function CompSearch({subject,comps,setComps,setPage,folders,setFolders}: {subjec
                                   : <button onClick={()=>{setComps([...comps,r]);setSelected(new Set())}} style={{background:`rgba(59,130,246,0.12)`,border:`1px solid rgba(59,130,246,0.25)`,borderRadius:5,color:D.blue,fontSize:11,fontWeight:700,padding:'4px 10px',cursor:'pointer',fontFamily:"'Inter',sans-serif",whiteSpace:'nowrap' as const}}>＋ Add</button>
                                 }
                                 <div style={{position:'relative'}}>
-                                  <button onClick={()=>setFolderDropdown(folderDropdown===r.id?null:r.id)} style={{background:'transparent',border:`1px solid ${D.border}`,borderRadius:5,color:D.textSec,fontSize:11,padding:'4px 8px',cursor:'pointer',fontFamily:"'Inter',sans-serif"}}>📁</button>
+                                  <button onClick={()=>setFolderDropdown(folderDropdown===r.id?null:r.id)} style={{background:'transparent',border:`1px solid ${D.border}`,borderRadius:5,color:D.textSec,fontSize:11,padding:'4px 8px',cursor:'pointer',fontFamily:"'Inter',sans-serif"}} title="Add to folder">📁</button>
                                   {folderDropdown===r.id&&(
                                     <div style={{position:'absolute',top:'100%',right:0,marginTop:4,background:D.surface,border:`1px solid ${D.border}`,borderRadius:8,padding:6,zIndex:100,minWidth:200,boxShadow:'0 8px 32px rgba(0,0,0,.5)'}}>
                                       {folders.filter(f=>f.type==='comps').length===0&&<div style={{fontSize:11,color:D.textMuted,padding:'6px 8px'}}>No comp folders yet.</div>}
                                       {folders.filter(f=>f.type==='comps').map(f=>(
                                         <div key={f.id} onClick={()=>{
-                                          const alreadyIn = f.items.find((i:Comp|Avail)=>i.id===r.id)
+                                          const alreadyIn = f.items.find(i=>i.id===r.id)
                                           if (!alreadyIn) setFolders(folders.map(fl=>fl.id===f.id?{...fl,items:[...fl.items,r]}:fl))
-                                          setFolderDropdown(null); alert(alreadyIn?'Already in this folder!':` Added to "${f.name}"`)
+                                          setFolderDropdown(null); alert(alreadyIn?'Already in this folder!':`Added to "${f.name}"`)
                                         }} style={{display:'flex',alignItems:'center',gap:8,padding:'7px 10px',borderRadius:6,cursor:'pointer',fontSize:12,color:D.text}}>
                                           <div style={{width:8,height:8,borderRadius:'50%',background:f.color,flexShrink:0}}/>{f.name}
                                         </div>
@@ -1485,6 +1496,32 @@ function CompSearch({subject,comps,setComps,setPage,folders,setFolders}: {subjec
                               </div>
                             </td>
                           </tr>
+                          {isExpanded&&(
+                            <tr key={`${r.id}-exp`} style={{borderBottom:`1px solid ${D.border}`,background:rowBg}}>
+                              <td colSpan={8} style={{padding:'0 12px 14px 36px'}}>
+                                <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(130px,1fr))',gap:'10px 20px',padding:'12px 16px',background:D.surface2,borderRadius:8,border:`1px solid ${D.border}`}}>
+                                  {specItem('Lot Size (ac)', r.lot_size_ac)}
+                                  {specItem('Ceiling Height', r.ceiling_height)}
+                                  {specItem('Loading Docks', r.loading_docks)}
+                                  {specItem('Drive-In Doors', r.drive_ins)}
+                                  {specItem('Power', r.power)}
+                                  {specItem('Heat', (r as Comp&{heat?:string}).heat)}
+                                  {specItem('Parking', (r as Comp&{parking?:string}).parking)}
+                                  {specItem('Sprinkler', (r as Comp&{sprinkler?:string}).sprinkler)}
+                                  {specItem('Sewer', r.sewer)}
+                                  {specItem('Zoning', r.zoning)}
+                                  {specItem('RE Taxes', r.real_estate_taxes?(r as Comp&{real_estate_taxes?:number}).real_estate_taxes?`$${Number((r as Comp&{real_estate_taxes?:number}).real_estate_taxes).toLocaleString()}`:undefined:undefined)}
+                                  {specItem('Cap Rate', (r as Comp&{actual_cap_rate?:number}).actual_cap_rate?`${(r as Comp&{actual_cap_rate?:number}).actual_cap_rate}%`:undefined)}
+                                  {specItem('Sale Type', r.sale_type)}
+                                  {specItem('Buyer', r.buyer)}
+                                  {specItem('Seller', r.seller)}
+                                  {specItem('Submarket', r.submarket)}
+                                  {specItem('County', r.county)}
+                                </div>
+                              </td>
+                            </tr>
+                          )}
+                          </>
                         )
                       })}
                     </tbody>
@@ -1514,6 +1551,8 @@ function AvailSearch({subject,avails,setAvails,setPage,folders,setFolders}: {sub
   const [filters,setFilters]=useState({county:'',city:'',min_sf:'',max_sf:'',min_price:'',max_price:''})
   const [showAdd,setShowAdd]=useState(false)
   const [folderDropdown, setFolderDropdown] = useState<string|null>(null)
+  const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set())
+  const toggleExpand = (id:string) => setExpandedRows(prev=>{const n=new Set(prev);n.has(id)?n.delete(id):n.add(id);return n})
 
   const search = async () => {
     setLoading(true); setResults([]); setSearched(false)
@@ -1610,7 +1649,7 @@ function AvailSearch({subject,avails,setAvails,setPage,folders,setFolders}: {sub
                 <table style={{width:'100%',borderCollapse:'collapse' as const}}>
                   <thead>
                     <tr style={{background:D.surface2}}>
-                      {['','Address','City','SF','Asking Price','$/SF','Docks','Ceiling','Broker','Actions'].map(h=>(
+                      {['','Address','City','SF','Asking Price','$/SF','Actions'].map(h=>(
                         <th key={h} style={{padding:'10px 12px',textAlign:'left' as const,fontSize:10,fontWeight:700,color:D.textMuted,letterSpacing:'.08em',textTransform:'uppercase' as const,borderBottom:`1px solid ${D.border}`,whiteSpace:'nowrap' as const}}>{h}</th>
                       ))}
                     </tr>
@@ -1619,29 +1658,82 @@ function AvailSearch({subject,avails,setAvails,setPage,folders,setFolders}: {sub
                     {results.map((r,idx)=>{
                       const psf=r.price_per_sf||(r.asking_price&&r.building_sf?Number(r.asking_price)/Number(r.building_sf):0)
                       const isAdded=avails.some(a=>a.id===r.id)
+                      const isExpanded=expandedRows.has(r.id)
+                      const rowBg=selected.has(r.id)?`rgba(59,130,246,0.08)`:idx%2===0?'transparent':D.surface2
+                      const specItem=(label:string,val:unknown)=>(
+                        <div key={label} style={{display:'flex',flexDirection:'column' as const,gap:2}}>
+                          <span style={{fontSize:9,fontWeight:700,letterSpacing:'.08em',textTransform:'uppercase' as const,color:D.textMuted}}>{label}</span>
+                          <span style={{fontSize:12,color:D.text,fontWeight:500}}>{val?String(val):'—'}</span>
+                        </div>
+                      )
                       return (
-                        <tr key={r.id} style={{borderBottom:`1px solid ${D.border}`,background:selected.has(r.id)?`rgba(59,130,246,0.08)`:idx%2===0?'transparent':D.surface2}}>
+                        <>
+                        <tr key={r.id} style={{borderBottom:isExpanded?'none':`1px solid ${D.border}`,background:rowBg}}>
                           <td style={{padding:'10px 12px'}}>
                             <input type="checkbox" checked={selected.has(r.id)} onChange={()=>toggleSelect(r.id)} style={{width:14,height:14,cursor:'pointer',accentColor:D.blue}}/>
                           </td>
-                          <td style={{padding:'10px 12px',fontSize:12,fontWeight:600,color:D.text,maxWidth:160,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' as const}}>{r.address||'—'}</td>
+                          <td style={{padding:'10px 12px'}}>
+                            <button onClick={()=>toggleExpand(r.id)} style={{background:'none',border:'none',cursor:'pointer',padding:0,display:'flex',alignItems:'center',gap:6,fontFamily:"'Inter',sans-serif"}}>
+                              <span style={{fontSize:10,color:D.textMuted,transition:'transform .18s',display:'inline-block',transform:isExpanded?'rotate(90deg)':'rotate(0deg)'}}>▶</span>
+                              <span style={{fontSize:12,fontWeight:600,color:D.text,maxWidth:160,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' as const,textAlign:'left' as const}}>{r.address||'—'}</span>
+                            </button>
+                          </td>
                           <td style={{padding:'10px 12px',fontSize:12,color:D.textSec,whiteSpace:'nowrap' as const}}>{r.city||'—'}</td>
                           <td style={{padding:'10px 12px',fontSize:12,color:D.textSec,whiteSpace:'nowrap' as const}}>{r.building_sf?Number(r.building_sf).toLocaleString():'—'}</td>
                           <td style={{padding:'10px 12px',fontSize:12,color:D.text,whiteSpace:'nowrap' as const}}>{r.asking_price?`$${Number(r.asking_price).toLocaleString()}`:'—'}</td>
                           <td style={{padding:'10px 12px',fontSize:12,fontWeight:700,color:D.blue,whiteSpace:'nowrap' as const}}>{psf?`$${Number(psf).toFixed(2)}`:'—'}</td>
-                          <td style={{padding:'10px 12px',fontSize:12,color:D.textSec}}>{r.loading_docks||'—'}</td>
-                          <td style={{padding:'10px 12px',fontSize:12,color:D.textSec,whiteSpace:'nowrap' as const}}>{r.ceiling_height||'—'}</td>
-                          <td style={{padding:'10px 12px',fontSize:11,color:D.textSec,maxWidth:120,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' as const}}>{r.listing_broker||'—'}</td>
                           <td style={{padding:'10px 12px'}}>
-                            <div style={{display:'flex',gap:6}}>
+                            <div style={{display:'flex',gap:6,alignItems:'center'}}>
                               {isAdded
                                 ? <Tag color={D.green}>✓ Added</Tag>
                                 : <button onClick={()=>setAvails([...avails,r])} style={{background:`rgba(59,130,246,0.12)`,border:`1px solid rgba(59,130,246,0.25)`,borderRadius:5,color:D.blue,fontSize:11,fontWeight:700,padding:'4px 10px',cursor:'pointer',fontFamily:"'Inter',sans-serif",whiteSpace:'nowrap' as const}}>＋ Add</button>
                               }
                               {r.loopnet_url&&<a href={r.loopnet_url} target="_blank" rel="noopener noreferrer" style={{fontSize:11,color:D.blue,padding:'4px 6px',textDecoration:'none'}}>↗</a>}
+                              <div style={{position:'relative'}}>
+                                <button onClick={()=>setFolderDropdown(folderDropdown===r.id?null:r.id)} style={{background:'transparent',border:`1px solid ${D.border}`,borderRadius:5,color:D.textSec,fontSize:11,padding:'4px 8px',cursor:'pointer',fontFamily:"'Inter',sans-serif"}} title="Add to folder">📁</button>
+                                {folderDropdown===r.id&&(
+                                  <div style={{position:'absolute',top:'100%',right:0,marginTop:4,background:D.surface,border:`1px solid ${D.border}`,borderRadius:8,padding:6,zIndex:100,minWidth:200,boxShadow:'0 8px 32px rgba(0,0,0,.5)'}}>
+                                    {folders.filter(f=>f.type==='avails').length===0&&<div style={{fontSize:11,color:D.textMuted,padding:'6px 8px'}}>No availability folders yet.</div>}
+                                    {folders.filter(f=>f.type==='avails').map(f=>(
+                                      <div key={f.id} onClick={()=>{
+                                        const alreadyIn = f.items.find(i=>i.id===r.id)
+                                        if (!alreadyIn) setFolders(folders.map(fl=>fl.id===f.id?{...fl,items:[...fl.items,r]}:fl))
+                                        setFolderDropdown(null); alert(alreadyIn?'Already in this folder!':`Added to "${f.name}"`)
+                                      }} style={{display:'flex',alignItems:'center',gap:8,padding:'7px 10px',borderRadius:6,cursor:'pointer',fontSize:12,color:D.text}}>
+                                        <div style={{width:8,height:8,borderRadius:'50%',background:f.color,flexShrink:0}}/>{f.name}
+                                      </div>
+                                    ))}
+                                    <div onClick={()=>{setFolderDropdown(null);setPage('folders')}} style={{display:'flex',alignItems:'center',gap:6,padding:'7px 10px',borderRadius:6,cursor:'pointer',fontSize:11,color:D.blue,marginTop:4,borderTop:`1px solid ${D.border}`}}>＋ Create folder</div>
+                                  </div>
+                                )}
+                              </div>
                             </div>
                           </td>
                         </tr>
+                        {isExpanded&&(
+                          <tr key={`${r.id}-exp`} style={{borderBottom:`1px solid ${D.border}`,background:rowBg}}>
+                            <td colSpan={7} style={{padding:'0 12px 14px 36px'}}>
+                              <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(130px,1fr))',gap:'10px 20px',padding:'12px 16px',background:D.surface2,borderRadius:8,border:`1px solid ${D.border}`}}>
+                                {specItem('Lot Size (ac)', r.lot_size_ac)}
+                                {specItem('Ceiling Height', r.ceiling_height)}
+                                {specItem('Loading Docks', r.loading_docks)}
+                                {specItem('Drive-In Doors', r.drive_ins)}
+                                {specItem('Power', r.power)}
+                                {specItem('Heat', (r as Avail&{heat?:string}).heat)}
+                                {specItem('Parking', (r as Avail&{parking?:string}).parking)}
+                                {specItem('Sprinkler', (r as Avail&{sprinkler?:string}).sprinkler)}
+                                {specItem('Sewer', r.sewer)}
+                                {specItem('Zoning', r.zoning)}
+                                {specItem('RE Taxes', (r as Avail&{real_estate_taxes?:number}).real_estate_taxes?`$${Number((r as Avail&{real_estate_taxes?:number}).real_estate_taxes).toLocaleString()}`:undefined)}
+                                {specItem('Pricing Guidance', r.pricing_guidance)}
+                                {specItem('Listing Broker', r.listing_broker)}
+                                {specItem('Submarket', (r as Avail&{submarket?:string}).submarket)}
+                                {specItem('County', r.county)}
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                        </>
                       )
                     })}
                   </tbody>
@@ -1657,7 +1749,7 @@ function AvailSearch({subject,avails,setAvails,setPage,folders,setFolders}: {sub
 
 
 // ── LEASE COMP SEARCH ─────────────────────────────────────────────────────────
-function LeaseCompSearch({subject,leaseComps,setLeaseComps,setPage}: {subject:SubjectForm|null,leaseComps:LeaseComp[],setLeaseComps:(c:LeaseComp[])=>void,setPage:(p:string)=>void}) {
+function LeaseCompSearch({subject,leaseComps,setLeaseComps,setPage,folders,setFolders}: {subject:SubjectForm|null,leaseComps:LeaseComp[],setLeaseComps:(c:LeaseComp[])=>void,setPage:(p:string)=>void,folders:Folder[],setFolders:(f:Folder[])=>void}) {
   const [results,setResults]=useState<LeaseComp[]>([])
   const [loading,setLoading]=useState(false)
   const [searched,setSearched]=useState(false)
@@ -1665,6 +1757,9 @@ function LeaseCompSearch({subject,leaseComps,setLeaseComps,setPage}: {subject:Su
   const [filters,setFilters]=useState({county:'',city:'',min_sf:'',max_sf:'',min_price:'',max_price:'',min_date:'',max_date:''})
   const [showManual,setShowManual]=useState(false)
   const [manual,setManual]=useState<Partial<LeaseComp>>({})
+  const [folderDropdown, setFolderDropdown] = useState<string|null>(null)
+  const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set())
+  const toggleExpand = (id:string) => setExpandedRows(prev=>{const n=new Set(prev);n.has(id)?n.delete(id):n.add(id);return n})
 
   const search = async () => {
     setLoading(true); setResults([]); setSearched(false)
@@ -1727,9 +1822,9 @@ function LeaseCompSearch({subject,leaseComps,setLeaseComps,setPage}: {subject:Su
                 <button onClick={()=>setLeaseComps(leaseComps.filter(x=>x.id!==c.id))} style={{background:'transparent',border:'none',color:D.red,cursor:'pointer',fontSize:13,padding:'0 4px',flexShrink:0}}>×</button>
               </div>
             ))}
-            <Btn onClick={()=>setPage('photos')} style={{width:'100%',padding:10,fontSize:12,marginTop:10}}>Next: Photos →</Btn>
+            <Btn onClick={()=>setPage('folders')} style={{width:'100%',padding:10,fontSize:12,marginTop:10}}>Next: OPV Folders →</Btn>
           </Card>}
-          <Btn variant="ghost" onClick={()=>setPage('photos')} style={{width:'100%',padding:10,fontSize:12,marginTop:10}}>Skip — Go to Photos →</Btn>
+          <Btn variant="ghost" onClick={()=>setPage('folders')} style={{width:'100%',padding:10,fontSize:12,marginTop:10}}>Skip — Go to Folders →</Btn>
         </div>
         <div>
           <div style={{display:'flex',justifyContent:'flex-end',marginBottom:12}}>
@@ -1783,12 +1878,26 @@ function LeaseCompSearch({subject,leaseComps,setLeaseComps,setPage}: {subject:Su
                   <tbody>
                     {results.map((r,idx)=>{
                       const isAdded=leaseComps.some(c=>c.id===r.id)
+                      const isExpanded=expandedRows.has(r.id)
+                      const rowBg=selected.has(r.id)?`rgba(59,130,246,0.08)`:idx%2===0?'transparent':D.surface2
+                      const specItem=(label:string,val:unknown)=>(
+                        <div key={label} style={{display:'flex',flexDirection:'column' as const,gap:2}}>
+                          <span style={{fontSize:9,fontWeight:700,letterSpacing:'.08em',textTransform:'uppercase' as const,color:D.textMuted}}>{label}</span>
+                          <span style={{fontSize:12,color:D.text,fontWeight:500}}>{val?String(val):'—'}</span>
+                        </div>
+                      )
                       return (
-                        <tr key={r.id} style={{borderBottom:`1px solid ${D.border}`,background:selected.has(r.id)?`rgba(59,130,246,0.08)`:idx%2===0?'transparent':D.surface2}}>
+                        <>
+                        <tr key={r.id} style={{borderBottom:isExpanded?'none':`1px solid ${D.border}`,background:rowBg}}>
                           <td style={{padding:'10px 12px'}}>
                             <input type="checkbox" checked={selected.has(r.id)} onChange={()=>toggleSelect(r.id)} style={{width:14,height:14,cursor:'pointer',accentColor:D.blue}}/>
                           </td>
-                          <td style={{padding:'10px 12px',fontSize:12,fontWeight:600,color:D.text,maxWidth:160,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' as const}}>{r.address||'—'}</td>
+                          <td style={{padding:'10px 12px'}}>
+                            <button onClick={()=>toggleExpand(r.id)} style={{background:'none',border:'none',cursor:'pointer',padding:0,display:'flex',alignItems:'center',gap:6,fontFamily:"'Inter',sans-serif"}}>
+                              <span style={{fontSize:10,color:D.textMuted,display:'inline-block',transform:isExpanded?'rotate(90deg)':'rotate(0deg)'}}>▶</span>
+                              <span style={{fontSize:12,fontWeight:600,color:D.text,maxWidth:150,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' as const,textAlign:'left' as const}}>{r.address||'—'}</span>
+                            </button>
+                          </td>
                           <td style={{padding:'10px 12px',fontSize:12,color:D.textSec}}>{r.city||'—'}</td>
                           <td style={{padding:'10px 12px',fontSize:12,color:D.textSec,whiteSpace:'nowrap' as const}}>{r.building_sf?Number(r.building_sf).toLocaleString():'—'}</td>
                           <td style={{padding:'10px 12px',fontSize:12,fontWeight:700,color:D.blue,whiteSpace:'nowrap' as const}}>{r.price_per_sf?`$${Number(r.price_per_sf).toFixed(2)}`:'—'}</td>
@@ -1796,12 +1905,54 @@ function LeaseCompSearch({subject,leaseComps,setLeaseComps,setPage}: {subject:Su
                           <td style={{padding:'10px 12px',fontSize:11,color:D.textSec,whiteSpace:'nowrap' as const}}>{r.lease_term||'—'}</td>
                           <td style={{padding:'10px 12px',fontSize:11,color:D.textSec,maxWidth:120,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' as const}}>{r.tenant||'—'}</td>
                           <td style={{padding:'10px 12px'}}>
-                            {isAdded
-                              ? <Tag color={D.green}>✓ Added</Tag>
-                              : <button onClick={()=>{setLeaseComps([...leaseComps,r]);}} style={{background:`rgba(59,130,246,0.12)`,border:`1px solid rgba(59,130,246,0.25)`,borderRadius:5,color:D.blue,fontSize:11,fontWeight:700,padding:'4px 10px',cursor:'pointer',fontFamily:"'Inter',sans-serif",whiteSpace:'nowrap' as const}}>＋ Add</button>
-                            }
+                            <div style={{display:'flex',gap:6,alignItems:'center'}}>
+                              {isAdded
+                                ? <Tag color={D.green}>✓ Added</Tag>
+                                : <button onClick={()=>{setLeaseComps([...leaseComps,r]);}} style={{background:`rgba(59,130,246,0.12)`,border:`1px solid rgba(59,130,246,0.25)`,borderRadius:5,color:D.blue,fontSize:11,fontWeight:700,padding:'4px 10px',cursor:'pointer',fontFamily:"'Inter',sans-serif",whiteSpace:'nowrap' as const}}>＋ Add</button>
+                              }
+                              <div style={{position:'relative'}}>
+                                <button onClick={()=>setFolderDropdown(folderDropdown===r.id?null:r.id)} style={{background:'transparent',border:`1px solid ${D.border}`,borderRadius:5,color:D.textSec,fontSize:11,padding:'4px 8px',cursor:'pointer',fontFamily:"'Inter',sans-serif"}} title="Add to folder">📁</button>
+                                {folderDropdown===r.id&&(
+                                  <div style={{position:'absolute',top:'100%',right:0,marginTop:4,background:D.surface,border:`1px solid ${D.border}`,borderRadius:8,padding:6,zIndex:100,minWidth:200,boxShadow:'0 8px 32px rgba(0,0,0,.5)'}}>
+                                    {folders.filter(f=>f.type==='lease-comps').length===0&&<div style={{fontSize:11,color:D.textMuted,padding:'6px 8px'}}>No lease comp folders yet.</div>}
+                                    {folders.filter(f=>f.type==='lease-comps').map(f=>(
+                                      <div key={f.id} onClick={()=>{
+                                        const alreadyIn = f.items.find(i=>i.id===r.id)
+                                        if (!alreadyIn) setFolders(folders.map(fl=>fl.id===f.id?{...fl,items:[...fl.items,r]}:fl))
+                                        setFolderDropdown(null); alert(alreadyIn?'Already in this folder!':`Added to "${f.name}"`)
+                                      }} style={{display:'flex',alignItems:'center',gap:8,padding:'7px 10px',borderRadius:6,cursor:'pointer',fontSize:12,color:D.text}}>
+                                        <div style={{width:8,height:8,borderRadius:'50%',background:f.color,flexShrink:0}}/>{f.name}
+                                      </div>
+                                    ))}
+                                    <div onClick={()=>{setFolderDropdown(null);setPage('folders')}} style={{display:'flex',alignItems:'center',gap:6,padding:'7px 10px',borderRadius:6,cursor:'pointer',fontSize:11,color:D.blue,marginTop:4,borderTop:`1px solid ${D.border}`}}>＋ Create folder</div>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
                           </td>
                         </tr>
+                        {isExpanded&&(
+                          <tr key={`${r.id}-exp`} style={{borderBottom:`1px solid ${D.border}`,background:rowBg}}>
+                            <td colSpan={9} style={{padding:'0 12px 14px 36px'}}>
+                              <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(130px,1fr))',gap:'10px 20px',padding:'12px 16px',background:D.surface2,borderRadius:8,border:`1px solid ${D.border}`}}>
+                                {specItem('Ceiling Height', r.ceiling_height)}
+                                {specItem('Loading Docks', r.loading_docks)}
+                                {specItem('Drive-In Doors', r.drive_ins)}
+                                {specItem('Power', r.power)}
+                                {specItem('Sewer', r.sewer)}
+                                {specItem('Zoning', r.zoning)}
+                                {specItem('Annual Rent ($)', r.lease_price?`$${Number(r.lease_price).toLocaleString()}`:undefined)}
+                                {specItem('Annual Escalations', r.annual_escalations)}
+                                {specItem('Landlord Work', r.landlord_work)}
+                                {specItem('Landlord', r.landlord)}
+                                {specItem('Taxes PSF', r.taxes_psf?`$${r.taxes_psf}/SF`:undefined)}
+                                {specItem('Office %', r.office_pct?`${r.office_pct}%`:undefined)}
+                                {specItem('County', r.county)}
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                        </>
                       )
                     })}
                   </tbody>
@@ -2546,7 +2697,7 @@ export default function App() {
             {page==='database'&&<DatabaseManager/>}
             {page==='comp-search'&&<CompSearch subject={subject} comps={comps} setComps={setComps} setPage={handleSetPage} folders={folders} setFolders={updateFolders}/>}
             {page==='avail-search'&&<AvailSearch subject={subject} avails={avails} setAvails={setAvails} setPage={handleSetPage} folders={folders} setFolders={updateFolders}/>}
-            {page==='lease-comps'&&<LeaseCompSearch subject={subject} leaseComps={leaseComps} setLeaseComps={setLeaseComps} setPage={handleSetPage}/>}
+            {page==='lease-comps'&&<LeaseCompSearch subject={subject} leaseComps={leaseComps} setLeaseComps={setLeaseComps} setPage={handleSetPage} folders={folders} setFolders={updateFolders}/>}
             {page==='folders'&&<FolderManager folders={folders} setFolders={updateFolders} setPage={handleSetPage} comps={comps} setComps={setComps} avails={avails} setAvails={setAvails}/>}
             {page==='analytics'&&<Analytics comps={scoredComps.length>0?scoredComps:comps} avails={avails} analytics={analytics} setAnalytics={setAnalytics} setPage={handleSetPage}/>}
             {page==='broker-review'&&<BrokerReview subject={subject} comps={scoredComps.length>0?scoredComps:comps} analytics={analytics} setAnalytics={setAnalytics} aiText={aiText} setAiText={setAiText} setPage={handleSetPage} setSubject={setSubject}/>}
