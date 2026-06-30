@@ -152,14 +152,15 @@ type SavedOPV = {id:string, created_at:string, saved_by:string, address:string}
 
 // ── WORKFLOW STEPPER ──────────────────────────────────────────────────────────
 const WORKFLOW_STEPS = [
+  {id:'dashboard',icon:'🏠',label:'Dashboard'},
   {id:'assignment',icon:'📋',label:'Assignment'},
   {id:'subject',icon:'🏢',label:'Subject Property'},
-  {id:'comp-search',icon:'📊',label:'Comparable Sales'},
+  {id:'comp-search',icon:'📊',label:'Sale Comps'},
   {id:'avail-search',icon:'🔍',label:'Market Availabilities'},
   {id:'lease-comps',icon:'📄',label:'Lease Comps'},
-  {id:'photos',icon:'📷',label:'Photo Collection'},
-  {id:'verification',icon:'✓',label:'Data Verification'},
-  {id:'broker-review',icon:'👤',label:'Broker Review'},
+  {id:'folders',icon:'📁',label:'OPV Folders'},
+  {id:'analytics',icon:'📈',label:'Analytics'},
+  {id:'broker-review',icon:'✍️',label:'Broker Analysis'},
   {id:'opv-report',icon:'📦',label:'Generate Package'},
 ]
 
@@ -189,6 +190,98 @@ function ProgressStepper({current, completedSteps}: {current:string, completedSt
 
 // ── ASSIGNMENT PAGE ───────────────────────────────────────────────────────────
 type AssignmentData = {clientName:string,propertyAddress:string,opvType:string,dueDate:string,preparedBy:string,notes:string}
+
+function Dashboard({user,subject,comps,avails,leaseComps,analytics,savedOPVs,setPage,loadSavedOPVs,restoreOPV}: {user:{name:string,role:string,init:string},subject:SubjectForm|null,comps:Comp[],avails:Avail[],leaseComps:LeaseComp[],analytics:AnalyticsData|null,savedOPVs:{id:string,address:string,current_step:string,updated_at:string,saved_by:string}[],setPage:(p:string)=>void,loadSavedOPVs:()=>void,restoreOPV:(id:string)=>void}) {
+  useEffect(()=>{loadSavedOPVs()},[])
+  const hour = new Date().getHours()
+  const hasActiveOPV = subject||comps.length>0
+
+  const steps = [
+    {id:'assignment',label:'Assignment',icon:'📋',done:false},
+    {id:'subject',label:'Subject Property',icon:'🏢',done:!!subject},
+    {id:'comp-search',label:'Sale Comps',icon:'📊',done:comps.length>0},
+    {id:'avail-search',label:'Market Availabilities',icon:'🔍',done:avails.length>0},
+    {id:'lease-comps',label:'Lease Comps',icon:'📄',done:leaseComps.length>0},
+    {id:'analytics',label:'Analytics',icon:'📈',done:!!analytics},
+  ]
+
+  return (
+    <div className="anim-in" style={{maxWidth:900}}>
+      <div style={{marginBottom:32}}>
+        <h1 style={{fontSize:28,fontWeight:600,color:D.text,marginBottom:6}}>
+          {hour<12?'Good morning':hour<17?'Good afternoon':'Good evening'}, {user.name.split(' ')[0]}
+        </h1>
+        <p style={{fontSize:14,color:D.textSec}}>Premier Commercial Real Estate · Long Island Industrial OPV Platform</p>
+      </div>
+
+      {/* Quick actions */}
+      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:16,marginBottom:32}}>
+        <div onClick={()=>setPage('assignment')} style={{background:D.blue,borderRadius:10,padding:24,cursor:'pointer',transition:'all .2s',border:`1px solid ${D.blue}`}}
+          onMouseEnter={e=>(e.currentTarget as HTMLDivElement).style.background=D.blueHover}
+          onMouseLeave={e=>(e.currentTarget as HTMLDivElement).style.background=D.blue}>
+          <div style={{fontSize:28,marginBottom:12}}>📋</div>
+          <div style={{fontSize:16,fontWeight:700,color:'#fff',marginBottom:4}}>Start New OPV</div>
+          <div style={{fontSize:12,color:'rgba(255,255,255,0.7)'}}>Begin a new Opinion of Value assignment</div>
+        </div>
+        <div onClick={()=>setPage('database')} style={{background:D.surface2,borderRadius:10,padding:24,cursor:'pointer',transition:'all .2s',border:`1px solid ${D.border}`}}
+          onMouseEnter={e=>(e.currentTarget as HTMLDivElement).style.borderColor=D.borderHover}
+          onMouseLeave={e=>(e.currentTarget as HTMLDivElement).style.borderColor=D.border}>
+          <div style={{fontSize:28,marginBottom:12}}>🗄️</div>
+          <div style={{fontSize:16,fontWeight:700,color:D.text,marginBottom:4}}>Database Manager</div>
+          <div style={{fontSize:12,color:D.textSec}}>Add, browse, and manage comp data</div>
+        </div>
+      </div>
+
+      {/* Active OPV status */}
+      {hasActiveOPV&&(
+        <div style={{background:D.surface,border:`1px solid ${D.border}`,borderRadius:10,padding:20,marginBottom:24}}>
+          <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:16}}>
+            <div style={{fontSize:13,fontWeight:700,color:D.text}}>Current OPV In Progress</div>
+            <div style={{fontSize:11,color:D.green,background:'rgba(16,185,129,0.12)',padding:'3px 10px',borderRadius:20,border:`1px solid rgba(16,185,129,0.3)`}}>Active</div>
+          </div>
+          {subject&&<div style={{fontSize:13,color:D.textSec,marginBottom:12}}>📍 {subject.address}{subject.city?`, ${subject.city}`:''} · {subject.size?`${parseInt(subject.size).toLocaleString()} SF`:'—'}</div>}
+          <div style={{display:'flex',gap:8,flexWrap:'wrap' as const,marginBottom:16}}>
+            {[
+              {label:`${comps.length} Sale Comps`,done:comps.length>0},
+              {label:`${avails.length} Availabilities`,done:avails.length>0},
+              {label:`${leaseComps.length} Lease Comps`,done:leaseComps.length>0},
+              {label:analytics?'Analytics Complete':'Analytics Pending',done:!!analytics},
+            ].map(item=>(
+              <span key={item.label} style={{fontSize:11,padding:'3px 10px',borderRadius:20,border:`1px solid ${item.done?`rgba(16,185,129,0.4)`:D.border}`,color:item.done?D.green:D.textMuted,background:item.done?'rgba(16,185,129,0.08)':'transparent'}}>{item.done?'✓ ':''}{item.label}</span>
+            ))}
+          </div>
+          <div style={{display:'flex',gap:8}}>
+            <button onClick={()=>setPage('subject')} style={{background:D.blue,border:'none',color:'#fff',fontFamily:"'Inter',sans-serif",fontSize:12,fontWeight:600,padding:'9px 18px',borderRadius:6,cursor:'pointer'}}>Continue OPV →</button>
+            <button onClick={()=>setPage('opv-report')} style={{background:'transparent',border:`1px solid ${D.border}`,color:D.textSec,fontFamily:"'Inter',sans-serif",fontSize:12,padding:'9px 18px',borderRadius:6,cursor:'pointer'}}>Generate Package</button>
+          </div>
+        </div>
+      )}
+
+      {/* Saved OPVs */}
+      <div style={{background:D.surface,border:`1px solid ${D.border}`,borderRadius:10,padding:20}}>
+        <div style={{fontSize:13,fontWeight:700,color:D.text,marginBottom:16}}>Recent OPVs</div>
+        {savedOPVs.length===0
+          ? <div style={{textAlign:'center' as const,padding:'32px 0',color:D.textMuted,fontSize:13}}>No saved OPVs yet. Start a new assignment above.</div>
+          : savedOPVs.slice(0,5).map(s=>{
+              const stepLabels: Record<string,string> = {assignment:'Assignment',subject:'Subject',['comp-search']:'Sale Comps',['avail-search']:'Availabilities',['broker-review']:'Broker Review',['opv-report']:'Report',analytics:'Analytics'}
+              const updatedAt = new Date(s.updated_at||'')
+              const diffMs = Date.now()-updatedAt.getTime()
+              const timeAgo = diffMs<3600000?`${Math.floor(diffMs/60000)}m ago`:diffMs<86400000?`${Math.floor(diffMs/3600000)}h ago`:`${Math.floor(diffMs/86400000)}d ago`
+              return (
+                <div key={s.id} style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'12px 0',borderBottom:`1px solid ${D.border}`}}>
+                  <div>
+                    <div style={{fontSize:13,fontWeight:500,color:D.text,marginBottom:2}}>{s.address||'Untitled OPV'}</div>
+                    <div style={{fontSize:11,color:D.textMuted}}>{timeAgo} · Stopped at: {stepLabels[s.current_step]||s.current_step}</div>
+                  </div>
+                  <button onClick={()=>restoreOPV(s.id)} style={{background:D.surface2,border:`1px solid ${D.border}`,color:D.textSec,fontFamily:"'Inter',sans-serif",fontSize:11,padding:'6px 14px',borderRadius:6,cursor:'pointer'}}>Resume</button>
+                </div>
+              )
+            })
+        }
+      </div>
+    </div>
+  )
+}
 
 function Assignment({assignmentData,setAssignmentData,user,setPage,setSubject,subject}: {assignmentData:AssignmentData,setAssignmentData:(a:AssignmentData)=>void,user:{name:string,role:string,init:string},setPage:(p:string)=>void,setSubject:(s:SubjectForm)=>void,subject:SubjectForm|null}) {
   const [form,setForm]=useState<AssignmentData>({...assignmentData,preparedBy:assignmentData.preparedBy||user.name})
@@ -2132,17 +2225,17 @@ function OPVReport({subject,comps,leaseComps,avails,analytics,aiText,setPage}: {
 
 // ── SIDEBAR NAV ITEMS ─────────────────────────────────────────────────────────
 const PAGE_TITLES: Record<string,string> = {
-  assignment:'Assignment',subject:'Subject Property',database:'Database Manager',
-  'comp-search':'Comparable Sales','avail-search':'Market Availabilities',
-  'lease-comps':'Lease Comps',photos:'Photo Collection',verification:'Data Verification',
-  'broker-review':'Broker Review','opv-report':'Generate Package',
-  folders:'OPV Folders',analytics:'Analytics',
+  dashboard:'Dashboard',assignment:'Assignment',subject:'Subject Property',
+  'comp-search':'Sale Comps','avail-search':'Market Availabilities',
+  'lease-comps':'Lease Comps','broker-review':'Broker Analysis',
+  'opv-report':'Generate Package',folders:'OPV Folders',
+  analytics:'Analytics',database:'Database Manager',
 }
 
 // ── APP ───────────────────────────────────────────────────────────────────────
 export default function App() {
   const [user,setUser]=useState<{name:string,role:string,init:string}|null>(null)
-  const [page,setPage]=useState('assignment')
+  const [page,setPage]=useState('dashboard')
   const [assignmentData,setAssignmentData]=useState<AssignmentData>(()=>{
     if(typeof window==='undefined') return {clientName:'',propertyAddress:'',opvType:'For Sale',dueDate:'',preparedBy:'',notes:''}
     try{return JSON.parse(localStorage.getItem('opv_assignment')||'null')||{clientName:'',propertyAddress:'',opvType:'For Sale',dueDate:'',preparedBy:'',notes:''}}catch{return {clientName:'',propertyAddress:'',opvType:'For Sale',dueDate:'',preparedBy:'',notes:''}}
@@ -2285,7 +2378,7 @@ export default function App() {
     setPhotoUrls({}); setVerificationStatus({})
     setSavedOPVId(null); setLastSaved(null)
     try{localStorage.removeItem('opv_saved_id')}catch{}
-    setPage('assignment')
+    setPage('dashboard')
   }
 
   const isWorkflowPage = WORKFLOW_STEPS.some(s=>s.id===page)
@@ -2337,7 +2430,7 @@ export default function App() {
             })}
             {/* Tools section */}
             <div style={{fontSize:9,fontWeight:700,letterSpacing:'.14em',textTransform:'uppercase' as const,color:D.textMuted,padding:'14px 10px 5px'}}>Tools</div>
-            {[{id:'folders',icon:'📁',label:'OPV Folders'},{id:'database',icon:'🗄️',label:'Database Manager'}].map(item=>{
+            {[{id:'database',icon:'🗄️',label:'Database Manager'}].map(item=>{
               const isActive=page===item.id
               return (
                 <div key={item.id} onClick={()=>setPage(item.id)} style={{display:'flex',alignItems:'center',gap:10,padding:'8px 10px',borderRadius:8,cursor:'pointer',marginBottom:2,border:`1px solid ${isActive?`${D.purple}55`:'transparent'}`,background:isActive?`rgba(139,92,246,0.12)`:'transparent',transition:'all .15s'}}>
@@ -2444,17 +2537,16 @@ export default function App() {
           </div>
           {/* Page content */}
           <div style={{padding:'28px 32px'}}>
-            {isWorkflowPage&&page!=='assignment'&&(
+            {isWorkflowPage&&page!=='dashboard'&&(
               <ProgressStepper current={page} completedSteps={completedSteps}/>
             )}
+            {page==='dashboard'&&<Dashboard user={user} subject={subject} comps={comps} avails={avails} leaseComps={leaseComps} analytics={analytics} savedOPVs={savedOPVs} setPage={handleSetPage} loadSavedOPVs={loadSavedOPVs} restoreOPV={restoreOPV}/>}
             {page==='assignment'&&<Assignment assignmentData={assignmentData} setAssignmentData={setAssignmentData} user={user} setPage={handleSetPage} setSubject={setSubject} subject={subject}/>}
             {page==='subject'&&<SubjectProperty subject={subject} setSubject={setSubject} setPage={handleSetPage} folders={folders} setFolders={updateFolders} assignmentData={assignmentData}/>}
             {page==='database'&&<DatabaseManager/>}
             {page==='comp-search'&&<CompSearch subject={subject} comps={comps} setComps={setComps} setPage={handleSetPage} folders={folders} setFolders={updateFolders}/>}
             {page==='avail-search'&&<AvailSearch subject={subject} avails={avails} setAvails={setAvails} setPage={handleSetPage} folders={folders} setFolders={updateFolders}/>}
             {page==='lease-comps'&&<LeaseCompSearch subject={subject} leaseComps={leaseComps} setLeaseComps={setLeaseComps} setPage={handleSetPage}/>}
-            {page==='photos'&&<PhotoCollection subject={subject} comps={comps} avails={avails} photoUrls={photoUrls} setPhotoUrls={setPhotoUrls} setPage={handleSetPage}/>}
-            {page==='verification'&&<DataVerification comps={comps} avails={avails} verificationStatus={verificationStatus} setVerificationStatus={setVerificationStatus} setPage={handleSetPage}/>}
             {page==='folders'&&<FolderManager folders={folders} setFolders={updateFolders} setPage={handleSetPage} comps={comps} setComps={setComps} avails={avails} setAvails={setAvails}/>}
             {page==='analytics'&&<Analytics comps={scoredComps.length>0?scoredComps:comps} avails={avails} analytics={analytics} setAnalytics={setAnalytics} setPage={handleSetPage}/>}
             {page==='broker-review'&&<BrokerReview subject={subject} comps={scoredComps.length>0?scoredComps:comps} analytics={analytics} setAnalytics={setAnalytics} aiText={aiText} setAiText={setAiText} setPage={handleSetPage} setSubject={setSubject}/>}
