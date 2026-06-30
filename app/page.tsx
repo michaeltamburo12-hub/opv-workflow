@@ -1431,102 +1431,91 @@ function CompSearch({subject,comps,setComps,setPage,folders,setFolders}: {subjec
               </div>
               {results.length===0?<Card style={{textAlign:'center' as const,padding:'48px 20px'}}><p style={{color:D.textSec}}>No results. Try broadening your filters.</p></Card>:null}
               {results.length>0&&(
-                <Card style={{padding:0,overflow:'hidden'}}>
-                  <table style={{width:'100%',borderCollapse:'collapse' as const}}>
-                    <thead>
-                      <tr style={{background:D.surface2}}>
-                        {['','Address','City','SF','$/SF','Sale Price','Sale Date','Actions'].map(h=>(
-                          <th key={h} style={{padding:'10px 12px',textAlign:'left' as const,fontSize:10,fontWeight:700,color:D.textMuted,letterSpacing:'.08em',textTransform:'uppercase' as const,borderBottom:`1px solid ${D.border}`,whiteSpace:'nowrap' as const}}>{h}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {results.map((r,idx)=>{
-                        const psf=r.price_per_sf||(r.sale_price&&r.building_sf?Number(r.sale_price)/Number(r.building_sf):0)
-                        const isAdded=comps.some(c=>c.id===r.id)
-                        const isExpanded=expandedRows.has(r.id)
-                        const rowBg=selected.has(r.id)?`rgba(59,130,246,0.08)`:idx%2===0?'transparent':D.surface2
-                        const specItem=(label:string,val:unknown)=>(
-                          <div key={label} style={{display:'flex',flexDirection:'column' as const,gap:2}}>
-                            <span style={{fontSize:9,fontWeight:700,letterSpacing:'.08em',textTransform:'uppercase' as const,color:D.textMuted}}>{label}</span>
-                            <span style={{fontSize:12,color:D.text,fontWeight:500}}>{val?String(val):'—'}</span>
+                <div style={{display:'flex',flexDirection:'column' as const,gap:10}}>
+                  {results.map((r,idx)=>{
+                    const psf=r.price_per_sf||(r.sale_price&&r.building_sf?Number(r.sale_price)/Number(r.building_sf):0)
+                    const isAdded=comps.some(c=>c.id===r.id)
+                    const sc=(label:string,val:unknown)=>(
+                      <div key={label}>
+                        <div style={{fontSize:10,fontWeight:600,color:D.textMuted,textTransform:'uppercase' as const,letterSpacing:'.06em',marginBottom:2}}>{label}</div>
+                        <div style={{fontSize:12,fontWeight:600,color:D.text}}>{val?String(val):'—'}</div>
+                      </div>
+                    )
+                    return (
+                      <Card key={r.id} style={{padding:'16px 20px',border:selected.has(r.id)?`1px solid ${D.blue}`:`1px solid ${D.border}`,background:selected.has(r.id)?`rgba(59,130,246,0.05)`:D.surface}}>
+                        <div style={{display:'flex',alignItems:'flex-start',gap:14}}>
+                          <div style={{display:'flex',flexDirection:'column' as const,alignItems:'center',gap:8,flexShrink:0,paddingTop:2}}>
+                            <input type="checkbox" checked={selected.has(r.id)} onChange={()=>toggleSelect(r.id)} style={{width:15,height:15,cursor:'pointer',accentColor:D.blue}}/>
+                            <div style={{width:28,height:28,borderRadius:'50%',background:`rgba(217,119,6,0.15)`,border:`1px solid ${D.gold}44`,display:'flex',alignItems:'center',justifyContent:'center',fontSize:10,fontWeight:700,color:D.gold}}>#{idx+1}</div>
                           </div>
-                        )
-                        return (
-                          <>
-                          <tr key={r.id} style={{borderBottom:isExpanded?'none':`1px solid ${D.border}`,background:rowBg}}>
-                            <td style={{padding:'10px 12px'}}>
-                              <input type="checkbox" checked={selected.has(r.id)} onChange={()=>toggleSelect(r.id)} style={{width:14,height:14,cursor:'pointer',accentColor:D.blue}}/>
-                            </td>
-                            <td style={{padding:'10px 12px'}}>
-                              <button onClick={()=>toggleExpand(r.id)} style={{background:'none',border:'none',cursor:'pointer',padding:0,display:'flex',alignItems:'center',gap:6,fontFamily:"'Inter',sans-serif"}}>
-                                <span style={{fontSize:10,color:D.textMuted,transition:'transform .18s',display:'inline-block',transform:isExpanded?'rotate(90deg)':'rotate(0deg)'}}>▶</span>
-                                <span style={{fontSize:12,fontWeight:600,color:D.text,maxWidth:160,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' as const,textAlign:'left' as const}}>{r.address}</span>
-                              </button>
-                            </td>
-                            <td style={{padding:'10px 12px',fontSize:12,color:D.textSec,whiteSpace:'nowrap' as const}}>{r.city||'—'}</td>
-                            <td style={{padding:'10px 12px',fontSize:12,color:D.textSec,whiteSpace:'nowrap' as const}}>{r.building_sf?Number(r.building_sf).toLocaleString():'—'}</td>
-                            <td style={{padding:'10px 12px',fontSize:12,fontWeight:700,color:D.gold,whiteSpace:'nowrap' as const}}>{psf?`$${Number(psf).toFixed(2)}`:'—'}</td>
-                            <td style={{padding:'10px 12px',fontSize:12,color:D.text,whiteSpace:'nowrap' as const}}>{r.sale_price?`$${Number(r.sale_price).toLocaleString()}`:'—'}</td>
-                            <td style={{padding:'10px 12px',fontSize:11,color:D.textSec,whiteSpace:'nowrap' as const}}>{r.sale_date?fmtDate(r.sale_date):'—'}</td>
-                            <td style={{padding:'10px 12px'}}>
-                              <div style={{display:'flex',gap:6,alignItems:'center'}}>
-                                {isAdded
-                                  ? <Tag color={D.green}>✓ Added</Tag>
-                                  : <button onClick={()=>{setComps([...comps,r]);setSelected(new Set())}} style={{background:`rgba(59,130,246,0.12)`,border:`1px solid rgba(59,130,246,0.25)`,borderRadius:5,color:D.blue,fontSize:11,fontWeight:700,padding:'4px 10px',cursor:'pointer',fontFamily:"'Inter',sans-serif",whiteSpace:'nowrap' as const}}>＋ Add</button>
-                                }
-                                <div style={{position:'relative'}}>
-                                  <button onClick={()=>setFolderDropdown(folderDropdown===r.id?null:r.id)} style={{background:'transparent',border:`1px solid ${D.border}`,borderRadius:5,color:D.textSec,fontSize:11,padding:'4px 8px',cursor:'pointer',fontFamily:"'Inter',sans-serif"}} title="Add to folder">📁</button>
-                                  {folderDropdown===r.id&&(
-                                    <div style={{position:'absolute',top:'100%',right:0,marginTop:4,background:D.surface,border:`1px solid ${D.border}`,borderRadius:8,padding:6,zIndex:100,minWidth:200,boxShadow:'0 8px 32px rgba(0,0,0,.5)'}}>
-                                      {folders.filter(f=>f.type==='comps').length===0&&<div style={{fontSize:11,color:D.textMuted,padding:'6px 8px'}}>No comp folders yet.</div>}
-                                      {folders.filter(f=>f.type==='comps').map(f=>(
-                                        <div key={f.id} onClick={()=>{
-                                          const alreadyIn = f.items.find(i=>i.id===r.id)
-                                          if (!alreadyIn) setFolders(folders.map(fl=>fl.id===f.id?{...fl,items:[...fl.items,r]}:fl))
-                                          setFolderDropdown(null); alert(alreadyIn?'Already in this folder!':`Added to "${f.name}"`)
-                                        }} style={{display:'flex',alignItems:'center',gap:8,padding:'7px 10px',borderRadius:6,cursor:'pointer',fontSize:12,color:D.text}}>
-                                          <div style={{width:8,height:8,borderRadius:'50%',background:f.color,flexShrink:0}}/>{f.name}
-                                        </div>
-                                      ))}
-                                      <div onClick={()=>{setFolderDropdown(null);setPage('folders')}} style={{display:'flex',alignItems:'center',gap:6,padding:'7px 10px',borderRadius:6,cursor:'pointer',fontSize:11,color:D.blue,marginTop:4,borderTop:`1px solid ${D.border}`}}>＋ Create folder</div>
-                                    </div>
-                                  )}
+                          <div style={{flex:1,minWidth:0}}>
+                            <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',gap:12,marginBottom:12}}>
+                              <div>
+                                <div style={{fontSize:15,fontWeight:700,color:D.text,marginBottom:5}}>{r.address}</div>
+                                <div style={{display:'flex',gap:6,flexWrap:'wrap' as const}}>
+                                  <Tag color={D.blue}>{r.county||'—'}</Tag>
+                                  {r.city&&<Tag color={D.textMuted}>{r.city}</Tag>}
+                                  {r.sale_date&&<Tag color={D.textMuted}>{fmtDate(r.sale_date)}</Tag>}
                                 </div>
                               </div>
-                            </td>
-                          </tr>
-                          {isExpanded&&(
-                            <tr key={`${r.id}-exp`} style={{borderBottom:`1px solid ${D.border}`,background:rowBg}}>
-                              <td colSpan={8} style={{padding:'0 12px 14px 36px'}}>
-                                <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(130px,1fr))',gap:'10px 20px',padding:'12px 16px',background:D.surface2,borderRadius:8,border:`1px solid ${D.border}`}}>
-                                  {specItem('Lot Size (ac)', r.lot_size_ac)}
-                                  {specItem('Ceiling Height', r.ceiling_height)}
-                                  {specItem('Loading Docks', r.loading_docks)}
-                                  {specItem('Drive-In Doors', r.drive_ins)}
-                                  {specItem('Power', r.power)}
-                                  {specItem('Heat', (r as Comp&{heat?:string}).heat)}
-                                  {specItem('Parking', (r as Comp&{parking?:string}).parking)}
-                                  {specItem('Sprinkler', (r as Comp&{sprinkler?:string}).sprinkler)}
-                                  {specItem('Sewer', r.sewer)}
-                                  {specItem('Zoning', r.zoning)}
-                                  {specItem('RE Taxes', r.real_estate_taxes?(r as Comp&{real_estate_taxes?:number}).real_estate_taxes?`$${Number((r as Comp&{real_estate_taxes?:number}).real_estate_taxes).toLocaleString()}`:undefined:undefined)}
-                                  {specItem('Cap Rate', (r as Comp&{actual_cap_rate?:number}).actual_cap_rate?`${(r as Comp&{actual_cap_rate?:number}).actual_cap_rate}%`:undefined)}
-                                  {specItem('Sale Type', r.sale_type)}
-                                  {specItem('Buyer', r.buyer)}
-                                  {specItem('Seller', r.seller)}
-                                  {specItem('Submarket', r.submarket)}
-                                  {specItem('County', r.county)}
-                                </div>
-                              </td>
-                            </tr>
-                          )}
-                          </>
-                        )
-                      })}
-                    </tbody>
-                  </table>
-                </Card>
+                              {r.score&&<div style={{textAlign:'right' as const,flexShrink:0}}>
+                                <div style={{fontSize:10,color:D.textMuted,letterSpacing:'.06em',marginBottom:2}}>MATCH</div>
+                                <div style={{fontSize:20,fontWeight:700,color:scoreColor(r.score)}}>{r.score}</div>
+                                <div style={{width:40,height:3,background:D.surface2,borderRadius:2,marginTop:3}}><div style={{height:'100%',background:scoreColor(r.score),borderRadius:2,width:`${r.score}%`}}/></div>
+                              </div>}
+                            </div>
+                            <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:'10px 16px',marginBottom:12}}>
+                              {sc('Building SF', r.building_sf?Number(r.building_sf).toLocaleString()+' SF':null)}
+                              {sc('Lot Size', r.lot_size_ac?r.lot_size_ac+' AC':null)}
+                              {sc('Sale Price', r.sale_price?'$'+Number(r.sale_price).toLocaleString():null)}
+                              {sc('Price / SF', psf?'$'+Number(psf).toFixed(2):null)}
+                              {sc('Ceiling Height', r.ceiling_height)}
+                              {sc('Loading Docks', r.loading_docks)}
+                              {sc('Drive-In Doors', r.drive_ins)}
+                              {sc('Power', r.power)}
+                              {sc('Heat', (r as Comp&{heat?:string}).heat)}
+                              {sc('Sprinkler', (r as Comp&{sprinkler?:string}).sprinkler)}
+                              {sc('Sewer', r.sewer)}
+                              {sc('Parking', (r as Comp&{parking?:string}).parking)}
+                              {sc('Zoning', r.zoning)}
+                              {sc('RE Taxes', (r as Comp&{real_estate_taxes?:number}).real_estate_taxes?'$'+Number((r as Comp&{real_estate_taxes?:number}).real_estate_taxes).toLocaleString():null)}
+                              {sc('Cap Rate', (r as Comp&{actual_cap_rate?:number}).actual_cap_rate?(r as Comp&{actual_cap_rate?:number}).actual_cap_rate+'%':null)}
+                              {sc('Sale Type', r.sale_type)}
+                              {sc('Buyer', r.buyer)}
+                              {sc('Seller', r.seller)}
+                            </div>
+                            <div style={{display:'flex',gap:8,alignItems:'center',paddingTop:10,borderTop:`1px solid ${D.border}`}}>
+                              {isAdded
+                                ? <Tag color={D.green}>✓ Added to OPV</Tag>
+                                : <button onClick={()=>setComps([...comps,r])} style={{background:`rgba(59,130,246,0.12)`,border:`1px solid rgba(59,130,246,0.25)`,borderRadius:6,color:D.blue,fontSize:12,fontWeight:700,padding:'6px 14px',cursor:'pointer',fontFamily:"'Inter',sans-serif"}}>＋ Add to OPV</button>
+                              }
+                              <div style={{position:'relative'}}>
+                                <button onClick={()=>setFolderDropdown(folderDropdown===r.id?null:r.id)} style={{background:'transparent',border:`1px solid ${D.border}`,borderRadius:6,color:D.textSec,fontSize:12,fontWeight:600,padding:'6px 12px',cursor:'pointer',fontFamily:"'Inter',sans-serif",display:'flex',alignItems:'center',gap:5}}>
+                                  📁 Add to Folder
+                                </button>
+                                {folderDropdown===r.id&&(
+                                  <div style={{position:'absolute',top:'100%',left:0,marginTop:4,background:D.surface,border:`1px solid ${D.border}`,borderRadius:8,padding:6,zIndex:100,minWidth:220,boxShadow:'0 8px 32px rgba(0,0,0,.5)'}}>
+                                    {folders.filter(f=>f.type==='comps').length===0&&<div style={{fontSize:11,color:D.textMuted,padding:'6px 8px'}}>No comp folders yet. Save a subject property first.</div>}
+                                    {folders.filter(f=>f.type==='comps').map(f=>(
+                                      <div key={f.id} onClick={()=>{
+                                        const alreadyIn=f.items.find(i=>i.id===r.id)
+                                        if (!alreadyIn) setFolders(folders.map(fl=>fl.id===f.id?{...fl,items:[...fl.items,r]}:fl))
+                                        setFolderDropdown(null); alert(alreadyIn?'Already in this folder!':`Added to "${f.name}"`)
+                                      }} style={{display:'flex',alignItems:'center',gap:8,padding:'8px 10px',borderRadius:6,cursor:'pointer',fontSize:12,color:D.text}}>
+                                        <div style={{width:8,height:8,borderRadius:'50%',background:f.color,flexShrink:0}}/>{f.name}
+                                      </div>
+                                    ))}
+                                    <div onClick={()=>{setFolderDropdown(null);setPage('folders')}} style={{display:'flex',alignItems:'center',gap:6,padding:'8px 10px',borderRadius:6,cursor:'pointer',fontSize:11,color:D.blue,marginTop:4,borderTop:`1px solid ${D.border}`}}>＋ Create folder</div>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </Card>
+                    )
+                  })}
+                </div>
               )}
               {comps.length>0&&(
                 <div style={{marginTop:12,padding:'12px 16px',borderRadius:8,background:`rgba(59,130,246,0.08)`,border:`1px solid rgba(59,130,246,0.2)`,display:'flex',alignItems:'center',justifyContent:'space-between'}}>
@@ -1645,100 +1634,88 @@ function AvailSearch({subject,avails,setAvails,setPage,folders,setFolders}: {sub
                 </div>
               </div>
               {results.length===0?<Card style={{textAlign:'center' as const,padding:'48px 20px'}}><p style={{color:D.textSec}}>No availabilities found.</p></Card>:
-              <Card style={{padding:0,overflow:'hidden'}}>
-                <table style={{width:'100%',borderCollapse:'collapse' as const}}>
-                  <thead>
-                    <tr style={{background:D.surface2}}>
-                      {['','Address','City','SF','Asking Price','$/SF','Actions'].map(h=>(
-                        <th key={h} style={{padding:'10px 12px',textAlign:'left' as const,fontSize:10,fontWeight:700,color:D.textMuted,letterSpacing:'.08em',textTransform:'uppercase' as const,borderBottom:`1px solid ${D.border}`,whiteSpace:'nowrap' as const}}>{h}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {results.map((r,idx)=>{
-                      const psf=r.price_per_sf||(r.asking_price&&r.building_sf?Number(r.asking_price)/Number(r.building_sf):0)
-                      const isAdded=avails.some(a=>a.id===r.id)
-                      const isExpanded=expandedRows.has(r.id)
-                      const rowBg=selected.has(r.id)?`rgba(59,130,246,0.08)`:idx%2===0?'transparent':D.surface2
-                      const specItem=(label:string,val:unknown)=>(
-                        <div key={label} style={{display:'flex',flexDirection:'column' as const,gap:2}}>
-                          <span style={{fontSize:9,fontWeight:700,letterSpacing:'.08em',textTransform:'uppercase' as const,color:D.textMuted}}>{label}</span>
-                          <span style={{fontSize:12,color:D.text,fontWeight:500}}>{val?String(val):'—'}</span>
+              <div style={{display:'flex',flexDirection:'column' as const,gap:10}}>
+                {results.map((r,idx)=>{
+                  const psf=r.price_per_sf||(r.asking_price&&r.building_sf?Number(r.asking_price)/Number(r.building_sf):0)
+                  const isAdded=avails.some(a=>a.id===r.id)
+                  const sc=(label:string,val:unknown)=>(
+                    <div key={label}>
+                      <div style={{fontSize:10,fontWeight:600,color:D.textMuted,textTransform:'uppercase' as const,letterSpacing:'.06em',marginBottom:2}}>{label}</div>
+                      <div style={{fontSize:12,fontWeight:600,color:D.text}}>{val?String(val):'—'}</div>
+                    </div>
+                  )
+                  return (
+                    <Card key={r.id} style={{padding:'16px 20px',border:selected.has(r.id)?`1px solid ${D.blue}`:`1px solid ${D.border}`,background:selected.has(r.id)?`rgba(59,130,246,0.05)`:D.surface}}>
+                      <div style={{display:'flex',alignItems:'flex-start',gap:14}}>
+                        <div style={{display:'flex',flexDirection:'column' as const,alignItems:'center',gap:8,flexShrink:0,paddingTop:2}}>
+                          <input type="checkbox" checked={selected.has(r.id)} onChange={()=>toggleSelect(r.id)} style={{width:15,height:15,cursor:'pointer',accentColor:D.blue}}/>
+                          <div style={{width:28,height:28,borderRadius:'50%',background:`rgba(59,130,246,0.15)`,border:`1px solid ${D.blue}44`,display:'flex',alignItems:'center',justifyContent:'center',fontSize:10,fontWeight:700,color:D.blue}}>#{idx+1}</div>
                         </div>
-                      )
-                      return (
-                        <>
-                        <tr key={r.id} style={{borderBottom:isExpanded?'none':`1px solid ${D.border}`,background:rowBg}}>
-                          <td style={{padding:'10px 12px'}}>
-                            <input type="checkbox" checked={selected.has(r.id)} onChange={()=>toggleSelect(r.id)} style={{width:14,height:14,cursor:'pointer',accentColor:D.blue}}/>
-                          </td>
-                          <td style={{padding:'10px 12px'}}>
-                            <button onClick={()=>toggleExpand(r.id)} style={{background:'none',border:'none',cursor:'pointer',padding:0,display:'flex',alignItems:'center',gap:6,fontFamily:"'Inter',sans-serif"}}>
-                              <span style={{fontSize:10,color:D.textMuted,transition:'transform .18s',display:'inline-block',transform:isExpanded?'rotate(90deg)':'rotate(0deg)'}}>▶</span>
-                              <span style={{fontSize:12,fontWeight:600,color:D.text,maxWidth:160,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' as const,textAlign:'left' as const}}>{r.address||'—'}</span>
-                            </button>
-                          </td>
-                          <td style={{padding:'10px 12px',fontSize:12,color:D.textSec,whiteSpace:'nowrap' as const}}>{r.city||'—'}</td>
-                          <td style={{padding:'10px 12px',fontSize:12,color:D.textSec,whiteSpace:'nowrap' as const}}>{r.building_sf?Number(r.building_sf).toLocaleString():'—'}</td>
-                          <td style={{padding:'10px 12px',fontSize:12,color:D.text,whiteSpace:'nowrap' as const}}>{r.asking_price?`$${Number(r.asking_price).toLocaleString()}`:'—'}</td>
-                          <td style={{padding:'10px 12px',fontSize:12,fontWeight:700,color:D.blue,whiteSpace:'nowrap' as const}}>{psf?`$${Number(psf).toFixed(2)}`:'—'}</td>
-                          <td style={{padding:'10px 12px'}}>
-                            <div style={{display:'flex',gap:6,alignItems:'center'}}>
-                              {isAdded
-                                ? <Tag color={D.green}>✓ Added</Tag>
-                                : <button onClick={()=>setAvails([...avails,r])} style={{background:`rgba(59,130,246,0.12)`,border:`1px solid rgba(59,130,246,0.25)`,borderRadius:5,color:D.blue,fontSize:11,fontWeight:700,padding:'4px 10px',cursor:'pointer',fontFamily:"'Inter',sans-serif",whiteSpace:'nowrap' as const}}>＋ Add</button>
-                              }
-                              {r.loopnet_url&&<a href={r.loopnet_url} target="_blank" rel="noopener noreferrer" style={{fontSize:11,color:D.blue,padding:'4px 6px',textDecoration:'none'}}>↗</a>}
-                              <div style={{position:'relative'}}>
-                                <button onClick={()=>setFolderDropdown(folderDropdown===r.id?null:r.id)} style={{background:'transparent',border:`1px solid ${D.border}`,borderRadius:5,color:D.textSec,fontSize:11,padding:'4px 8px',cursor:'pointer',fontFamily:"'Inter',sans-serif"}} title="Add to folder">📁</button>
-                                {folderDropdown===r.id&&(
-                                  <div style={{position:'absolute',top:'100%',right:0,marginTop:4,background:D.surface,border:`1px solid ${D.border}`,borderRadius:8,padding:6,zIndex:100,minWidth:200,boxShadow:'0 8px 32px rgba(0,0,0,.5)'}}>
-                                    {folders.filter(f=>f.type==='avails').length===0&&<div style={{fontSize:11,color:D.textMuted,padding:'6px 8px'}}>No availability folders yet.</div>}
-                                    {folders.filter(f=>f.type==='avails').map(f=>(
-                                      <div key={f.id} onClick={()=>{
-                                        const alreadyIn = f.items.find(i=>i.id===r.id)
-                                        if (!alreadyIn) setFolders(folders.map(fl=>fl.id===f.id?{...fl,items:[...fl.items,r]}:fl))
-                                        setFolderDropdown(null); alert(alreadyIn?'Already in this folder!':`Added to "${f.name}"`)
-                                      }} style={{display:'flex',alignItems:'center',gap:8,padding:'7px 10px',borderRadius:6,cursor:'pointer',fontSize:12,color:D.text}}>
-                                        <div style={{width:8,height:8,borderRadius:'50%',background:f.color,flexShrink:0}}/>{f.name}
-                                      </div>
-                                    ))}
-                                    <div onClick={()=>{setFolderDropdown(null);setPage('folders')}} style={{display:'flex',alignItems:'center',gap:6,padding:'7px 10px',borderRadius:6,cursor:'pointer',fontSize:11,color:D.blue,marginTop:4,borderTop:`1px solid ${D.border}`}}>＋ Create folder</div>
-                                  </div>
-                                )}
+                        <div style={{flex:1,minWidth:0}}>
+                          <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',gap:12,marginBottom:12}}>
+                            <div>
+                              <div style={{fontSize:15,fontWeight:700,color:D.text,marginBottom:5}}>{r.address||'—'}</div>
+                              <div style={{display:'flex',gap:6,flexWrap:'wrap' as const}}>
+                                <Tag color={D.blue}>{r.county||'—'}</Tag>
+                                {r.city&&<Tag color={D.textMuted}>{r.city}</Tag>}
+                                {r.listing_broker&&<Tag color={D.textMuted}>{r.listing_broker}</Tag>}
                               </div>
                             </div>
-                          </td>
-                        </tr>
-                        {isExpanded&&(
-                          <tr key={`${r.id}-exp`} style={{borderBottom:`1px solid ${D.border}`,background:rowBg}}>
-                            <td colSpan={7} style={{padding:'0 12px 14px 36px'}}>
-                              <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(130px,1fr))',gap:'10px 20px',padding:'12px 16px',background:D.surface2,borderRadius:8,border:`1px solid ${D.border}`}}>
-                                {specItem('Lot Size (ac)', r.lot_size_ac)}
-                                {specItem('Ceiling Height', r.ceiling_height)}
-                                {specItem('Loading Docks', r.loading_docks)}
-                                {specItem('Drive-In Doors', r.drive_ins)}
-                                {specItem('Power', r.power)}
-                                {specItem('Heat', (r as Avail&{heat?:string}).heat)}
-                                {specItem('Parking', (r as Avail&{parking?:string}).parking)}
-                                {specItem('Sprinkler', (r as Avail&{sprinkler?:string}).sprinkler)}
-                                {specItem('Sewer', r.sewer)}
-                                {specItem('Zoning', r.zoning)}
-                                {specItem('RE Taxes', (r as Avail&{real_estate_taxes?:number}).real_estate_taxes?`$${Number((r as Avail&{real_estate_taxes?:number}).real_estate_taxes).toLocaleString()}`:undefined)}
-                                {specItem('Pricing Guidance', r.pricing_guidance)}
-                                {specItem('Listing Broker', r.listing_broker)}
-                                {specItem('Submarket', (r as Avail&{submarket?:string}).submarket)}
-                                {specItem('County', r.county)}
-                              </div>
-                            </td>
-                          </tr>
-                        )}
-                        </>
-                      )
-                    })}
-                  </tbody>
-                </table>
-              </Card>}
+                            {r.asking_price&&<div style={{textAlign:'right' as const,flexShrink:0}}>
+                              <div style={{fontSize:10,color:D.textMuted,letterSpacing:'.06em',marginBottom:2}}>ASKING</div>
+                              <div style={{fontSize:16,fontWeight:700,color:D.blue}}>${Number(r.asking_price).toLocaleString()}</div>
+                              {psf&&<div style={{fontSize:11,color:D.textSec}}>${Number(psf).toFixed(2)}/SF</div>}
+                            </div>}
+                          </div>
+                          <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:'10px 16px',marginBottom:12}}>
+                            {sc('Building SF', r.building_sf?Number(r.building_sf).toLocaleString()+' SF':null)}
+                            {sc('Lot Size', r.lot_size_ac?r.lot_size_ac+' AC':null)}
+                            {sc('Pricing Guidance', r.pricing_guidance)}
+                            {sc('RE Taxes', (r as Avail&{real_estate_taxes?:number}).real_estate_taxes?'$'+Number((r as Avail&{real_estate_taxes?:number}).real_estate_taxes).toLocaleString():null)}
+                            {sc('Ceiling Height', r.ceiling_height)}
+                            {sc('Loading Docks', r.loading_docks)}
+                            {sc('Drive-In Doors', r.drive_ins)}
+                            {sc('Power', r.power)}
+                            {sc('Heat', (r as Avail&{heat?:string}).heat)}
+                            {sc('Sprinkler', (r as Avail&{sprinkler?:string}).sprinkler)}
+                            {sc('Sewer', r.sewer)}
+                            {sc('Parking', (r as Avail&{parking?:string}).parking)}
+                            {sc('Zoning', r.zoning)}
+                            {sc('Submarket', (r as Avail&{submarket?:string}).submarket)}
+                          </div>
+                          <div style={{display:'flex',gap:8,alignItems:'center',paddingTop:10,borderTop:`1px solid ${D.border}`}}>
+                            {isAdded
+                              ? <Tag color={D.green}>✓ Added to OPV</Tag>
+                              : <button onClick={()=>setAvails([...avails,r])} style={{background:`rgba(59,130,246,0.12)`,border:`1px solid rgba(59,130,246,0.25)`,borderRadius:6,color:D.blue,fontSize:12,fontWeight:700,padding:'6px 14px',cursor:'pointer',fontFamily:"'Inter',sans-serif"}}>＋ Add to OPV</button>
+                            }
+                            {r.loopnet_url&&<a href={r.loopnet_url} target="_blank" rel="noopener noreferrer" style={{fontSize:12,color:D.blue,padding:'6px 10px',textDecoration:'none',border:`1px solid ${D.blue}33`,borderRadius:6,fontWeight:600}}>↗ LoopNet</a>}
+                            <div style={{position:'relative'}}>
+                              <button onClick={()=>setFolderDropdown(folderDropdown===r.id?null:r.id)} style={{background:'transparent',border:`1px solid ${D.border}`,borderRadius:6,color:D.textSec,fontSize:12,fontWeight:600,padding:'6px 12px',cursor:'pointer',fontFamily:"'Inter',sans-serif",display:'flex',alignItems:'center',gap:5}}>
+                                📁 Add to Folder
+                              </button>
+                              {folderDropdown===r.id&&(
+                                <div style={{position:'absolute',top:'100%',left:0,marginTop:4,background:D.surface,border:`1px solid ${D.border}`,borderRadius:8,padding:6,zIndex:100,minWidth:220,boxShadow:'0 8px 32px rgba(0,0,0,.5)'}}>
+                                  {folders.filter(f=>f.type==='avails').length===0&&<div style={{fontSize:11,color:D.textMuted,padding:'6px 8px'}}>No availability folders yet.</div>}
+                                  {folders.filter(f=>f.type==='avails').map(f=>(
+                                    <div key={f.id} onClick={()=>{
+                                      const alreadyIn=f.items.find(i=>i.id===r.id)
+                                      if (!alreadyIn) setFolders(folders.map(fl=>fl.id===f.id?{...fl,items:[...fl.items,r]}:fl))
+                                      setFolderDropdown(null); alert(alreadyIn?'Already in this folder!':`Added to "${f.name}"`)
+                                    }} style={{display:'flex',alignItems:'center',gap:8,padding:'8px 10px',borderRadius:6,cursor:'pointer',fontSize:12,color:D.text}}>
+                                      <div style={{width:8,height:8,borderRadius:'50%',background:f.color,flexShrink:0}}/>{f.name}
+                                    </div>
+                                  ))}
+                                  <div onClick={()=>{setFolderDropdown(null);setPage('folders')}} style={{display:'flex',alignItems:'center',gap:6,padding:'8px 10px',borderRadius:6,cursor:'pointer',fontSize:11,color:D.blue,marginTop:4,borderTop:`1px solid ${D.border}`}}>＋ Create folder</div>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </Card>
+                  )
+                })}
+              </div>}
             </>
           )}
         </div>
@@ -1866,98 +1843,87 @@ function LeaseCompSearch({subject,leaseComps,setLeaseComps,setPage,folders,setFo
                   {selected.size>0&&<Btn size="sm" onClick={addSelected}>＋ Add {selected.size} to OPV</Btn>}
                 </div>
               </div>
-              <Card style={{padding:0,overflow:'hidden'}}>
-                <table style={{width:'100%',borderCollapse:'collapse' as const}}>
-                  <thead>
-                    <tr style={{background:D.surface2}}>
-                      {['','Address','City','SF','$/SF/yr','Date','Term','Tenant','Actions'].map(h=>(
-                        <th key={h} style={{padding:'10px 12px',textAlign:'left' as const,fontSize:10,fontWeight:700,color:D.textMuted,letterSpacing:'.08em',textTransform:'uppercase' as const,borderBottom:`1px solid ${D.border}`,whiteSpace:'nowrap' as const}}>{h}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {results.map((r,idx)=>{
-                      const isAdded=leaseComps.some(c=>c.id===r.id)
-                      const isExpanded=expandedRows.has(r.id)
-                      const rowBg=selected.has(r.id)?`rgba(59,130,246,0.08)`:idx%2===0?'transparent':D.surface2
-                      const specItem=(label:string,val:unknown)=>(
-                        <div key={label} style={{display:'flex',flexDirection:'column' as const,gap:2}}>
-                          <span style={{fontSize:9,fontWeight:700,letterSpacing:'.08em',textTransform:'uppercase' as const,color:D.textMuted}}>{label}</span>
-                          <span style={{fontSize:12,color:D.text,fontWeight:500}}>{val?String(val):'—'}</span>
+              <div style={{display:'flex',flexDirection:'column' as const,gap:10}}>
+                {results.map((r,idx)=>{
+                  const isAdded=leaseComps.some(c=>c.id===r.id)
+                  const sc=(label:string,val:unknown)=>(
+                    <div key={label}>
+                      <div style={{fontSize:10,fontWeight:600,color:D.textMuted,textTransform:'uppercase' as const,letterSpacing:'.06em',marginBottom:2}}>{label}</div>
+                      <div style={{fontSize:12,fontWeight:600,color:D.text}}>{val?String(val):'—'}</div>
+                    </div>
+                  )
+                  return (
+                    <Card key={r.id} style={{padding:'16px 20px',border:selected.has(r.id)?`1px solid ${D.blue}`:`1px solid ${D.border}`,background:selected.has(r.id)?`rgba(59,130,246,0.05)`:D.surface}}>
+                      <div style={{display:'flex',alignItems:'flex-start',gap:14}}>
+                        <div style={{display:'flex',flexDirection:'column' as const,alignItems:'center',gap:8,flexShrink:0,paddingTop:2}}>
+                          <input type="checkbox" checked={selected.has(r.id)} onChange={()=>toggleSelect(r.id)} style={{width:15,height:15,cursor:'pointer',accentColor:D.blue}}/>
+                          <div style={{width:28,height:28,borderRadius:'50%',background:`rgba(16,185,129,0.15)`,border:`1px solid ${D.green}44`,display:'flex',alignItems:'center',justifyContent:'center',fontSize:10,fontWeight:700,color:D.green}}>#{idx+1}</div>
                         </div>
-                      )
-                      return (
-                        <>
-                        <tr key={r.id} style={{borderBottom:isExpanded?'none':`1px solid ${D.border}`,background:rowBg}}>
-                          <td style={{padding:'10px 12px'}}>
-                            <input type="checkbox" checked={selected.has(r.id)} onChange={()=>toggleSelect(r.id)} style={{width:14,height:14,cursor:'pointer',accentColor:D.blue}}/>
-                          </td>
-                          <td style={{padding:'10px 12px'}}>
-                            <button onClick={()=>toggleExpand(r.id)} style={{background:'none',border:'none',cursor:'pointer',padding:0,display:'flex',alignItems:'center',gap:6,fontFamily:"'Inter',sans-serif"}}>
-                              <span style={{fontSize:10,color:D.textMuted,display:'inline-block',transform:isExpanded?'rotate(90deg)':'rotate(0deg)'}}>▶</span>
-                              <span style={{fontSize:12,fontWeight:600,color:D.text,maxWidth:150,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' as const,textAlign:'left' as const}}>{r.address||'—'}</span>
-                            </button>
-                          </td>
-                          <td style={{padding:'10px 12px',fontSize:12,color:D.textSec}}>{r.city||'—'}</td>
-                          <td style={{padding:'10px 12px',fontSize:12,color:D.textSec,whiteSpace:'nowrap' as const}}>{r.building_sf?Number(r.building_sf).toLocaleString():'—'}</td>
-                          <td style={{padding:'10px 12px',fontSize:12,fontWeight:700,color:D.blue,whiteSpace:'nowrap' as const}}>{r.price_per_sf?`$${Number(r.price_per_sf).toFixed(2)}`:'—'}</td>
-                          <td style={{padding:'10px 12px',fontSize:11,color:D.textSec,whiteSpace:'nowrap' as const}}>{r.lease_date?fmtDate(r.lease_date):'—'}</td>
-                          <td style={{padding:'10px 12px',fontSize:11,color:D.textSec,whiteSpace:'nowrap' as const}}>{r.lease_term||'—'}</td>
-                          <td style={{padding:'10px 12px',fontSize:11,color:D.textSec,maxWidth:120,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' as const}}>{r.tenant||'—'}</td>
-                          <td style={{padding:'10px 12px'}}>
-                            <div style={{display:'flex',gap:6,alignItems:'center'}}>
-                              {isAdded
-                                ? <Tag color={D.green}>✓ Added</Tag>
-                                : <button onClick={()=>{setLeaseComps([...leaseComps,r]);}} style={{background:`rgba(59,130,246,0.12)`,border:`1px solid rgba(59,130,246,0.25)`,borderRadius:5,color:D.blue,fontSize:11,fontWeight:700,padding:'4px 10px',cursor:'pointer',fontFamily:"'Inter',sans-serif",whiteSpace:'nowrap' as const}}>＋ Add</button>
-                              }
-                              <div style={{position:'relative'}}>
-                                <button onClick={()=>setFolderDropdown(folderDropdown===r.id?null:r.id)} style={{background:'transparent',border:`1px solid ${D.border}`,borderRadius:5,color:D.textSec,fontSize:11,padding:'4px 8px',cursor:'pointer',fontFamily:"'Inter',sans-serif"}} title="Add to folder">📁</button>
-                                {folderDropdown===r.id&&(
-                                  <div style={{position:'absolute',top:'100%',right:0,marginTop:4,background:D.surface,border:`1px solid ${D.border}`,borderRadius:8,padding:6,zIndex:100,minWidth:200,boxShadow:'0 8px 32px rgba(0,0,0,.5)'}}>
-                                    {folders.filter(f=>f.type==='lease-comps').length===0&&<div style={{fontSize:11,color:D.textMuted,padding:'6px 8px'}}>No lease comp folders yet.</div>}
-                                    {folders.filter(f=>f.type==='lease-comps').map(f=>(
-                                      <div key={f.id} onClick={()=>{
-                                        const alreadyIn = f.items.find(i=>i.id===r.id)
-                                        if (!alreadyIn) setFolders(folders.map(fl=>fl.id===f.id?{...fl,items:[...fl.items,r]}:fl))
-                                        setFolderDropdown(null); alert(alreadyIn?'Already in this folder!':`Added to "${f.name}"`)
-                                      }} style={{display:'flex',alignItems:'center',gap:8,padding:'7px 10px',borderRadius:6,cursor:'pointer',fontSize:12,color:D.text}}>
-                                        <div style={{width:8,height:8,borderRadius:'50%',background:f.color,flexShrink:0}}/>{f.name}
-                                      </div>
-                                    ))}
-                                    <div onClick={()=>{setFolderDropdown(null);setPage('folders')}} style={{display:'flex',alignItems:'center',gap:6,padding:'7px 10px',borderRadius:6,cursor:'pointer',fontSize:11,color:D.blue,marginTop:4,borderTop:`1px solid ${D.border}`}}>＋ Create folder</div>
-                                  </div>
-                                )}
+                        <div style={{flex:1,minWidth:0}}>
+                          <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',gap:12,marginBottom:12}}>
+                            <div>
+                              <div style={{fontSize:15,fontWeight:700,color:D.text,marginBottom:5}}>{r.address||'—'}</div>
+                              <div style={{display:'flex',gap:6,flexWrap:'wrap' as const}}>
+                                <Tag color={D.green}>{r.county||'—'}</Tag>
+                                {r.city&&<Tag color={D.textMuted}>{r.city}</Tag>}
+                                {r.lease_date&&<Tag color={D.textMuted}>{fmtDate(r.lease_date)}</Tag>}
+                                {r.lease_term&&<Tag color={D.textMuted}>{r.lease_term}</Tag>}
                               </div>
                             </div>
-                          </td>
-                        </tr>
-                        {isExpanded&&(
-                          <tr key={`${r.id}-exp`} style={{borderBottom:`1px solid ${D.border}`,background:rowBg}}>
-                            <td colSpan={9} style={{padding:'0 12px 14px 36px'}}>
-                              <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(130px,1fr))',gap:'10px 20px',padding:'12px 16px',background:D.surface2,borderRadius:8,border:`1px solid ${D.border}`}}>
-                                {specItem('Ceiling Height', r.ceiling_height)}
-                                {specItem('Loading Docks', r.loading_docks)}
-                                {specItem('Drive-In Doors', r.drive_ins)}
-                                {specItem('Power', r.power)}
-                                {specItem('Sewer', r.sewer)}
-                                {specItem('Zoning', r.zoning)}
-                                {specItem('Annual Rent ($)', r.lease_price?`$${Number(r.lease_price).toLocaleString()}`:undefined)}
-                                {specItem('Annual Escalations', r.annual_escalations)}
-                                {specItem('Landlord Work', r.landlord_work)}
-                                {specItem('Landlord', r.landlord)}
-                                {specItem('Taxes PSF', r.taxes_psf?`$${r.taxes_psf}/SF`:undefined)}
-                                {specItem('Office %', r.office_pct?`${r.office_pct}%`:undefined)}
-                                {specItem('County', r.county)}
-                              </div>
-                            </td>
-                          </tr>
-                        )}
-                        </>
-                      )
-                    })}
-                  </tbody>
-                </table>
-              </Card>
+                            {r.price_per_sf&&<div style={{textAlign:'right' as const,flexShrink:0}}>
+                              <div style={{fontSize:10,color:D.textMuted,letterSpacing:'.06em',marginBottom:2}}>LEASE RATE</div>
+                              <div style={{fontSize:18,fontWeight:700,color:D.green}}>${Number(r.price_per_sf).toFixed(2)}</div>
+                              <div style={{fontSize:11,color:D.textSec}}>per SF / yr</div>
+                            </div>}
+                          </div>
+                          <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:'10px 16px',marginBottom:12}}>
+                            {sc('Building SF', r.building_sf?Number(r.building_sf).toLocaleString()+' SF':null)}
+                            {sc('Annual Rent', r.lease_price?'$'+Number(r.lease_price).toLocaleString():null)}
+                            {sc('Tenant', r.tenant)}
+                            {sc('Landlord', r.landlord)}
+                            {sc('Ceiling Height', r.ceiling_height)}
+                            {sc('Loading Docks', r.loading_docks)}
+                            {sc('Drive-In Doors', r.drive_ins)}
+                            {sc('Power', r.power)}
+                            {sc('Sewer', r.sewer)}
+                            {sc('Zoning', r.zoning)}
+                            {sc('Annual Escalations', r.annual_escalations)}
+                            {sc('Landlord Work', r.landlord_work)}
+                            {sc('Taxes PSF', r.taxes_psf?'$'+r.taxes_psf+'/SF':null)}
+                            {sc('Office %', r.office_pct?r.office_pct+'%':null)}
+                          </div>
+                          <div style={{display:'flex',gap:8,alignItems:'center',paddingTop:10,borderTop:`1px solid ${D.border}`}}>
+                            {isAdded
+                              ? <Tag color={D.green}>✓ Added to OPV</Tag>
+                              : <button onClick={()=>setLeaseComps([...leaseComps,r])} style={{background:`rgba(59,130,246,0.12)`,border:`1px solid rgba(59,130,246,0.25)`,borderRadius:6,color:D.blue,fontSize:12,fontWeight:700,padding:'6px 14px',cursor:'pointer',fontFamily:"'Inter',sans-serif"}}>＋ Add to OPV</button>
+                            }
+                            <div style={{position:'relative'}}>
+                              <button onClick={()=>setFolderDropdown(folderDropdown===r.id?null:r.id)} style={{background:'transparent',border:`1px solid ${D.border}`,borderRadius:6,color:D.textSec,fontSize:12,fontWeight:600,padding:'6px 12px',cursor:'pointer',fontFamily:"'Inter',sans-serif",display:'flex',alignItems:'center',gap:5}}>
+                                📁 Add to Folder
+                              </button>
+                              {folderDropdown===r.id&&(
+                                <div style={{position:'absolute',top:'100%',left:0,marginTop:4,background:D.surface,border:`1px solid ${D.border}`,borderRadius:8,padding:6,zIndex:100,minWidth:220,boxShadow:'0 8px 32px rgba(0,0,0,.5)'}}>
+                                  {folders.filter(f=>f.type==='lease-comps').length===0&&<div style={{fontSize:11,color:D.textMuted,padding:'6px 8px'}}>No lease comp folders yet.</div>}
+                                  {folders.filter(f=>f.type==='lease-comps').map(f=>(
+                                    <div key={f.id} onClick={()=>{
+                                      const alreadyIn=f.items.find(i=>i.id===r.id)
+                                      if (!alreadyIn) setFolders(folders.map(fl=>fl.id===f.id?{...fl,items:[...fl.items,r]}:fl))
+                                      setFolderDropdown(null); alert(alreadyIn?'Already in this folder!':`Added to "${f.name}"`)
+                                    }} style={{display:'flex',alignItems:'center',gap:8,padding:'8px 10px',borderRadius:6,cursor:'pointer',fontSize:12,color:D.text}}>
+                                      <div style={{width:8,height:8,borderRadius:'50%',background:f.color,flexShrink:0}}/>{f.name}
+                                    </div>
+                                  ))}
+                                  <div onClick={()=>{setFolderDropdown(null);setPage('folders')}} style={{display:'flex',alignItems:'center',gap:6,padding:'8px 10px',borderRadius:6,cursor:'pointer',fontSize:11,color:D.blue,marginTop:4,borderTop:`1px solid ${D.border}`}}>＋ Create folder</div>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </Card>
+                  )
+                })}
+              </div>
             </>
           )}
         </div>
