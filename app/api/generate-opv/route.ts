@@ -322,15 +322,13 @@ export async function POST(req: NextRequest) {
   const logoPath = path.join(process.cwd(), 'public', 'pcre_logo.png')
   const logoData = fs.existsSync(logoPath) ? fs.readFileSync(logoPath) : null
 
-  // Base URL for internal APIs
-  const baseUrl = process.env.VERCEL_URL
-    ? `https://${process.env.VERCEL_URL}`
-    : 'http://localhost:3000'
-
   async function fetchPropertyPhoto(photoUrl: string | undefined, address: string | undefined): Promise<Buffer | null> {
     if (photoUrl) return fetchImageBuffer(photoUrl)
     if (!address) return null
-    return fetchImageBuffer(`${baseUrl}/api/street-view?address=${encodeURIComponent(address + ', NY')}`)
+    const key = process.env.GOOGLE_MAPS_KEY
+    if (!key) return null
+    const encoded = encodeURIComponent(address + ', NY')
+    return fetchImageBuffer(`https://maps.googleapis.com/maps/api/streetview?size=600x400&location=${encoded}&key=${key}&return_error_code=true`)
   }
 
   // Pre-fetch all photos
