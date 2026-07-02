@@ -2343,8 +2343,17 @@ function OPVReport({subject,comps,leaseComps,avails,analytics,aiText,setPage}: {
           <div style={{fontSize:16,fontWeight:700,marginBottom:32}}>{today}</div>
           <div style={{marginBottom:6,fontSize:11,color:'#888',textTransform:'uppercase' as const,letterSpacing:'.1em'}}>Property Address</div>
           <div style={{fontSize:24,fontWeight:900,color:'#1a1a1a',textTransform:'uppercase' as const,marginBottom:4}}>{subject.address}</div>
-          {subject.city&&<div style={{fontSize:16,color:'#444',marginBottom:32}}>{subject.city.toUpperCase()}, NEW YORK</div>}
-          <div style={{width:'100%',height:1,background:'#ddd',margin:'32px 0'}}/>
+          {subject.city&&<div style={{fontSize:16,color:'#444',marginBottom:24}}>{subject.city.toUpperCase()}, NEW YORK</div>}
+          <div style={{width:'100%',height:320,borderRadius:8,overflow:'hidden' as const,border:'1px solid #ddd',marginBottom:8}}>
+            <img
+              src={`/api/street-view?address=${encodeURIComponent(subject.address+(subject.city?', '+subject.city:'')+', NY')}`}
+              alt={subject.address}
+              onError={e=>{(e.target as HTMLImageElement).style.display='none'}}
+              style={{width:'100%',height:'100%',objectFit:'cover' as const}}
+            />
+          </div>
+          <div style={{fontSize:10,color:'#aaa',marginBottom:8,fontStyle:'italic'}}>Street View  ·  {subject.address}{subject.city?', '+subject.city:''}</div>
+          <div style={{width:'100%',height:1,background:'#ddd',margin:'24px 0'}}/>
           <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:24,width:'100%',marginBottom:24}}>
             {[
               ['Jason Miller','Managing Principal','516.413.1690','Jmiller@pcrellc.com'],
