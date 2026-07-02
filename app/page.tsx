@@ -2303,49 +2303,95 @@ function OPVReport({subject,comps,leaseComps,avails,analytics,aiText,setPage}: {
           </table>
         </Section>
         {comps.length>0&&<Section title="Comparable Sales Analysis">
-          <div style={{overflowX:'auto' as const}}>
+          {/* Summary table */}
+          <div style={{overflowX:'auto' as const,marginBottom:32}}>
             <table style={{width:'100%',borderCollapse:'collapse' as const,fontSize:11}}>
               <thead><tr style={{background:'#1a1a2e',color:'#fff'}}>
-                {['Address','City','Building SF','Ceiling','Docks','Drive-In','Power','Sewer','Zoning','Sale Price','$/SF','Sale Date','Buyer','Seller'].map(h=><th key={h} style={{padding:'8px 8px',textAlign:'left' as const,fontSize:9,whiteSpace:'nowrap' as const}}>{h}</th>)}
+                {['#','Address','City','SF','Ceiling','Docks','Dr-In','Sale Price','$/SF','Date'].map(h=><th key={h} style={{padding:'8px 8px',textAlign:'left' as const,fontSize:9,whiteSpace:'nowrap' as const}}>{h}</th>)}
               </tr></thead>
               <tbody>{comps.map((c,i)=>(
                 <tr key={c.id} style={{background:i%2===0?'#f8f8f8':'#fff'}}>
+                  <td style={{padding:'7px 8px',borderBottom:'1px solid #eee',color:'#888',fontWeight:700}}>{i+1}</td>
                   <td style={{padding:'7px 8px',borderBottom:'1px solid #eee',minWidth:160,fontWeight:600}}>{c.address}</td>
                   <td style={{padding:'7px 8px',borderBottom:'1px solid #eee'}}>{c.city||'—'}</td>
                   <td style={{padding:'7px 8px',borderBottom:'1px solid #eee',whiteSpace:'nowrap' as const}}>{c.building_sf?Number(c.building_sf).toLocaleString():'—'}</td>
                   <td style={{padding:'7px 8px',borderBottom:'1px solid #eee'}}>{c.ceiling_height||'—'}</td>
                   <td style={{padding:'7px 8px',borderBottom:'1px solid #eee'}}>{c.loading_docks||'—'}</td>
                   <td style={{padding:'7px 8px',borderBottom:'1px solid #eee'}}>{c.drive_ins||'—'}</td>
-                  <td style={{padding:'7px 8px',borderBottom:'1px solid #eee'}}>{c.power||'—'}</td>
-                  <td style={{padding:'7px 8px',borderBottom:'1px solid #eee'}}>{c.sewer||'—'}</td>
-                  <td style={{padding:'7px 8px',borderBottom:'1px solid #eee'}}>{c.zoning||'—'}</td>
                   <td style={{padding:'7px 8px',borderBottom:'1px solid #eee',whiteSpace:'nowrap' as const}}>{c.sale_price?`$${Number(c.sale_price).toLocaleString()}`:'—'}</td>
                   <td style={{padding:'7px 8px',borderBottom:'1px solid #eee',fontWeight:700,color:'#c9a84c',whiteSpace:'nowrap' as const}}>{(c.price_per_sf||(c.sale_price&&c.building_sf?Number(c.sale_price)/Number(c.building_sf):0))?`$${(c.price_per_sf||Number(c.sale_price)/Number(c.building_sf)).toFixed(2)}`:'—'}</td>
                   <td style={{padding:'7px 8px',borderBottom:'1px solid #eee',whiteSpace:'nowrap' as const}}>{fmtDate(c.sale_date)}</td>
-                  <td style={{padding:'7px 8px',borderBottom:'1px solid #eee'}}>{c.buyer||'—'}</td>
-                  <td style={{padding:'7px 8px',borderBottom:'1px solid #eee'}}>{c.seller||'—'}</td>
                 </tr>
               ))}</tbody>
             </table>
           </div>
+          {/* Individual comp pages */}
+          {comps.map((c,i)=>{
+            const psf = c.price_per_sf||(c.sale_price&&c.building_sf?Number(c.sale_price)/Number(c.building_sf):0)
+            return (
+              <div key={c.id} style={{marginBottom:40,paddingBottom:40,borderBottom:i<comps.length-1?'2px dashed #ddd':'none'}}>
+                <div style={{display:'flex',alignItems:'baseline',justifyContent:'space-between',marginBottom:14}}>
+                  <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:17,fontWeight:700,color:'#1a1a2e'}}>
+                    Comparable {i+1} — {c.address}{c.city?`, ${c.city}`:''}
+                  </div>
+                  {psf>0&&<div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:20,fontWeight:700,color:'#c9a84c'}}>${Number(psf).toFixed(2)}/SF</div>}
+                </div>
+                {/* Photo */}
+                <div style={{width:'100%',height:260,borderRadius:8,overflow:'hidden' as const,marginBottom:16,background:'#f0ede6',border:'1px solid #ddd'}}>
+                  <img
+                    src={`/api/street-view?address=${encodeURIComponent((c.address+(c.city?', '+c.city:'')+', NY'))}`}
+                    alt={c.address}
+                    onError={e=>{(e.target as HTMLImageElement).style.display='none'}}
+                    style={{width:'100%',height:'100%',objectFit:'cover' as const}}
+                  />
+                </div>
+                {/* Specs grid */}
+                <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'0 32px'}}>
+                  {([
+                    ['Building Size', c.building_sf?`+/- ${Number(c.building_sf).toLocaleString()} SF`:'—'],
+                    ['Sale Price',    c.sale_price?`$${Number(c.sale_price).toLocaleString()}`:'—'],
+                    ['Lot Size',      c.lot_size_ac?`${c.lot_size_ac} acres`:'—'],
+                    ['Price Per SF',  psf?`$${Number(psf).toFixed(2)} PSF`:'—'],
+                    ['Clear Ceiling', c.ceiling_height?`${c.ceiling_height} ft`:'—'],
+                    ['Sale Date',     fmtDate(c.sale_date)],
+                    ['Loading Docks', c.loading_docks||'—'],
+                    ['Buyer',         c.buyer||'—'],
+                    ['Drive-In Doors',c.drive_ins||'—'],
+                    ['Seller',        c.seller||'—'],
+                    ['Power',         c.power||'—'],
+                    ['Sewer',         c.sewer||'—'],
+                    ['Heat',          (c as any).heat||'—'],
+                    ['Sprinkler',     (c as any).sprinkler||'—'],
+                    ['Zoning',        c.zoning||'—'],
+                    ['County',        c.county||'—'],
+                    ['RE Taxes',      (c as any).taxes?`$${Number((c as any).taxes).toLocaleString()}/yr`:'—'],
+                  ] as [string,string][]).map(([l,v])=>(
+                    <div key={l} style={{display:'flex',justifyContent:'space-between',padding:'6px 0',borderBottom:'1px solid #f0ede6',fontSize:12}}>
+                      <span style={{color:'#666',fontWeight:600}}>{l}</span>
+                      <span style={{color:'#1a1a2e',fontWeight:500,textAlign:'right' as const,maxWidth:'55%'}}>{v}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )
+          })}
         </Section>}
         {avails.length>0&&<Section title="Active Market Availabilities">
-          <div style={{overflowX:'auto' as const}}>
+          {/* Summary table */}
+          <div style={{overflowX:'auto' as const,marginBottom:32}}>
             <table style={{width:'100%',borderCollapse:'collapse' as const,fontSize:11}}>
               <thead><tr style={{background:'#1a1a2e',color:'#fff'}}>
-                {['Address','City','Building SF','Ceiling','Docks','Drive-In','Power','Sewer','Zoning','Asking Price','$/SF','Guidance'].map(h=><th key={h} style={{padding:'8px 8px',textAlign:'left' as const,fontSize:9,whiteSpace:'nowrap' as const}}>{h}</th>)}
+                {['#','Address','City','SF','Ceiling','Docks','Dr-In','Asking Price','$/SF','Guidance'].map(h=><th key={h} style={{padding:'8px 8px',textAlign:'left' as const,fontSize:9,whiteSpace:'nowrap' as const}}>{h}</th>)}
               </tr></thead>
               <tbody>{avails.map((a,i)=>(
                 <tr key={a.id} style={{background:i%2===0?'#f8f8f8':'#fff'}}>
+                  <td style={{padding:'7px 8px',borderBottom:'1px solid #eee',color:'#888',fontWeight:700}}>{i+1}</td>
                   <td style={{padding:'7px 8px',borderBottom:'1px solid #eee',minWidth:160,fontWeight:600}}>{a.address}</td>
                   <td style={{padding:'7px 8px',borderBottom:'1px solid #eee'}}>{a.city||'—'}</td>
                   <td style={{padding:'7px 8px',borderBottom:'1px solid #eee',whiteSpace:'nowrap' as const}}>{a.building_sf?Number(a.building_sf).toLocaleString():'—'}</td>
                   <td style={{padding:'7px 8px',borderBottom:'1px solid #eee'}}>{a.ceiling_height||'—'}</td>
                   <td style={{padding:'7px 8px',borderBottom:'1px solid #eee'}}>{a.loading_docks||'—'}</td>
                   <td style={{padding:'7px 8px',borderBottom:'1px solid #eee'}}>{a.drive_ins||'—'}</td>
-                  <td style={{padding:'7px 8px',borderBottom:'1px solid #eee'}}>{a.power||'—'}</td>
-                  <td style={{padding:'7px 8px',borderBottom:'1px solid #eee'}}>{a.sewer||'—'}</td>
-                  <td style={{padding:'7px 8px',borderBottom:'1px solid #eee'}}>{a.zoning||'—'}</td>
                   <td style={{padding:'7px 8px',borderBottom:'1px solid #eee',whiteSpace:'nowrap' as const}}>{a.asking_price?`$${Number(a.asking_price).toLocaleString()}`:'—'}</td>
                   <td style={{padding:'7px 8px',borderBottom:'1px solid #eee',fontWeight:700,color:'#3b82f6',whiteSpace:'nowrap' as const}}>{(a.price_per_sf||(a.asking_price&&a.building_sf?Number(a.asking_price)/Number(a.building_sf):0))?`$${(a.price_per_sf||Number(a.asking_price)/Number(a.building_sf)).toFixed(2)}`:'—'}</td>
                   <td style={{padding:'7px 8px',borderBottom:'1px solid #eee'}}>{a.pricing_guidance||'—'}</td>
@@ -2353,6 +2399,55 @@ function OPVReport({subject,comps,leaseComps,avails,analytics,aiText,setPage}: {
               ))}</tbody>
             </table>
           </div>
+          {/* Individual availability pages */}
+          {avails.map((a,i)=>{
+            const psf = a.price_per_sf||(a.asking_price&&a.building_sf?Number(a.asking_price)/Number(a.building_sf):0)
+            return (
+              <div key={a.id} style={{marginBottom:40,paddingBottom:40,borderBottom:i<avails.length-1?'2px dashed #ddd':'none'}}>
+                <div style={{display:'flex',alignItems:'baseline',justifyContent:'space-between',marginBottom:14}}>
+                  <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:17,fontWeight:700,color:'#1a1a2e'}}>
+                    Availability {i+1} — {a.address}{a.city?`, ${a.city}`:''}
+                  </div>
+                  {psf>0&&<div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:20,fontWeight:700,color:'#3b82f6'}}>${Number(psf).toFixed(2)}/SF</div>}
+                </div>
+                {/* Photo */}
+                <div style={{width:'100%',height:260,borderRadius:8,overflow:'hidden' as const,marginBottom:16,background:'#f0ede6',border:'1px solid #ddd'}}>
+                  <img
+                    src={`/api/street-view?address=${encodeURIComponent((a.address+(a.city?', '+a.city:'')+', NY'))}`}
+                    alt={a.address}
+                    onError={e=>{(e.target as HTMLImageElement).style.display='none'}}
+                    style={{width:'100%',height:'100%',objectFit:'cover' as const}}
+                  />
+                </div>
+                {/* Specs grid */}
+                <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'0 32px'}}>
+                  {([
+                    ['Building Size',  a.building_sf?`+/- ${Number(a.building_sf).toLocaleString()} SF`:'—'],
+                    ['Asking Price',   a.asking_price?`$${Number(a.asking_price).toLocaleString()}`:'—'],
+                    ['Lot Size',       a.lot_size_ac?`${a.lot_size_ac} acres`:'—'],
+                    ['Asking $/SF',    psf?`$${Number(psf).toFixed(2)} PSF`:'—'],
+                    ['Clear Ceiling',  a.ceiling_height?`${a.ceiling_height} ft`:'—'],
+                    ['Pricing Guidance',a.pricing_guidance||'—'],
+                    ['Loading Docks',  a.loading_docks||'—'],
+                    ['Listing Broker', a.listing_broker||'—'],
+                    ['Drive-In Doors', a.drive_ins||'—'],
+                    ['Power',          a.power||'—'],
+                    ['Heat',           (a as any).heat||'—'],
+                    ['Sprinkler',      (a as any).sprinkler||'—'],
+                    ['Sewer',          a.sewer||'—'],
+                    ['Zoning',         a.zoning||'—'],
+                    ['County',         a.county||'—'],
+                    ['RE Taxes',       (a as any).taxes?`$${Number((a as any).taxes).toLocaleString()}/yr`:'—'],
+                  ] as [string,string][]).map(([l,v])=>(
+                    <div key={l} style={{display:'flex',justifyContent:'space-between',padding:'6px 0',borderBottom:'1px solid #f0ede6',fontSize:12}}>
+                      <span style={{color:'#666',fontWeight:600}}>{l}</span>
+                      <span style={{color:'#1a1a2e',fontWeight:500,textAlign:'right' as const,maxWidth:'55%'}}>{v}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )
+          })}
         </Section>}
         {aiText&&<Section title="Market Commentary & Broker Analysis">
           <div style={{fontSize:13,lineHeight:1.85,whiteSpace:'pre-wrap' as const}}>{aiText}</div>
