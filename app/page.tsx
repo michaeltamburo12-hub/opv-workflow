@@ -527,7 +527,7 @@ function SaleComps({subject,comps,setComps,setPage}:{subject:SubjectForm|null,co
                     </div>
                     {/* Photo */}
                     <StreetViewPhoto address={`${c.address}, ${c.city||''}, NY`}
-                      style={{width:160,height:118,borderRadius:7,flexShrink:0}}/>
+                      style={{width:220,height:160,borderRadius:7,flexShrink:0}}/>
                     {/* Info */}
                     <div style={{flex:1,minWidth:0}}>
                       <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:6}}>
@@ -689,7 +689,7 @@ function Availabilities({subject,avails,setAvails,setPage}:{subject:SubjectForm|
                       {selected.has(a.id)&&'✓'}
                     </div>
                     <StreetViewPhoto address={`${a.address}, ${a.city||''}, NY`}
-                      style={{width:160,height:118,borderRadius:7,flexShrink:0}}/>
+                      style={{width:220,height:160,borderRadius:7,flexShrink:0}}/>
                     <div style={{flex:1,minWidth:0}}>
                       <div style={{fontSize:13,fontWeight:600,marginBottom:6}}>{a.address}{a.city?`, ${a.city}`:''}</div>
                       <div style={{display:'flex',gap:6,flexWrap:'wrap' as const,marginBottom:6}}>
