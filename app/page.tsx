@@ -2201,7 +2201,7 @@ function BrokerReview({subject,comps,analytics,setAnalytics,aiText,setAiText,set
 
 // ── OPV REPORT ────────────────────────────────────────────────────────────────
 function OPVReport({subject,comps,leaseComps,avails,analytics,aiText,setPage}: {subject:SubjectForm|null,comps:Comp[],leaseComps:LeaseComp[],avails:Avail[],analytics:AnalyticsData|null,aiText:string,setPage:(p:string)=>void}) {
-  const today=new Date().toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'})
+  const today = new Date().toLocaleDateString('en-US',{month:'long',year:'numeric'}).toUpperCase()
   const [downloading, setDownloading] = useState(false)
   const [includeLeaseComps, setIncludeLeaseComps] = useState(leaseComps.length>0)
   const [includeAvails, setIncludeAvails] = useState(true)
@@ -2232,14 +2232,75 @@ function OPVReport({subject,comps,leaseComps,avails,analytics,aiText,setPage}: {
       <Card style={{textAlign:'center' as const,padding:'56px 20px'}}><p style={{color:D.textSec,marginBottom:16}}>Complete the workflow before generating the OPV report.</p><Btn onClick={()=>setPage('subject')}>Start with Subject Property →</Btn></Card>
     </div>
   )
-  const Section=({title,children}: {title:string,children:React.ReactNode})=>(
-    <div style={{marginBottom:28}}>
-      <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:16,fontWeight:700,color:'#c9a84c',borderBottom:'1px solid #e8d8a0',paddingBottom:6,marginBottom:14}}>{title}</div>
-      {children}
+
+  // ── DOC STYLES ────────────────────────────────────────────────────────────────
+  const doc: React.CSSProperties = {background:'#fff',color:'#1a1a1a',fontFamily:'Arial,sans-serif',fontSize:13,lineHeight:1.7}
+  const gold = '#C9A227'
+  const darkBg = '#2D2D2D'
+
+  const SecHeading = ({num,title}:{num:string,title:string}) => (
+    <div style={{marginBottom:20,marginTop:32,paddingBottom:8,borderBottom:`3px solid ${gold}`}}>
+      <span style={{color:gold,fontWeight:700,fontSize:16,marginRight:8}}>{num}.</span>
+      <span style={{fontWeight:700,fontSize:16,color:'#1a1a1a'}}>{title}</span>
     </div>
   )
+  const SubHead = ({children}:{children:React.ReactNode}) => (
+    <div style={{fontWeight:700,fontSize:14,color:'#1a1a1a',margin:'20px 0 10px'}}>{children}</div>
+  )
+  const Bullet = ({children}:{children:React.ReactNode}) => (
+    <div style={{display:'flex',gap:8,padding:'4px 0 4px 16px',fontSize:12,lineHeight:1.6}}>
+      <span style={{color:gold,fontWeight:700,flexShrink:0}}>→</span>
+      <span>{children}</span>
+    </div>
+  )
+  const LabelRow = ({label,value,shade}:{label:string,value:string,shade?:boolean}) => (
+    <div style={{display:'grid',gridTemplateColumns:'240px 1fr',borderBottom:'1px solid #ccc'}}>
+      <div style={{background:'#EBEBEB',padding:'7px 12px',fontWeight:700,fontSize:11,color:'#1a1a1a',borderRight:'1px solid #ccc'}}>{label}</div>
+      <div style={{background:shade?'#F2F2F2':'#fff',padding:'7px 12px',fontSize:11}}>{value||'—'}</div>
+    </div>
+  )
+  const TblHeader = ({cols}:{cols:string[]}) => (
+    <div style={{display:'grid',gridTemplateColumns:`repeat(${cols.length},1fr)`}}>
+      {cols.map(c=><div key={c} style={{background:darkBg,color:'#fff',padding:'8px 8px',fontSize:10,fontWeight:700,textAlign:'center' as const,borderRight:'1px solid #444'}}>{c}</div>)}
+    </div>
+  )
+  const TblRow = ({cells,shade}:{cells:string[],shade?:boolean}) => (
+    <div style={{display:'grid',gridTemplateColumns:`repeat(${cells.length},1fr)`,background:shade?'#F2F2F2':'#fff'}}>
+      {cells.map((c,i)=><div key={i} style={{padding:'7px 8px',fontSize:11,borderRight:'1px solid #ddd',borderBottom:'1px solid #ddd',textAlign:'center' as const}}>{c||'—'}</div>)}
+    </div>
+  )
+
+  const fmt = (n:number|string|null|undefined,pre='',suf='') => n ? `${pre}${Number(n).toLocaleString()}${suf}` : '—'
+  const bldgSF = parseInt(subject.size||'0')
+  const valLowPsf  = parseFloat(subject.estimatedValueLow||'0')
+  const valHighPsf = parseFloat(subject.estimatedValueHigh||'0')
+  const avgPsf = analytics?.market || (comps.length ? comps.reduce((s,c)=>s+(c.price_per_sf||0),0)/comps.length : 0)
+
+  const RECENT_SALES = [
+    ['128 Spagnoli Rd','Melville','Redevelopment','150,000','$21,000,000','3rd Qtr 2025'],
+    ['48 Mall Dr','Commack','Industrial','20,000','$4,700,000','2nd Qtr 2025'],
+    ['22 Sutton Place','Brewster','Industrial','70,000','Undisclosed','1st Qtr 2025'],
+    ['474 Grand Blvd','Westbury','Industrial','71,000','$14,250,000','4th Qtr 2024'],
+    ['145 Kennedy Dr','Hauppauge','Industrial','40,000','$8,150,000','3rd Qtr 2024'],
+    ['200 Central Ave','Farmingdale','Industrial','25,000','$5,875,000','2nd Qtr 2024'],
+    ['218 Front St','Hempstead','Industrial','30,183','$4,750,000','1st Qtr 2024'],
+    ['30 Eastern Ave','Deer Park','Industrial','11,940','$2,200,000','1st Qtr 2024'],
+    ['81 Modular Ave','Commack','Industrial','30,000','$6,150,000','4th Qtr 2023'],
+  ]
+  const RECENT_LEASES = [
+    ['1460 N Clinton Ave','Bay Shore','Absolute Home Contracting','2,000','$20.00 PSF','3rd Qtr 2025'],
+    ['99 Seaview Blvd','Port Washington','Pyramid Flooring','9,000','$18.00 PSF','2nd Qtr 2025'],
+    ['80 13th Ave','Ronkonkoma','Demil Corp','7,500','$15.00 PSF','2nd Qtr 2025'],
+    ['170 Express St','Plainview','Life Plus Style Gourmet','42,000','$12.00 Gross','2nd Qtr 2025'],
+    ['40 Rabro Dr','Hauppauge','Blue Point Dance','6,900','$17.40 Gross','3rd Qtr 2025'],
+    ['260 Spagnoli Rd','Melville','LIBM Inc.','54,000','$17.00 Gross','2nd Qtr 2025'],
+    ['47 Mall Dr','Commack','eBizware','10,000','$17.50 Gross','2nd Qtr 2025'],
+    ['1980 New Highway','Farmingdale','Top Bright Inc.','26,500','$16.00 Gross','1st Qtr 2025'],
+  ]
+
   return (
     <div className="anim-in">
+      {/* Controls */}
       <div className="no-print" style={{marginBottom:20}}>
         <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:12}}>
           <SectionTitle>Generate Package</SectionTitle>
@@ -2267,207 +2328,347 @@ function OPVReport({subject,comps,leaseComps,avails,analytics,aiText,setPage}: {
           </div>
         </Card>
       </div>
-      <div className="print-area" style={{background:'#fff',borderRadius:10,padding:'48px 56px',color:'#1a1a2e',maxWidth:900,margin:'0 auto',fontFamily:'Georgia,serif',fontSize:13,lineHeight:1.7,boxShadow:'0 4px 24px rgba(0,0,0,.20)'}}>
-        <div style={{textAlign:'center' as const,marginBottom:48,paddingBottom:48,borderBottom:'2px solid #1a1a2e'}}>
-          <div style={{fontSize:11,fontWeight:700,letterSpacing:'.15em',textTransform:'uppercase' as const,color:'#888',marginBottom:16}}>PREMIER COMMERCIAL REAL ESTATE · LONG ISLAND</div>
-          <div style={{fontSize:32,fontWeight:700,fontFamily:"'Cormorant Garamond',serif",marginBottom:12}}>Opinion of Value</div>
-          <div style={{fontSize:22,color:'#c9a84c',fontFamily:"'Cormorant Garamond',serif",marginBottom:20}}>{subject.address}</div>
-          <div style={{display:'inline-block',background:'#0a0c10',color:'#c9a84c',padding:'6px 18px',borderRadius:4,fontSize:11,fontWeight:700,letterSpacing:'.08em',textTransform:'uppercase' as const}}>{subject.type} · {subject.county} County</div>
-          <div style={{marginTop:24,fontSize:12,color:'#888'}}>Prepared: {today}</div>
-        </div>
-        <Section title="Executive Summary">
-          <p style={{marginBottom:10}}>This Opinion of Value has been prepared by Premier Commercial Real Estate for the property at <strong>{subject.address}</strong>. The subject is a {parseInt(subject.size||'0').toLocaleString()} SF {subject.type?.toLowerCase()} in {subject.county} County, NY.</p>
-          {analytics&&<div style={{background:'#f8f6f0',border:'1px solid #e8d8a0',borderRadius:6,padding:'14px 20px',margin:'16px 0'}}>
-            <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:16,textAlign:'center' as const}}>
-              {([['Conservative',`$${analytics.low.toFixed(2)}/SF`],['Market Value',`$${analytics.market.toFixed(2)}/SF`],['Optimistic',`$${analytics.high.toFixed(2)}/SF`]] as [string,string][]).map(([l,v])=>(
-                <div key={l}><div style={{fontSize:10,color:'#888',textTransform:'uppercase' as const,letterSpacing:'.08em',marginBottom:4}}>{l}</div><div style={{fontSize:18,fontWeight:700}}>{v}</div></div>
-              ))}
-            </div>
-            <div style={{borderTop:'1px solid #e8d8a0',marginTop:12,paddingTop:12,textAlign:'center' as const}}>
-              <div style={{fontSize:10,color:'#888',textTransform:'uppercase' as const,marginBottom:4}}>Recommended Listing Price</div>
-              <div style={{fontSize:28,fontWeight:700,color:'#c9a84c',fontFamily:"'Cormorant Garamond',serif"}}>${analytics.suggested} / Square Foot</div>
-              {subject.size&&<div style={{fontSize:14,color:'#555',marginTop:4}}>Implied Total: ${(analytics.suggested*parseInt(subject.size)).toLocaleString()}</div>}
-            </div>
-          </div>}
-        </Section>
-        <Section title="Subject Property Specifications">
-          <table style={{width:'100%',borderCollapse:'collapse' as const,fontSize:12}}>
-            <tbody>
-              {([['Address',subject.address],['County',subject.county+' County'],['Property Type',subject.type],['Building Size',`${parseInt(subject.size||'0').toLocaleString()} SF`],['Lot Size',subject.lot||'—'],['Clear Ceiling',subject.ceiling?`${subject.ceiling} ft`:'—'],['Year Built',subject.yearBuilt||'—'],['Construction',subject.construction],['Condition',subject.condition],['Loading Docks',subject.docks||'—'],['Drive-In Doors',subject.driveIn||'—'],['Electrical Power',subject.power||'—'],['Heat',subject.heat],['Sprinkler',subject.sprinkler],['Sewer',subject.sewer],['Office %',subject.officePct?`${subject.officePct}%`:'—'],['Parking',subject.parking||'—'],['Zoning',subject.zoning||'—'],['RE Taxes',subject.taxes?`$${parseInt(subject.taxes).toLocaleString()}/yr`:'—']] as [string,string][]).map(([l,v],i)=>(
-                <tr key={l} style={{background:i%2===0?'#f8f8f8':'#fff'}}>
-                  <td style={{padding:'7px 12px',fontWeight:700,color:'#555',width:'35%',borderBottom:'1px solid #eee'}}>{l}</td>
-                  <td style={{padding:'7px 12px',borderBottom:'1px solid #eee'}}>{v}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </Section>
-        {comps.length>0&&<Section title="Comparable Sales Analysis">
-          {/* Summary table */}
-          <div style={{overflowX:'auto' as const,marginBottom:32}}>
-            <table style={{width:'100%',borderCollapse:'collapse' as const,fontSize:11}}>
-              <thead><tr style={{background:'#1a1a2e',color:'#fff'}}>
-                {['#','Address','City','SF','Ceiling','Docks','Dr-In','Sale Price','$/SF','Date'].map(h=><th key={h} style={{padding:'8px 8px',textAlign:'left' as const,fontSize:9,whiteSpace:'nowrap' as const}}>{h}</th>)}
-              </tr></thead>
-              <tbody>{comps.map((c,i)=>(
-                <tr key={c.id} style={{background:i%2===0?'#f8f8f8':'#fff'}}>
-                  <td style={{padding:'7px 8px',borderBottom:'1px solid #eee',color:'#888',fontWeight:700}}>{i+1}</td>
-                  <td style={{padding:'7px 8px',borderBottom:'1px solid #eee',minWidth:160,fontWeight:600}}>{c.address}</td>
-                  <td style={{padding:'7px 8px',borderBottom:'1px solid #eee'}}>{c.city||'—'}</td>
-                  <td style={{padding:'7px 8px',borderBottom:'1px solid #eee',whiteSpace:'nowrap' as const}}>{c.building_sf?Number(c.building_sf).toLocaleString():'—'}</td>
-                  <td style={{padding:'7px 8px',borderBottom:'1px solid #eee'}}>{c.ceiling_height||'—'}</td>
-                  <td style={{padding:'7px 8px',borderBottom:'1px solid #eee'}}>{c.loading_docks||'—'}</td>
-                  <td style={{padding:'7px 8px',borderBottom:'1px solid #eee'}}>{c.drive_ins||'—'}</td>
-                  <td style={{padding:'7px 8px',borderBottom:'1px solid #eee',whiteSpace:'nowrap' as const}}>{c.sale_price?`$${Number(c.sale_price).toLocaleString()}`:'—'}</td>
-                  <td style={{padding:'7px 8px',borderBottom:'1px solid #eee',fontWeight:700,color:'#c9a84c',whiteSpace:'nowrap' as const}}>{(c.price_per_sf||(c.sale_price&&c.building_sf?Number(c.sale_price)/Number(c.building_sf):0))?`$${(c.price_per_sf||Number(c.sale_price)/Number(c.building_sf)).toFixed(2)}`:'—'}</td>
-                  <td style={{padding:'7px 8px',borderBottom:'1px solid #eee',whiteSpace:'nowrap' as const}}>{fmtDate(c.sale_date)}</td>
-                </tr>
-              ))}</tbody>
-            </table>
+
+      {/* Full OPV Document */}
+      <div className="print-area" style={{...doc,borderRadius:10,padding:'60px 72px',maxWidth:960,margin:'0 auto',boxShadow:'0 4px 32px rgba(0,0,0,.25)'}}>
+
+        {/* ── COVER PAGE ── */}
+        <div style={{textAlign:'center' as const,minHeight:600,display:'flex',flexDirection:'column' as const,alignItems:'center',justifyContent:'center',marginBottom:60,paddingBottom:60,borderBottom:`3px solid ${gold}`}}>
+          <div style={{fontSize:12,fontStyle:'italic',color:'#555',marginBottom:24}}>"Complex Issues – Simple Solutions"</div>
+          <div style={{fontSize:28,fontWeight:900,color:'#1a1a1a',letterSpacing:'.15em',marginBottom:4}}>PREMIER COMMERCIAL REAL ESTATE</div>
+          <div style={{width:120,height:3,background:gold,margin:'12px auto 40px'}}/>
+          <div style={{fontSize:42,fontWeight:900,color:'#1a1a1a',letterSpacing:'.08em',marginBottom:8}}>OPINION OF VALUE</div>
+          <div style={{width:80,height:1,background:'#ccc',margin:'16px auto'}}/>
+          <div style={{marginTop:32,marginBottom:6,fontSize:11,color:'#888',textTransform:'uppercase' as const,letterSpacing:'.1em'}}>Date Prepared</div>
+          <div style={{fontSize:16,fontWeight:700,marginBottom:32}}>{today}</div>
+          <div style={{marginBottom:6,fontSize:11,color:'#888',textTransform:'uppercase' as const,letterSpacing:'.1em'}}>Property Address</div>
+          <div style={{fontSize:24,fontWeight:900,color:'#1a1a1a',textTransform:'uppercase' as const,marginBottom:4}}>{subject.address}</div>
+          {subject.city&&<div style={{fontSize:16,color:'#444',marginBottom:32}}>{subject.city.toUpperCase()}, NEW YORK</div>}
+          <div style={{width:'100%',height:1,background:'#ddd',margin:'32px 0'}}/>
+          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:24,width:'100%',marginBottom:24}}>
+            {[
+              ['Jason Miller','Managing Principal','516.413.1690','Jmiller@pcrellc.com'],
+              ['JB (Jeff) Schwartzberg','Managing Principal','516.857.8013','Jbs@pcrellc.com'],
+              ['Desmond Mullins','Partner, Executive Director','631.398.5654','Dmullins@pcrellc.com'],
+            ].map(([name,title,phone,email],i,arr)=>(
+              <div key={name} style={{textAlign:'center' as const,padding:'0 16px',borderRight:i<arr.length-1?'1px solid #ddd':'none'}}>
+                <div style={{fontWeight:700,fontSize:13,marginBottom:3}}>{name}</div>
+                <div style={{fontSize:11,color:'#555',marginBottom:2}}>{title}</div>
+                <div style={{fontSize:11,color:'#555',marginBottom:2}}>{phone}</div>
+                <div style={{fontSize:11,color:'#555'}}>{email}</div>
+              </div>
+            ))}
           </div>
-          {/* Individual comp pages */}
+          <div style={{fontSize:11,color:'#666',fontStyle:'italic'}}>Premier Commercial Real Estate, LLC  |  500 N. Broadway, Suite 105, Jericho, NY 11753</div>
+          <div style={{fontSize:11,color:'#666'}}>Main: 516.284.8000  |  www.pcrellc.com</div>
+        </div>
+
+        {/* ── TABLE OF CONTENTS ── */}
+        <div style={{marginBottom:60,paddingBottom:60,borderBottom:'1px solid #ddd'}}>
+          <div style={{textAlign:'center' as const,fontWeight:700,fontSize:18,marginBottom:20,letterSpacing:'.08em'}}>TABLE OF CONTENTS</div>
+          <div style={{borderBottom:`2px solid ${gold}`,marginBottom:20}}/>
+          {[
+            'I.  EXECUTIVE SUMMARY',
+            'II.  BUILDING DESCRIPTION',
+            'III.  OPINION OF VALUE',
+            ...(comps.length>0?['IV.  RECENT INVESTMENT/SALE TRANSACTIONS']:[]),
+            ...(includeLeaseComps&&leaseComps.length>0?['V.  RECENT LEASE TRANSACTIONS']:[]),
+            ...(includeAvails&&avails.length>0?['VI.  MARKET AVAILABILITIES']:[]),
+            ...(includeMarketingStrategy?['VII.  MARKETING STRATEGY']:[]),
+            ...(includePcreProfile?['VIII.  PREMIER COMMERCIAL REAL ESTATE PROFILE']:[]),
+          ].map((entry,i)=>(
+            <div key={i} style={{display:'flex',justifyContent:'space-between',padding:'10px 0',borderBottom:'1px dotted #ccc',fontSize:13}}>
+              <span>{entry}</span>
+              <span style={{color:'#999'}}>{i+2}</span>
+            </div>
+          ))}
+        </div>
+
+        {/* ── SECTION I: EXECUTIVE SUMMARY ── */}
+        <SecHeading num="I" title="EXECUTIVE SUMMARY"/>
+        <div style={{marginBottom:24}}>
+          <div style={{display:'grid',gridTemplateColumns:'180px 1fr',gap:'0',marginBottom:20}}>
+            {[
+              ['PURPOSE OF OPINION:', subject.opvType==='investment'?'DETERMINE CURRENT MARKET VALUE AS AN INVESTMENT SALE':subject.opvType==='lease'?'DETERMINE CURRENT MARKET RENTAL RATE':'DETERMINE CURRENT MARKET VALUE FOR SALE'],
+              ['DATE OF OPINION:', today],
+              ['ADDRESS:', `${subject.address}${subject.city?', '+subject.city.toUpperCase()+', NEW YORK':''}`.toUpperCase()],
+              ['COUNTY:', (subject.county||'—').toUpperCase()],
+              ...(subject.municipality?[['MUNICIPALITY:', subject.municipality]]:[]),
+              ...(subject.parcelId?[['PARCEL ID:', subject.parcelId]]:[]),
+            ].map(([l,v])=>(
+              <React.Fragment key={l}>
+                <div style={{padding:'7px 0',fontWeight:700,fontSize:12,color:'#1a1a1a',borderBottom:'1px solid #eee'}}>{l}</div>
+                <div style={{padding:'7px 0 7px 12px',fontSize:12,borderBottom:'1px solid #eee'}}>{v}</div>
+              </React.Fragment>
+            ))}
+          </div>
+          <SubHead>PROPERTY SUMMARY HIGHLIGHTS AND ASSUMPTIONS:</SubHead>
+          {[
+            subject.size?`The building is approximately ${Number(subject.size).toLocaleString()} sq. ft. in total.`:null,
+            subject.ceiling?`Ceiling height of ${subject.ceiling}' clear.`:null,
+            (subject.docks||subject.driveIn)?`${subject.docks||'—'} loading dock(s) and ${subject.driveIn||'—'} drive-in door(s).`:null,
+            subject.sprinkler?`${subject.sprinkler} sprinkler system.`:null,
+            subject.sewer?`Sewer: ${subject.sewer}.`:null,
+            subject.power?`Electrical service: ${subject.power}.`:null,
+            subject.taxes?`Real Estate Taxes are $${Number(subject.taxes).toLocaleString()} or approximately $${subject.size?(Number(subject.taxes)/Number(subject.size)).toFixed(2):'—'} PSF.`:null,
+            subject.lot?`The building sits on a parcel of approximately ${subject.lot} acres.`:null,
+            subject.notes||null,
+          ].filter(Boolean).map((t,i)=><Bullet key={i}>{t as string}</Bullet>)}
+          <SubHead>HIGHEST AND BEST USE:</SubHead>
+          {subject.highestBestUse
+            ? (subject.highestBestUse as string).split('\n').filter(Boolean).map((u,i)=><Bullet key={i}>{u.trim()}</Bullet>)
+            : [<Bullet key="1">Manufacturing</Bullet>,<Bullet key="2">Wholesale Operation</Bullet>,<Bullet key="3">Warehouse / Distribution</Bullet>]}
+        </div>
+
+        {/* ── SECTION II: BUILDING DESCRIPTION ── */}
+        <SecHeading num="II" title="BUILDING DESCRIPTION"/>
+        <div style={{border:'1px solid #ccc',marginBottom:32}}>
+          <LabelRow label="PROPERTY ADDRESS" value={`${subject.address}${subject.city?', '+subject.city:''}`}/>
+          <LabelRow label="TOTAL BUILDING SF" value={fmt(subject.size,'',' SF')} shade/>
+          {subject.officePct&&<LabelRow label="OFFICE" value={`${subject.officePct}%`}/>}
+          <LabelRow label="TOTAL SITE ACREAGE" value={subject.lot?`${subject.lot} AC`:'—'} shade={!subject.officePct}/>
+          <LabelRow label="CEILING HEIGHT" value={subject.ceiling?`${subject.ceiling}' clear`:'—'} shade={!!subject.officePct}/>
+          <LabelRow label="DRIVE-IN DOORS" value={subject.driveIn||'—'} shade={!subject.officePct}/>
+          <LabelRow label="LOADING DOCKS" value={subject.docks||'—'} shade/>
+          <LabelRow label="HEAT" value={subject.heat||'—'}/>
+          <LabelRow label="POWER" value={subject.power||'—'} shade/>
+          <LabelRow label="PARKING" value={subject.parking||'—'}/>
+          <LabelRow label="SPRINKLER SYSTEM" value={subject.sprinkler||'—'} shade/>
+          <LabelRow label="SEWER CONNECTION" value={subject.sewer||'—'}/>
+          <LabelRow label="ZONING" value={subject.zoning||'—'} shade/>
+          <LabelRow label="REAL ESTATE TAXES" value={subject.taxes?`$${Number(subject.taxes).toLocaleString()}/yr${subject.size?` / $${(Number(subject.taxes)/Number(subject.size)).toFixed(2)} PSF`:''}`:  '—'}/>
+          {subject.yearBuilt&&<LabelRow label="YEAR BUILT" value={subject.yearBuilt} shade/>}
+          {subject.construction&&<LabelRow label="CONSTRUCTION" value={subject.construction}/>}
+          {subject.condition&&<LabelRow label="CONDITION" value={subject.condition} shade/>}
+        </div>
+
+        {/* ── SECTION III: OPINION OF VALUE ── */}
+        <SecHeading num="III" title="OPINION OF VALUE"/>
+        <p style={{fontSize:13,marginBottom:16,lineHeight:1.7}}>Based upon the aforementioned assumptions, our knowledge of current market conditions, and a review of the Comparables found in Section IV.</p>
+        <div style={{display:'grid',gridTemplateColumns:'200px 1fr 1fr',border:'1px solid #ccc',marginBottom:24}}>
+          <div style={{background:darkBg,color:'#fff',padding:'10px 12px',fontWeight:700,fontSize:11,borderRight:'1px solid #444'}}>Estimated Value For Sale</div>
+          <div style={{background:darkBg,color:'#fff',padding:'10px 12px',fontWeight:700,fontSize:11,textAlign:'center' as const,borderRight:'1px solid #444'}}>Per SF</div>
+          <div style={{background:darkBg,color:'#fff',padding:'10px 12px',fontWeight:700,fontSize:11,textAlign:'center' as const}}>Total</div>
+          <div style={{background:'#EBEBEB',padding:'14px 12px',borderRight:'1px solid #ccc',borderTop:'1px solid #ccc'}}/>
+          <div style={{background:'#FFF8E1',padding:'14px 12px',textAlign:'center' as const,borderRight:'1px solid #ccc',borderTop:'1px solid #ccc'}}>
+            <span style={{fontSize:20,fontWeight:700,color:gold}}>
+              {valLowPsf&&valHighPsf?`$${valLowPsf.toFixed(2)} – $${valHighPsf.toFixed(2)}`:avgPsf?`$${Number(avgPsf).toFixed(2)}`:'[ __________ ]'}
+            </span>
+          </div>
+          <div style={{background:'#FFF8E1',padding:'14px 12px',textAlign:'center' as const,borderTop:'1px solid #ccc'}}>
+            <span style={{fontSize:20,fontWeight:700,color:gold}}>
+              {valLowPsf&&valHighPsf&&bldgSF?`$${Math.round(valLowPsf*bldgSF).toLocaleString()} – $${Math.round(valHighPsf*bldgSF).toLocaleString()}`:bldgSF&&avgPsf?`$${Math.round(bldgSF*avgPsf).toLocaleString()}`:'[ __________ ]'}
+            </span>
+          </div>
+        </div>
+        {(subject.opvType==='investment'||subject.capRateLow)&&(
+          <div style={{marginBottom:24}}>
+            <div style={{fontSize:13,marginBottom:12}}>The value shall be established as a function of:</div>
+            <Bullet>A "Fair Market" Rental Rate for an acceptable lease term.</Bullet>
+            <Bullet>An acceptable Rate of Return (Cap Rate) to the investor/Purchaser.</Bullet>
+            {(subject.leasePsfLow||subject.leasePsfHigh)&&<div style={{border:'1px solid #ccc',marginTop:16}}><LabelRow label="Lease/Rental Rate (Year 1)" value={`$${subject.leasePsfLow} to $${subject.leasePsfHigh} PSF NNN`}/></div>}
+            {(subject.capRateLow||subject.capRateHigh)&&<div style={{border:'1px solid #ccc',marginTop:4}}><LabelRow label="Cap Rate" value={`${subject.capRateLow}% to ${subject.capRateHigh}%`}/></div>}
+          </div>
+        )}
+
+        {/* ── SECTION IV: SALE COMPS ── */}
+        {comps.length>0&&<>
+          <SecHeading num="IV" title={subject.opvType==='investment'?'RECENT INVESTMENT TRANSACTIONS':'RECENT SALE TRANSACTIONS'}/>
+          <div style={{border:'1px solid #ccc',marginBottom:16}}>
+            <TblHeader cols={['Property Address','City','Building Size (SF)','Sale Price','Price PSF']}/>
+            {comps.map((c,i)=><TblRow key={c.id} shade={i%2===1} cells={[
+              c.address,c.city||'',
+              c.building_sf?`${Number(c.building_sf).toLocaleString()} SF`:'—',
+              c.sale_price?`$${Number(c.sale_price).toLocaleString()}`:'—',
+              (c.price_per_sf||(c.sale_price&&c.building_sf?Number(c.sale_price)/Number(c.building_sf):0))?`$${(c.price_per_sf||Number(c.sale_price)/Number(c.building_sf)).toFixed(2)}`:'—',
+            ]}/>)}
+          </div>
+          <p style={{fontSize:12,color:'#555',marginBottom:24,fontStyle:'italic'}}>Each comparable transaction is detailed on the following pages.</p>
           {comps.map((c,i)=>{
             const psf = c.price_per_sf||(c.sale_price&&c.building_sf?Number(c.sale_price)/Number(c.building_sf):0)
             return (
-              <div key={c.id} style={{marginBottom:40,paddingBottom:40,borderBottom:i<comps.length-1?'2px dashed #ddd':'none'}}>
-                <div style={{display:'flex',alignItems:'baseline',justifyContent:'space-between',marginBottom:14}}>
-                  <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:17,fontWeight:700,color:'#1a1a2e'}}>
-                    Comparable {i+1} — {c.address}{c.city?`, ${c.city}`:''}
-                  </div>
-                  {psf>0&&<div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:20,fontWeight:700,color:'#c9a84c'}}>${Number(psf).toFixed(2)}/SF</div>}
+              <div key={c.id} style={{marginBottom:48,paddingBottom:48,borderBottom:'2px dashed #ddd'}}>
+                <div style={{fontWeight:700,fontSize:14,paddingBottom:8,borderBottom:`2px solid ${gold}`,marginBottom:16,display:'flex',justifyContent:'space-between',alignItems:'baseline'}}>
+                  <span>COMPARABLE {i+1}  —  {(c.address||'').toUpperCase()}{c.city?', '+c.city.toUpperCase():''}</span>
+                  {psf>0&&<span style={{color:gold,fontSize:16}}>${Number(psf).toFixed(2)}/SF</span>}
                 </div>
-                {/* Photo */}
-                <div style={{width:'100%',height:260,borderRadius:8,overflow:'hidden' as const,marginBottom:16,background:'#f0ede6',border:'1px solid #ddd'}}>
-                  <img
-                    src={`/api/street-view?address=${encodeURIComponent((c.address+(c.city?', '+c.city:'')+', NY'))}`}
-                    alt={c.address}
-                    onError={e=>{(e.target as HTMLImageElement).style.display='none'}}
-                    style={{width:'100%',height:'100%',objectFit:'cover' as const}}
-                  />
+                <div style={{width:'100%',height:280,borderRadius:6,overflow:'hidden' as const,marginBottom:20,background:'#f0ede6',border:'1px solid #ddd'}}>
+                  <img src={`/api/street-view?address=${encodeURIComponent(c.address+(c.city?', '+c.city:'')+', NY')}`}
+                    alt={c.address} onError={e=>{(e.target as HTMLImageElement).style.display='none'}}
+                    style={{width:'100%',height:'100%',objectFit:'cover' as const}}/>
                 </div>
-                {/* Specs grid */}
-                <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'0 32px'}}>
-                  {([
-                    ['Building Size', c.building_sf?`+/- ${Number(c.building_sf).toLocaleString()} SF`:'—'],
-                    ['Sale Price',    c.sale_price?`$${Number(c.sale_price).toLocaleString()}`:'—'],
-                    ['Lot Size',      c.lot_size_ac?`${c.lot_size_ac} acres`:'—'],
-                    ['Price Per SF',  psf?`$${Number(psf).toFixed(2)} PSF`:'—'],
-                    ['Clear Ceiling', c.ceiling_height?`${c.ceiling_height} ft`:'—'],
-                    ['Sale Date',     fmtDate(c.sale_date)],
-                    ['Loading Docks', c.loading_docks||'—'],
-                    ['Buyer',         c.buyer||'—'],
-                    ['Drive-In Doors',c.drive_ins||'—'],
-                    ['Seller',        c.seller||'—'],
-                    ['Power',         c.power||'—'],
-                    ['Sewer',         c.sewer||'—'],
-                    ['Heat',          (c as any).heat||'—'],
-                    ['Sprinkler',     (c as any).sprinkler||'—'],
-                    ['Zoning',        c.zoning||'—'],
-                    ['County',        c.county||'—'],
-                    ['RE Taxes',      (c as any).taxes?`$${Number((c as any).taxes).toLocaleString()}/yr`:'—'],
-                  ] as [string,string][]).map(([l,v])=>(
-                    <div key={l} style={{display:'flex',justifyContent:'space-between',padding:'6px 0',borderBottom:'1px solid #f0ede6',fontSize:12}}>
-                      <span style={{color:'#666',fontWeight:600}}>{l}</span>
-                      <span style={{color:'#1a1a2e',fontWeight:500,textAlign:'right' as const,maxWidth:'55%'}}>{v}</span>
-                    </div>
-                  ))}
+                <div style={{border:'1px solid #ccc'}}>
+                  <LabelRow label="PROPERTY ADDRESS" value={`${c.address||'—'}${c.city?', '+c.city:''}`}/>
+                  <LabelRow label="BUILDING SIZE" value={fmt(c.building_sf,'',c.building_sf?' SF':'')} shade/>
+                  {c.lot_size_ac&&<LabelRow label="LOT SIZE" value={`${c.lot_size_ac} Acres`}/>}
+                  <LabelRow label="CEILING HEIGHT" value={c.ceiling_height?`${c.ceiling_height} ft`:'—'} shade={!!c.lot_size_ac}/>
+                  <LabelRow label="LOADING DOCKS" value={c.loading_docks||'—'} shade={!c.lot_size_ac}/>
+                  <LabelRow label="DRIVE INS" value={c.drive_ins||'—'} shade={!!c.lot_size_ac}/>
+                  {c.power&&<LabelRow label="POWER" value={c.power as string} shade={!c.lot_size_ac}/>}
+                  {c.sewer&&<LabelRow label="SEWERS" value={c.sewer} shade={!!c.power}/>}
+                  {(c as any).heat&&<LabelRow label="HEAT" value={(c as any).heat}/>}
+                  {c.zoning&&<LabelRow label="ZONING" value={c.zoning} shade/>}
+                  <LabelRow label="SALE PRICE" value={`${fmt(c.sale_price,'$')}${psf?` ($${Number(psf).toFixed(2)} PSF)`:''}`}/>
+                  <LabelRow label="TRANSACTION DATE" value={c.sale_date?new Date(c.sale_date).toLocaleDateString('en-US',{month:'long',year:'numeric'}):'—'} shade/>
+                  {c.buyer&&<LabelRow label="BUYER" value={c.buyer}/>}
+                  {c.seller&&<LabelRow label="SELLER" value={c.seller} shade/>}
                 </div>
               </div>
             )
           })}
-        </Section>}
-        {avails.length>0&&<Section title="Active Market Availabilities">
-          {/* Summary table */}
-          <div style={{overflowX:'auto' as const,marginBottom:32}}>
-            <table style={{width:'100%',borderCollapse:'collapse' as const,fontSize:11}}>
-              <thead><tr style={{background:'#1a1a2e',color:'#fff'}}>
-                {['#','Address','City','SF','Ceiling','Docks','Dr-In','Asking Price','$/SF','Guidance'].map(h=><th key={h} style={{padding:'8px 8px',textAlign:'left' as const,fontSize:9,whiteSpace:'nowrap' as const}}>{h}</th>)}
-              </tr></thead>
-              <tbody>{avails.map((a,i)=>(
-                <tr key={a.id} style={{background:i%2===0?'#f8f8f8':'#fff'}}>
-                  <td style={{padding:'7px 8px',borderBottom:'1px solid #eee',color:'#888',fontWeight:700}}>{i+1}</td>
-                  <td style={{padding:'7px 8px',borderBottom:'1px solid #eee',minWidth:160,fontWeight:600}}>{a.address}</td>
-                  <td style={{padding:'7px 8px',borderBottom:'1px solid #eee'}}>{a.city||'—'}</td>
-                  <td style={{padding:'7px 8px',borderBottom:'1px solid #eee',whiteSpace:'nowrap' as const}}>{a.building_sf?Number(a.building_sf).toLocaleString():'—'}</td>
-                  <td style={{padding:'7px 8px',borderBottom:'1px solid #eee'}}>{a.ceiling_height||'—'}</td>
-                  <td style={{padding:'7px 8px',borderBottom:'1px solid #eee'}}>{a.loading_docks||'—'}</td>
-                  <td style={{padding:'7px 8px',borderBottom:'1px solid #eee'}}>{a.drive_ins||'—'}</td>
-                  <td style={{padding:'7px 8px',borderBottom:'1px solid #eee',whiteSpace:'nowrap' as const}}>{a.asking_price?`$${Number(a.asking_price).toLocaleString()}`:'—'}</td>
-                  <td style={{padding:'7px 8px',borderBottom:'1px solid #eee',fontWeight:700,color:'#3b82f6',whiteSpace:'nowrap' as const}}>{(a.price_per_sf||(a.asking_price&&a.building_sf?Number(a.asking_price)/Number(a.building_sf):0))?`$${(a.price_per_sf||Number(a.asking_price)/Number(a.building_sf)).toFixed(2)}`:'—'}</td>
-                  <td style={{padding:'7px 8px',borderBottom:'1px solid #eee'}}>{a.pricing_guidance||'—'}</td>
-                </tr>
-              ))}</tbody>
-            </table>
+        </>}
+
+        {/* ── SECTION V: LEASE COMPS ── */}
+        {includeLeaseComps&&leaseComps.length>0&&<>
+          <SecHeading num="V" title="RECENT LEASE TRANSACTIONS"/>
+          <div style={{border:'1px solid #ccc',marginBottom:16}}>
+            <TblHeader cols={['Property Address','City','Building Size (SF)','Lease Price (PSF)']}/>
+            {leaseComps.map((c,i)=><TblRow key={c.id} shade={i%2===1} cells={[
+              c.address,c.city||'',
+              c.building_sf?`${Number(c.building_sf).toLocaleString()} SF`:'—',
+              c.lease_price?`$${Number(c.lease_price).toFixed(2)} PSF NNN`:c.price_per_sf?`$${Number(c.price_per_sf).toFixed(2)} PSF NNN`:'—',
+            ]}/>)}
           </div>
-          {/* Individual availability pages */}
+          {leaseComps.map((c,i)=>(
+            <div key={c.id} style={{marginBottom:48,paddingBottom:48,borderBottom:'2px dashed #ddd'}}>
+              <div style={{fontWeight:700,fontSize:14,paddingBottom:8,borderBottom:`2px solid ${gold}`,marginBottom:16}}>
+                LEASE COMPARABLE {i+1}  —  {(c.address||'').toUpperCase()}{c.city?', '+c.city.toUpperCase():''}
+              </div>
+              <div style={{width:'100%',height:280,borderRadius:6,overflow:'hidden' as const,marginBottom:20,background:'#f0ede6',border:'1px solid #ddd'}}>
+                <img src={`/api/street-view?address=${encodeURIComponent(c.address+(c.city?', '+c.city:'')+', NY')}`}
+                  alt={c.address} onError={e=>{(e.target as HTMLImageElement).style.display='none'}}
+                  style={{width:'100%',height:'100%',objectFit:'cover' as const}}/>
+              </div>
+              <div style={{border:'1px solid #ccc'}}>
+                <LabelRow label="PROPERTY ADDRESS" value={`${c.address||'—'}${c.city?', '+c.city:''}`}/>
+                <LabelRow label="BUILDING SIZE" value={fmt(c.building_sf,'',c.building_sf?' SF':'')} shade/>
+                <LabelRow label="CEILING HEIGHT" value={c.ceiling_height?`${c.ceiling_height} ft`:'—'}/>
+                <LabelRow label="LOADING DOCKS" value={c.loading_docks||'—'} shade/>
+                <LabelRow label="DRIVE INS" value={c.drive_ins||'—'}/>
+                <LabelRow label="LEASE PRICE" value={c.lease_price?`$${Number(c.lease_price).toFixed(2)} PSF NNN`:c.price_per_sf?`$${Number(c.price_per_sf).toFixed(2)} PSF NNN`:'—'} shade/>
+                {c.lease_term&&<LabelRow label="TERM" value={c.lease_term}/>}
+                {c.annual_escalations&&<LabelRow label="ESCALATIONS" value={c.annual_escalations} shade/>}
+                {c.tenant&&<LabelRow label="TENANT" value={c.tenant}/>}
+                {c.landlord&&<LabelRow label="LANDLORD" value={c.landlord} shade/>}
+                {c.comments&&<LabelRow label="COMMENTS" value={c.comments}/>}
+              </div>
+            </div>
+          ))}
+        </>}
+
+        {/* ── SECTION VI: MARKET AVAILABILITIES ── */}
+        {includeAvails&&avails.length>0&&<>
+          <SecHeading num="VI" title="MARKET AVAILABILITIES"/>
+          <div style={{border:'1px solid #ccc',marginBottom:16}}>
+            <TblHeader cols={['Property Address','City','Bldg SF','Lot Size','Asking Price','Price PSF']}/>
+            {avails.map((a,i)=><TblRow key={a.id} shade={i%2===1} cells={[
+              a.address,a.city||'',
+              a.building_sf?`${Number(a.building_sf).toLocaleString()} SF`:'—',
+              a.lot_size_ac?`${a.lot_size_ac} AC`:'—',
+              a.asking_price?`$${Number(a.asking_price).toLocaleString()}`:'—',
+              a.asking_price&&a.building_sf?`$${(Number(a.asking_price)/Number(a.building_sf)).toFixed(2)}`:'—',
+            ]}/>)}
+          </div>
+          <p style={{fontSize:12,color:'#555',marginBottom:24,fontStyle:'italic'}}>Each market availability is detailed on the following pages.</p>
           {avails.map((a,i)=>{
             const psf = a.price_per_sf||(a.asking_price&&a.building_sf?Number(a.asking_price)/Number(a.building_sf):0)
             return (
-              <div key={a.id} style={{marginBottom:40,paddingBottom:40,borderBottom:i<avails.length-1?'2px dashed #ddd':'none'}}>
-                <div style={{display:'flex',alignItems:'baseline',justifyContent:'space-between',marginBottom:14}}>
-                  <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:17,fontWeight:700,color:'#1a1a2e'}}>
-                    Availability {i+1} — {a.address}{a.city?`, ${a.city}`:''}
-                  </div>
-                  {psf>0&&<div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:20,fontWeight:700,color:'#3b82f6'}}>${Number(psf).toFixed(2)}/SF</div>}
+              <div key={a.id} style={{marginBottom:48,paddingBottom:48,borderBottom:'2px dashed #ddd'}}>
+                <div style={{fontWeight:700,fontSize:14,paddingBottom:8,borderBottom:`2px solid ${gold}`,marginBottom:16,display:'flex',justifyContent:'space-between',alignItems:'baseline'}}>
+                  <span>AVAILABILITY {i+1}  —  {(a.address||'').toUpperCase()}{a.city?', '+a.city.toUpperCase():''}</span>
+                  {psf>0&&<span style={{color:'#3b82f6',fontSize:16}}>${Number(psf).toFixed(2)}/SF</span>}
                 </div>
-                {/* Photo */}
-                <div style={{width:'100%',height:260,borderRadius:8,overflow:'hidden' as const,marginBottom:16,background:'#f0ede6',border:'1px solid #ddd'}}>
-                  <img
-                    src={`/api/street-view?address=${encodeURIComponent((a.address+(a.city?', '+a.city:'')+', NY'))}`}
-                    alt={a.address}
-                    onError={e=>{(e.target as HTMLImageElement).style.display='none'}}
-                    style={{width:'100%',height:'100%',objectFit:'cover' as const}}
-                  />
+                <div style={{width:'100%',height:280,borderRadius:6,overflow:'hidden' as const,marginBottom:20,background:'#f0ede6',border:'1px solid #ddd'}}>
+                  <img src={`/api/street-view?address=${encodeURIComponent(a.address+(a.city?', '+a.city:'')+', NY')}`}
+                    alt={a.address} onError={e=>{(e.target as HTMLImageElement).style.display='none'}}
+                    style={{width:'100%',height:'100%',objectFit:'cover' as const}}/>
                 </div>
-                {/* Specs grid */}
-                <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'0 32px'}}>
-                  {([
-                    ['Building Size',  a.building_sf?`+/- ${Number(a.building_sf).toLocaleString()} SF`:'—'],
-                    ['Asking Price',   a.asking_price?`$${Number(a.asking_price).toLocaleString()}`:'—'],
-                    ['Lot Size',       a.lot_size_ac?`${a.lot_size_ac} acres`:'—'],
-                    ['Asking $/SF',    psf?`$${Number(psf).toFixed(2)} PSF`:'—'],
-                    ['Clear Ceiling',  a.ceiling_height?`${a.ceiling_height} ft`:'—'],
-                    ['Pricing Guidance',a.pricing_guidance||'—'],
-                    ['Loading Docks',  a.loading_docks||'—'],
-                    ['Listing Broker', a.listing_broker||'—'],
-                    ['Drive-In Doors', a.drive_ins||'—'],
-                    ['Power',          a.power||'—'],
-                    ['Heat',           (a as any).heat||'—'],
-                    ['Sprinkler',      (a as any).sprinkler||'—'],
-                    ['Sewer',          a.sewer||'—'],
-                    ['Zoning',         a.zoning||'—'],
-                    ['County',         a.county||'—'],
-                    ['RE Taxes',       (a as any).taxes?`$${Number((a as any).taxes).toLocaleString()}/yr`:'—'],
-                  ] as [string,string][]).map(([l,v])=>(
-                    <div key={l} style={{display:'flex',justifyContent:'space-between',padding:'6px 0',borderBottom:'1px solid #f0ede6',fontSize:12}}>
-                      <span style={{color:'#666',fontWeight:600}}>{l}</span>
-                      <span style={{color:'#1a1a2e',fontWeight:500,textAlign:'right' as const,maxWidth:'55%'}}>{v}</span>
-                    </div>
-                  ))}
+                <div style={{border:'1px solid #ccc'}}>
+                  <LabelRow label="PROPERTY ADDRESS" value={`${a.address||'—'}${a.city?', '+a.city:''}`}/>
+                  <LabelRow label="BUILDING SIZE" value={fmt(a.building_sf,'',a.building_sf?' SF':'')} shade/>
+                  {a.lot_size_ac&&<LabelRow label="LOT SIZE" value={`${a.lot_size_ac} Acres`}/>}
+                  <LabelRow label="CEILING HEIGHT" value={a.ceiling_height?`${a.ceiling_height} ft`:'—'} shade={!!a.lot_size_ac}/>
+                  <LabelRow label="LOADING DOCKS" value={a.loading_docks||'—'} shade={!a.lot_size_ac}/>
+                  <LabelRow label="DRIVE INS" value={a.drive_ins||'—'} shade={!!a.lot_size_ac}/>
+                  {a.power&&<LabelRow label="POWER" value={a.power}/>}
+                  {a.sewer&&<LabelRow label="SEWERS" value={a.sewer} shade/>}
+                  <LabelRow label="ASKING PRICE" value={a.asking_price?`$${Number(a.asking_price).toLocaleString()}`:'—'} shade={!a.sewer}/>
+                  <LabelRow label="ASKING $/SF" value={psf?`$${Number(psf).toFixed(2)} PSF`:'—'} shade/>
+                  {a.pricing_guidance&&<LabelRow label="PRICING GUIDANCE" value={a.pricing_guidance}/>}
+                  {a.listing_broker&&<LabelRow label="LISTING BROKER" value={a.listing_broker} shade/>}
                 </div>
               </div>
             )
           })}
-        </Section>}
-        {aiText&&<Section title="Market Commentary & Broker Analysis">
-          <div style={{fontSize:13,lineHeight:1.85,whiteSpace:'pre-wrap' as const}}>{aiText}</div>
-        </Section>}
-        {analytics&&<Section title="Value Conclusion">
-          <p>Based upon our analysis of {comps.length} comparable industrial sale transactions and {avails.length} active market availabilities in {subject.county} County, it is our opinion that the subject property has a current market value range of <strong>${analytics.low.toFixed(2)} – ${analytics.high.toFixed(2)} per square foot</strong>, with a most probable value of <strong>${analytics.market.toFixed(2)} per square foot</strong>.</p>
-          <div style={{background:'#f8f6f0',border:'1px solid #e8d8a0',borderRadius:6,padding:'18px 24px',margin:'16px 0',textAlign:'center' as const}}>
-            <div style={{fontSize:10,color:'#888',textTransform:'uppercase' as const,letterSpacing:'.1em',marginBottom:8}}>Recommended Listing Price</div>
-            <div style={{fontSize:32,fontWeight:700,color:'#c9a84c',fontFamily:"'Cormorant Garamond',serif"}}>${analytics.suggested} / Square Foot</div>
-            {subject.size&&<div style={{fontSize:14,color:'#555',marginTop:6}}>Implied Total Value: ${(analytics.suggested*parseInt(subject.size)).toLocaleString()}</div>}
+        </>}
+
+        {/* ── AI TEXT ── */}
+        {aiText&&<>
+          <SecHeading num="" title="MARKET COMMENTARY & BROKER ANALYSIS"/>
+          <div style={{fontSize:13,lineHeight:1.85,whiteSpace:'pre-wrap' as const,marginBottom:32}}>{aiText}</div>
+        </>}
+
+        {/* ── SECTION VII: MARKETING STRATEGY ── */}
+        {includeMarketingStrategy&&<>
+          <SecHeading num="VII" title="MARKETING STRATEGY"/>
+          <SubHead>FOCUSED DEDICATION / HARD WORK… TO INCLUDE:</SubHead>
+          <Bullet>PREMIER COMMERCIAL REAL ESTATE will prepare electronic marketing material and meet with selected "Highly qualified" buyers.</Bullet>
+          <Bullet>PREMIER COMMERCIAL REAL ESTATE will distribute e-Blast marketing flyers to the local brokerage community (including the outer NYC Boroughs).</Bullet>
+          <Bullet>PREMIER COMMERCIAL REAL ESTATE will prepare all proposals and respond to proposals submitted by prospective purchasers after receiving authorization from ownership.</Bullet>
+          <Bullet>PREMIER COMMERCIAL REAL ESTATE will conduct all site inspections and conduct marketing presentations for purchasers.</Bullet>
+          <Bullet>PREMIER COMMERCIAL REAL ESTATE will implement and follow up on a direct marketing program including: Identification of qualified prospects; Mailings (electronic and regular) to prospective Investors; Regular follow-up phone canvassing; Regular follow-up "in-person" canvassing; and Follow-up correspondence.</Bullet>
+          <SubHead>HOW DOES PARTNERING WITH PREMIER DIFFER FROM "THE CROWD"?</SubHead>
+          <Bullet>We always maintain a "Client First" philosophy.</Bullet>
+          <Bullet>We view our clients as "Partners" – our economic interests are precisely aligned.</Bullet>
+          <Bullet>Industrial leasing & sales are all that we do.</Bullet>
+          <Bullet>Our market knowledge is "top in the business" which will serve us to maximize value.</Bullet>
+          <Bullet>Combined over 40 years experience – specializing in Industrial Properties (Total Sales Transactions exceed $500 Million).</Bullet>
+          <Bullet>In 2020 we brokered the largest industrial sales transactions in both Suffolk and Nassau counties ($35.5 Million and $33 Million respectively).</Bullet>
+          <Bullet>We have built strong relationships with highly qualified purchasers and investors over several decades.</Bullet>
+          <Bullet>We are recognized as "leaders" within the commercial brokerage community.</Bullet>
+        </>}
+
+        {/* ── SECTION VIII: PCRE PROFILE ── */}
+        {includePcreProfile&&<>
+          <SecHeading num="VIII" title="PREMIER COMMERCIAL REAL ESTATE PROFILE"/>
+          <p style={{fontSize:13,lineHeight:1.8,marginBottom:12}}>Premier Commercial Real Estate, LLC is a full-service commercial real estate service provider offering personalized and strategic solutions for investors, property owners, tenants and diverse businesses. With a laser-sharp focus on, and in-depth knowledge of the Long Island market, Premier's seasoned professionals work together as a team to identify the best real estate opportunities for its clients.</p>
+          <p style={{fontSize:13,lineHeight:1.8,marginBottom:24}}>From property sales and leasing to tax-advantaged 1031 exchanges and portfolio development, Premier applies the full force of its experience, know-how and network to effectively achieve the real estate goals of its clients.</p>
+          <SubHead>PCRE'S SAMPLE OF OUR RECENTLY COMPLETED SALES TRANSACTIONS</SubHead>
+          <div style={{border:'1px solid #ccc',marginBottom:24}}>
+            <TblHeader cols={['Property Address','City','Property Type','Building Size (SF)','Sale Price','Transaction Date']}/>
+            {RECENT_SALES.map((row,i)=><TblRow key={i} shade={i%2===1} cells={row}/>)}
           </div>
-        </Section>}
+          <SubHead>PCRE'S SAMPLE OF OUR RECENTLY COMPLETED LEASE TRANSACTIONS</SubHead>
+          <div style={{border:'1px solid #ccc',marginBottom:32}}>
+            <TblHeader cols={['Property Address','City','Tenant','Leased SF','Lease Price (PSF)','Transaction Date']}/>
+            {RECENT_LEASES.map((row,i)=><TblRow key={i} shade={i%2===1} cells={row}/>)}
+          </div>
+          {/* Jason bio */}
+          <div style={{marginBottom:32,paddingBottom:32,borderBottom:'1px solid #eee'}}>
+            <div style={{fontWeight:900,fontSize:20,paddingBottom:6,borderBottom:`2px solid ${gold}`,marginBottom:8}}>JASON D. MILLER</div>
+            <div style={{fontWeight:600,fontSize:13,color:'#555',marginBottom:12}}>Managing Principal</div>
+            <p style={{fontSize:12,lineHeight:1.8,marginBottom:8}}>Jason Miller is Co-Founder and Managing Principal at Premier Commercial Real Estate with over 17 years experience, and is widely recognized as one of Long Island's top commercial real estate professionals.</p>
+            <p style={{fontSize:12,lineHeight:1.8,marginBottom:8}}>Mr. Miller began his real estate career as a Sales Associate at Sutton & Edwards Inc (now Colliers International, LI Inc.) and was quickly promoted to the position of Senior Director, Industrial Properties for Long Island. In October of 2013, along with his partner Jeff Schwartzberg, he created Premier Commercial Real Estate, a brokerage firm strictly focused on delivering ultimate customer service.</p>
+            <p style={{fontSize:12,lineHeight:1.8}}>Since Premier's inception, Jason and his company have received a number of the industry's top awards, including: "Commercial Brokerage Company of the Year" (LIBN 2015); Largest Industrial Sales Transactions in Nassau and Suffolk Counties (2015 & 2016); and Co-Star Power Broker Award each year.</p>
+          </div>
+          {/* Jeff bio */}
+          <div style={{marginBottom:32}}>
+            <div style={{fontWeight:900,fontSize:20,paddingBottom:6,borderBottom:`2px solid ${gold}`,marginBottom:8}}>JEFFREY SCHWARTZBERG</div>
+            <div style={{fontWeight:600,fontSize:13,color:'#555',marginBottom:12}}>Managing Principal</div>
+            <p style={{fontSize:12,lineHeight:1.8,marginBottom:8}}>JB (Jeff) Schwartzberg, Co-Founder and Managing Principal at Premier Commercial Real Estate, has developed a vast background and proven track record in commercial real estate spanning over three decades. Mr. Schwartzberg brings that knowledge to Premier, leading its day-to-day business operations.</p>
+            <p style={{fontSize:12,lineHeight:1.8,marginBottom:8}}>Before becoming a full time Broker, Jeff enjoyed a successful and extensive 20-year career, holding several key "senior executive" positions in the Defense Industry. Immediately prior to creating Premier in 2013, Mr. Schwartzberg spent more than a decade with Colliers International, ultimately rising to the position of Senior Executive Director, Industrial Properties-Long Island.</p>
+            <p style={{fontSize:12,lineHeight:1.8}}>He has been named a Co-Star "Power Broker" every year and has participated in industrial property sales and leases involving millions of square feet. In 2023, Jeff was honored & received Long Island Business News' most prestigious award "Top Commercial Broker on Long Island."</p>
+          </div>
+        </>}
+
+        {/* Disclaimer */}
         <div style={{borderTop:'1px solid #ddd',paddingTop:16,marginTop:16,fontSize:10,color:'#999',lineHeight:1.7}}>
-          <strong>DISCLAIMER:</strong> This Opinion of Value has been prepared by Premier Commercial Real Estate for informational purposes only and does not constitute a certified appraisal. It is based upon data available at the time of preparation and may not reflect subsequent market changes.
+          <strong>DISCLAIMER:</strong> This Opinion of Value has been prepared by Premier Commercial Real Estate for informational purposes only and does not constitute a certified appraisal. It is based upon data available at the time of preparation and may not reflect subsequent market changes. This report should not be relied upon as a substitute for a formal appraisal by a licensed appraiser.
         </div>
       </div>
     </div>
   )
 }
-
 
 // ── SIDEBAR NAV ITEMS ─────────────────────────────────────────────────────────
 const PAGE_TITLES: Record<string,string> = {
