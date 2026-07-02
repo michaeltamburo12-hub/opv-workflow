@@ -2344,12 +2344,16 @@ function OPVReport({subject,comps,leaseComps,avails,analytics,aiText,setPage}: {
           <div style={{marginBottom:6,fontSize:11,color:'#888',textTransform:'uppercase' as const,letterSpacing:'.1em'}}>Property Address</div>
           <div style={{fontSize:24,fontWeight:900,color:'#1a1a1a',textTransform:'uppercase' as const,marginBottom:4}}>{subject.address}</div>
           {subject.city&&<div style={{fontSize:16,color:'#444',marginBottom:24}}>{subject.city.toUpperCase()}, NEW YORK</div>}
-          <div style={{width:'100%',height:320,borderRadius:8,overflow:'hidden' as const,border:'1px solid #ddd',marginBottom:8}}>
+          <div style={{width:'100%',height:320,borderRadius:8,overflow:'hidden' as const,border:'1px solid #ddd',marginBottom:8,background:'#f5f5f0',position:'relative' as const,display:'flex',alignItems:'center',justifyContent:'center'}}>
+            <div style={{position:'absolute' as const,inset:0,display:'flex',alignItems:'center',justifyContent:'center',flexDirection:'column' as const,gap:8,color:'#bbb',fontSize:12}}>
+              <span style={{fontSize:28}}>📍</span>
+              <span>{subject.address}{subject.city?', '+subject.city:''}</span>
+            </div>
             <img
               src={`/api/street-view?address=${encodeURIComponent(subject.address+(subject.city?', '+subject.city:'')+', NY')}`}
               alt={subject.address}
-              onError={e=>{(e.target as HTMLImageElement).style.display='none'}}
-              style={{width:'100%',height:'100%',objectFit:'cover' as const}}
+              onError={e=>{(e.target as HTMLImageElement).style.opacity='0'}}
+              style={{width:'100%',height:'100%',objectFit:'cover' as const,position:'relative' as const,zIndex:1}}
             />
           </div>
           <div style={{fontSize:10,color:'#aaa',marginBottom:8,fontStyle:'italic'}}>Street View  ·  {subject.address}{subject.city?', '+subject.city:''}</div>
