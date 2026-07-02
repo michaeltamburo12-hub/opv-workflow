@@ -2207,6 +2207,55 @@ function OPVReport({subject,comps,leaseComps,avails,analytics,aiText,setPage}: {
   const [includeAvails, setIncludeAvails] = useState(true)
   const [includeMarketingStrategy, setIncludeMarketingStrategy] = useState(true)
   const [includePcreProfile, setIncludePcreProfile] = useState(true)
+  const [photoOverrides, setPhotoOverrides] = useState<Record<string,string>>({})
+  const [editingKey, setEditingKey] = useState<string|null>(null)
+
+  const setCustomPhoto = (key: string, url: string) => {
+    setPhotoOverrides(p=>({...p,[key]:url}))
+    setEditingKey(null)
+  }
+  const handleFileUpload = (key: string, file: File) => {
+    const reader = new FileReader()
+    reader.onload = e => { if(e.target?.result) setCustomPhoto(key, e.target.result as string) }
+    reader.readAsDataURL(file)
+  }
+  const EditablePhoto = ({photoKey, defaultSrc, height=280}: {photoKey:string, defaultSrc:string, height?:number}) => {
+    const src = photoOverrides[photoKey] || defaultSrc
+    const isEditing = editingKey === photoKey
+    return (
+      <div style={{marginBottom:20}}>
+        <div style={{width:'100%',height,borderRadius:6,overflow:'hidden' as const,background:'#f0ede6',border:'1px solid #ddd',position:'relative' as const}}>
+          <img src={src} alt="" onError={e=>{(e.target as HTMLImageElement).style.opacity='0'}}
+            style={{width:'100%',height:'100%',objectFit:'cover' as const,display:'block'}}/>
+          <button onClick={()=>setEditingKey(isEditing?null:photoKey)}
+            style={{position:'absolute' as const,top:8,right:8,background:'rgba(0,0,0,0.55)',color:'#fff',border:'none',borderRadius:5,padding:'5px 10px',fontSize:11,cursor:'pointer',fontWeight:600,backdropFilter:'blur(4px)'}}>
+            ✏️ {isEditing?'Cancel':'Edit Photo'}
+          </button>
+        </div>
+        {isEditing&&(
+          <div style={{background:'#f7f7f5',border:'1px solid #ddd',borderRadius:6,padding:'12px 14px',marginTop:4,display:'flex',flexDirection:'column' as const,gap:8}}>
+            <div style={{fontSize:11,fontWeight:700,color:'#555',marginBottom:2}}>Replace Photo</div>
+            <label style={{display:'flex',alignItems:'center',gap:8,cursor:'pointer'}}>
+              <span style={{background:'#1a1a1a',color:'#fff',padding:'6px 12px',borderRadius:5,fontSize:11,fontWeight:600,cursor:'pointer',whiteSpace:'nowrap' as const}}>📁 Upload from Computer</span>
+              <input type="file" accept="image/*" style={{display:'none'}} onChange={e=>{const f=e.target.files?.[0]; if(f) handleFileUpload(photoKey,f)}}/>
+            </label>
+            <div style={{display:'flex',gap:6}}>
+              <input type="text" placeholder="Or paste image URL here..." style={{flex:1,padding:'6px 10px',border:'1px solid #ccc',borderRadius:5,fontSize:11,background:'#fff',color:'#1a1a1a'}}
+                onKeyDown={e=>{if(e.key==='Enter'){const v=(e.target as HTMLInputElement).value.trim();if(v)setCustomPhoto(photoKey,v)}}}/>
+              <button onClick={e=>{const inp=(e.currentTarget.previousSibling as HTMLInputElement);if(inp.value.trim())setCustomPhoto(photoKey,inp.value.trim())}}
+                style={{background:'#1a1a1a',color:'#fff',border:'none',borderRadius:5,padding:'6px 12px',fontSize:11,cursor:'pointer',fontWeight:600}}>Use</button>
+            </div>
+            {photoOverrides[photoKey]&&(
+              <button onClick={()=>{setPhotoOverrides(p=>{const n={...p};delete n[photoKey];return n});setEditingKey(null)}}
+                style={{background:'none',border:'1px solid #ccc',borderRadius:5,padding:'5px 10px',fontSize:11,cursor:'pointer',color:'#666',alignSelf:'flex-start' as const}}>
+                ↺ Reset to Street View
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+    )
+  }
 
   const downloadWord = async () => {
     setDownloading(true)
@@ -2344,18 +2393,8 @@ function OPVReport({subject,comps,leaseComps,avails,analytics,aiText,setPage}: {
           <div style={{marginBottom:6,fontSize:11,color:'#888',textTransform:'uppercase' as const,letterSpacing:'.1em'}}>Property Address</div>
           <div style={{fontSize:24,fontWeight:900,color:'#1a1a1a',textTransform:'uppercase' as const,marginBottom:4}}>{subject.address}</div>
           {subject.city&&<div style={{fontSize:16,color:'#444',marginBottom:24}}>{subject.city.toUpperCase()}, NEW YORK</div>}
-          <div style={{width:'100%',height:320,borderRadius:8,overflow:'hidden' as const,border:'1px solid #ddd',marginBottom:8,background:'#f5f5f0',position:'relative' as const,display:'flex',alignItems:'center',justifyContent:'center'}}>
-            <div style={{position:'absolute' as const,inset:0,display:'flex',alignItems:'center',justifyContent:'center',flexDirection:'column' as const,gap:8,color:'#bbb',fontSize:12}}>
-              <span style={{fontSize:28}}>📍</span>
-              <span>{subject.address}{subject.city?', '+subject.city:''}</span>
-            </div>
-            <img
-              src={`/api/street-view?address=${encodeURIComponent(subject.address+(subject.city?', '+subject.city:'')+', NY')}`}
-              alt={subject.address}
-              onError={e=>{(e.target as HTMLImageElement).style.opacity='0'}}
-              style={{width:'100%',height:'100%',objectFit:'cover' as const,position:'relative' as const,zIndex:1}}
-            />
-          </div>
+          <EditablePhoto photoKey="subject_cover" height={320}
+            defaultSrc={`/api/street-view?address=${encodeURIComponent(subject.address+(subject.city?', '+subject.city:'')+', NY')}`}/>
           <div style={{fontSize:10,color:'#aaa',marginBottom:8,fontStyle:'italic'}}>Property Photo  ·  {subject.address}{subject.city?', '+subject.city:''}</div>
           <div style={{width:'100%',height:1,background:'#ddd',margin:'24px 0'}}/>
           <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:24,width:'100%',marginBottom:24}}>
@@ -2505,11 +2544,8 @@ function OPVReport({subject,comps,leaseComps,avails,analytics,aiText,setPage}: {
                   <span>COMPARABLE {i+1}  —  {(c.address||'').toUpperCase()}{c.city?', '+c.city.toUpperCase():''}</span>
                   {psf>0&&<span style={{color:gold,fontSize:16}}>${Number(psf).toFixed(2)}/SF</span>}
                 </div>
-                <div style={{width:'100%',height:280,borderRadius:6,overflow:'hidden' as const,marginBottom:20,background:'#f0ede6',border:'1px solid #ddd'}}>
-                  <img src={`/api/street-view?address=${encodeURIComponent(c.address+(c.city?', '+c.city:'')+', NY')}`}
-                    alt={c.address} onError={e=>{(e.target as HTMLImageElement).style.display='none'}}
-                    style={{width:'100%',height:'100%',objectFit:'cover' as const}}/>
-                </div>
+                <EditablePhoto photoKey={`comp_${c.id}`}
+                  defaultSrc={`/api/street-view?address=${encodeURIComponent(c.address+(c.city?', '+c.city:'')+', NY')}`}/>
                 <div style={{border:'1px solid #ccc'}}>
                   <LabelRow label="PROPERTY ADDRESS" value={`${c.address||'—'}${c.city?', '+c.city:''}`}/>
                   <LabelRow label="BUILDING SIZE" value={fmt(c.building_sf,'',c.building_sf?' SF':'')} shade/>
@@ -2547,11 +2583,8 @@ function OPVReport({subject,comps,leaseComps,avails,analytics,aiText,setPage}: {
               <div style={{fontWeight:700,fontSize:14,paddingBottom:8,borderBottom:`2px solid ${gold}`,marginBottom:16}}>
                 LEASE COMPARABLE {i+1}  —  {(c.address||'').toUpperCase()}{c.city?', '+c.city.toUpperCase():''}
               </div>
-              <div style={{width:'100%',height:280,borderRadius:6,overflow:'hidden' as const,marginBottom:20,background:'#f0ede6',border:'1px solid #ddd'}}>
-                <img src={`/api/street-view?address=${encodeURIComponent(c.address+(c.city?', '+c.city:'')+', NY')}`}
-                  alt={c.address} onError={e=>{(e.target as HTMLImageElement).style.display='none'}}
-                  style={{width:'100%',height:'100%',objectFit:'cover' as const}}/>
-              </div>
+              <EditablePhoto photoKey={`lease_${c.id}`}
+                defaultSrc={`/api/street-view?address=${encodeURIComponent(c.address+(c.city?', '+c.city:'')+', NY')}`}/>
               <div style={{border:'1px solid #ccc'}}>
                 <LabelRow label="PROPERTY ADDRESS" value={`${c.address||'—'}${c.city?', '+c.city:''}`}/>
                 <LabelRow label="BUILDING SIZE" value={fmt(c.building_sf,'',c.building_sf?' SF':'')} shade/>
@@ -2591,11 +2624,8 @@ function OPVReport({subject,comps,leaseComps,avails,analytics,aiText,setPage}: {
                   <span>AVAILABILITY {i+1}  —  {(a.address||'').toUpperCase()}{a.city?', '+a.city.toUpperCase():''}</span>
                   {psf>0&&<span style={{color:'#3b82f6',fontSize:16}}>${Number(psf).toFixed(2)}/SF</span>}
                 </div>
-                <div style={{width:'100%',height:280,borderRadius:6,overflow:'hidden' as const,marginBottom:20,background:'#f0ede6',border:'1px solid #ddd'}}>
-                  <img src={`/api/street-view?address=${encodeURIComponent(a.address+(a.city?', '+a.city:'')+', NY')}`}
-                    alt={a.address} onError={e=>{(e.target as HTMLImageElement).style.display='none'}}
-                    style={{width:'100%',height:'100%',objectFit:'cover' as const}}/>
-                </div>
+                <EditablePhoto photoKey={`avail_${a.id}`}
+                  defaultSrc={`/api/street-view?address=${encodeURIComponent(a.address+(a.city?', '+a.city:'')+', NY')}`}/>
                 <div style={{border:'1px solid #ccc'}}>
                   <LabelRow label="PROPERTY ADDRESS" value={`${a.address||'—'}${a.city?', '+a.city:''}`}/>
                   <LabelRow label="BUILDING SIZE" value={fmt(a.building_sf,'',a.building_sf?' SF':'')} shade/>
