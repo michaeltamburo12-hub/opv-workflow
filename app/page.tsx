@@ -2356,7 +2356,7 @@ function OPVReport({subject,comps,leaseComps,avails,analytics,aiText,setPage}: {
               style={{width:'100%',height:'100%',objectFit:'cover' as const,position:'relative' as const,zIndex:1}}
             />
           </div>
-          <div style={{fontSize:10,color:'#aaa',marginBottom:8,fontStyle:'italic'}}>Street View  ·  {subject.address}{subject.city?', '+subject.city:''}</div>
+          <div style={{fontSize:10,color:'#aaa',marginBottom:8,fontStyle:'italic'}}>Property Photo  ·  {subject.address}{subject.city?', '+subject.city:''}</div>
           <div style={{width:'100%',height:1,background:'#ddd',margin:'24px 0'}}/>
           <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:24,width:'100%',marginBottom:24}}>
             {[
