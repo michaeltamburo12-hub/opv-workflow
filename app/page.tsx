@@ -1,5 +1,5 @@
 'use client'
-import { useState, useRef, useCallback, useEffect } from 'react'
+import { useState, useRef, useCallback, useEffect, Fragment } from 'react'
 import { createClient } from '@supabase/supabase-js'
 
 const supabase = createClient(
@@ -2396,10 +2396,10 @@ function OPVReport({subject,comps,leaseComps,avails,analytics,aiText,setPage}: {
               ...(subject.municipality?[['MUNICIPALITY:', subject.municipality]]:[]),
               ...(subject.parcelId?[['PARCEL ID:', subject.parcelId]]:[]),
             ].map(([l,v])=>(
-              <React.Fragment key={l}>
-                <div style={{padding:'7px 0',fontWeight:700,fontSize:12,color:'#1a1a1a',borderBottom:'1px solid #eee'}}>{l}</div>
-                <div style={{padding:'7px 0 7px 12px',fontSize:12,borderBottom:'1px solid #eee'}}>{v}</div>
-              </React.Fragment>
+              <Fragment key={l as string}>
+                <div style={{padding:'7px 0',fontWeight:700,fontSize:12,color:'#1a1a1a',borderBottom:'1px solid #eee'}}>{l as string}</div>
+                <div style={{padding:'7px 0 7px 12px',fontSize:12,borderBottom:'1px solid #eee'}}>{v as string}</div>
+              </Fragment>
             ))}
           </div>
           <SubHead>PROPERTY SUMMARY HIGHLIGHTS AND ASSUMPTIONS:</SubHead>
