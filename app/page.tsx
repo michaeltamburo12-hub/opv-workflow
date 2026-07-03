@@ -2223,16 +2223,41 @@ function OPVReport({subject,comps,leaseComps,avails,analytics,aiText,setPage}: {
     const src = photoOverrides[photoKey] || defaultSrc
     const isEditing = editingKey === photoKey
     const urlInputId = `url-input-${photoKey}`
-    const applyUrl = () => {
+    const applyUrl = async () => {
       const inp = document.getElementById(urlInputId) as HTMLInputElement|null
       const v = inp?.value?.trim()
-      if(v) setCustomPhoto(photoKey, v)
+      if(!v) return
+      // Proxy external URLs through our server to bypass CORS/hotlink protection
+      const proxied = v.startsWith('http') ? `/api/proxy-image?url=${encodeURIComponent(v)}` : v
+      setCustomPhoto(photoKey, proxied)
     }
     return (
       <div style={{width:'100%',alignSelf:'stretch' as const,marginBottom:20}}>
         <div style={{width:'100%',height,borderRadius:6,overflow:'hidden' as const,background:'#f0ede6',border:'1px solid #ddd',position:'relative' as const}}>
-          <img src={src} alt="" onError={e=>{(e.target as HTMLImageElement).style.opacity='0'}}
+          <img src={src} alt="" onError={e=>{
+              const img = e.target as HTMLImageElement
+              img.style.display='none'
+              const parent = img.parentElement
+              if(parent){
+                const msg = parent.querySelector('.photo-error') as HTMLElement|null
+                if(msg) msg.style.display='flex'
+              }
+            }}
+            onLoad={e=>{
+              const img = e.target as HTMLImageElement
+              img.style.display='block'
+              const parent = img.parentElement
+              if(parent){
+                const msg = parent.querySelector('.photo-error') as HTMLElement|null
+                if(msg) msg.style.display='none'
+              }
+            }}
             style={{width:'100%',height:'100%',objectFit:'cover' as const,display:'block'}}/>
+          <div className="photo-error" style={{display:'none',position:'absolute' as const,inset:0,alignItems:'center',justifyContent:'center',flexDirection:'column' as const,gap:6,background:'#f0ede6',color:'#999',fontSize:12,textAlign:'center' as const}}>
+            <span style={{fontSize:24}}>📍</span>
+            <span>No photo available</span>
+            <span style={{fontSize:10}}>Click Edit Photo to add one</span>
+          </div>
           <button onClick={()=>setEditingKey(isEditing?null:photoKey)}
             style={{position:'absolute' as const,top:8,right:8,background:'rgba(0,0,0,0.6)',color:'#fff',border:'none',borderRadius:5,padding:'5px 11px',fontSize:11,cursor:'pointer',fontWeight:600}}>
             ✏️ {isEditing?'Cancel':'Edit Photo'}
