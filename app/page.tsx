@@ -2199,6 +2199,67 @@ function BrokerReview({subject,comps,analytics,setAnalytics,aiText,setAiText,set
   )
 }
 
+// ── PHOTO SLOT (stable component, defined outside OPVReport so React doesn't remount on state changes) ──
+function PhotoSlot({photoKey,defaultSrc,height=280,override,isEditing,onToggleEdit,onSetPhoto,onClearPhoto,onFileUpload}: {
+  photoKey:string, defaultSrc:string, height?:number,
+  override:string|undefined, isEditing:boolean,
+  onToggleEdit:()=>void, onSetPhoto:(key:string,url:string)=>void,
+  onClearPhoto:(key:string)=>void, onFileUpload:(key:string,file:File)=>void,
+}) {
+  const urlRef = useRef<HTMLInputElement>(null)
+  const src = override || defaultSrc
+  const applyUrl = () => {
+    const v = urlRef.current?.value?.trim()
+    if(!v) return
+    const proxied = v.startsWith('http') ? `/api/proxy-image?url=${encodeURIComponent(v)}` : v
+    onSetPhoto(photoKey, proxied)
+    if(urlRef.current) urlRef.current.value = ''
+  }
+  return (
+    <div style={{width:'100%',alignSelf:'stretch' as const,marginBottom:20}}>
+      <div style={{width:'100%',height,borderRadius:6,overflow:'hidden' as const,background:'#f0ede6',border:'1px solid #ddd',position:'relative' as const}}>
+        <img src={src} alt="" style={{width:'100%',height:'100%',objectFit:'cover' as const,display:'block'}}
+          onError={e=>{
+            const img=e.target as HTMLImageElement; img.style.display='none'
+            const err=img.parentElement?.querySelector('.photo-err') as HTMLElement|null
+            if(err) err.style.display='flex'
+          }}
+          onLoad={e=>{
+            const img=e.target as HTMLImageElement; img.style.display='block'
+            const err=img.parentElement?.querySelector('.photo-err') as HTMLElement|null
+            if(err) err.style.display='none'
+          }}/>
+        <div className="photo-err" style={{display:'none',position:'absolute' as const,inset:0,alignItems:'center',justifyContent:'center',flexDirection:'column' as const,gap:6,background:'#f0ede6',color:'#aaa',fontSize:12,textAlign:'center' as const,pointerEvents:'none'}}>
+          <span style={{fontSize:24}}>📍</span><span>No photo available</span><span style={{fontSize:10}}>Click Edit Photo to add one</span>
+        </div>
+        <button onClick={onToggleEdit} style={{position:'absolute' as const,top:8,right:8,background:'rgba(0,0,0,0.6)',color:'#fff',border:'none',borderRadius:5,padding:'5px 11px',fontSize:11,cursor:'pointer',fontWeight:600}}>
+          ✏️ {isEditing?'Cancel':'Edit Photo'}
+        </button>
+      </div>
+      {isEditing&&(
+        <div style={{background:'#f7f7f5',border:'1px solid #ddd',borderTop:'none',borderRadius:'0 0 6px 6px',padding:'12px 14px',display:'flex',flexDirection:'column' as const,gap:8}}>
+          <div style={{fontSize:11,fontWeight:700,color:'#555'}}>Replace Photo</div>
+          <label style={{display:'inline-flex',alignItems:'center',gap:8,cursor:'pointer',width:'fit-content'}}>
+            <span style={{background:'#1a1a1a',color:'#fff',padding:'6px 14px',borderRadius:5,fontSize:11,fontWeight:600,cursor:'pointer'}}>📁 Upload from Computer</span>
+            <input type="file" accept="image/*" style={{display:'none'}} onChange={e=>{const f=e.target.files?.[0];if(f) onFileUpload(photoKey,f)}}/>
+          </label>
+          <div style={{display:'flex',gap:6}}>
+            <input ref={urlRef} type="text" placeholder="Paste image URL and press Use…"
+              style={{flex:1,padding:'7px 10px',border:'1px solid #ccc',borderRadius:5,fontSize:11,background:'#fff',color:'#1a1a1a'}}
+              onKeyDown={e=>{if(e.key==='Enter') applyUrl()}}/>
+            <button onClick={applyUrl} style={{background:'#1a1a1a',color:'#fff',border:'none',borderRadius:5,padding:'7px 14px',fontSize:11,cursor:'pointer',fontWeight:600,whiteSpace:'nowrap' as const}}>Use URL</button>
+          </div>
+          {override&&(
+            <button onClick={()=>onClearPhoto(photoKey)} style={{background:'none',border:'1px solid #ccc',borderRadius:5,padding:'5px 10px',fontSize:11,cursor:'pointer',color:'#666',width:'fit-content'}}>
+              ↺ Reset to Street View
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── OPV REPORT ────────────────────────────────────────────────────────────────
 function OPVReport({subject,comps,leaseComps,avails,analytics,aiText,setPage}: {subject:SubjectForm|null,comps:Comp[],leaseComps:LeaseComp[],avails:Avail[],analytics:AnalyticsData|null,aiText:string,setPage:(p:string)=>void}) {
   const today = new Date().toLocaleDateString('en-US',{month:'long',year:'numeric'}).toUpperCase()
@@ -2219,75 +2280,22 @@ function OPVReport({subject,comps,leaseComps,avails,analytics,aiText,setPage}: {
     reader.onload = e => { if(e.target?.result) setCustomPhoto(key, e.target.result as string) }
     reader.readAsDataURL(file)
   }
-  const EditablePhoto = ({photoKey, defaultSrc, height=280}: {photoKey:string, defaultSrc:string, height?:number}) => {
-    const src = photoOverrides[photoKey] || defaultSrc
-    const isEditing = editingKey === photoKey
-    const urlInputId = `url-input-${photoKey}`
-    const applyUrl = async () => {
-      const inp = document.getElementById(urlInputId) as HTMLInputElement|null
-      const v = inp?.value?.trim()
-      if(!v) return
-      // Proxy external URLs through our server to bypass CORS/hotlink protection
-      const proxied = v.startsWith('http') ? `/api/proxy-image?url=${encodeURIComponent(v)}` : v
-      setCustomPhoto(photoKey, proxied)
-    }
-    return (
-      <div style={{width:'100%',alignSelf:'stretch' as const,marginBottom:20}}>
-        <div style={{width:'100%',height,borderRadius:6,overflow:'hidden' as const,background:'#f0ede6',border:'1px solid #ddd',position:'relative' as const}}>
-          <img src={src} alt="" onError={e=>{
-              const img = e.target as HTMLImageElement
-              img.style.display='none'
-              const parent = img.parentElement
-              if(parent){
-                const msg = parent.querySelector('.photo-error') as HTMLElement|null
-                if(msg) msg.style.display='flex'
-              }
-            }}
-            onLoad={e=>{
-              const img = e.target as HTMLImageElement
-              img.style.display='block'
-              const parent = img.parentElement
-              if(parent){
-                const msg = parent.querySelector('.photo-error') as HTMLElement|null
-                if(msg) msg.style.display='none'
-              }
-            }}
-            style={{width:'100%',height:'100%',objectFit:'cover' as const,display:'block'}}/>
-          <div className="photo-error" style={{display:'none',position:'absolute' as const,inset:0,alignItems:'center',justifyContent:'center',flexDirection:'column' as const,gap:6,background:'#f0ede6',color:'#999',fontSize:12,textAlign:'center' as const}}>
-            <span style={{fontSize:24}}>📍</span>
-            <span>No photo available</span>
-            <span style={{fontSize:10}}>Click Edit Photo to add one</span>
-          </div>
-          <button onClick={()=>setEditingKey(isEditing?null:photoKey)}
-            style={{position:'absolute' as const,top:8,right:8,background:'rgba(0,0,0,0.6)',color:'#fff',border:'none',borderRadius:5,padding:'5px 11px',fontSize:11,cursor:'pointer',fontWeight:600}}>
-            ✏️ {isEditing?'Cancel':'Edit Photo'}
-          </button>
-        </div>
-        {isEditing&&(
-          <div style={{background:'#f7f7f5',border:'1px solid #ddd',borderTop:'none',borderRadius:'0 0 6px 6px',padding:'12px 14px',display:'flex',flexDirection:'column' as const,gap:8}}>
-            <div style={{fontSize:11,fontWeight:700,color:'#555'}}>Replace Photo</div>
-            <label style={{display:'inline-flex',alignItems:'center',gap:8,cursor:'pointer',width:'fit-content'}}>
-              <span style={{background:'#1a1a1a',color:'#fff',padding:'6px 14px',borderRadius:5,fontSize:11,fontWeight:600,cursor:'pointer'}}>📁 Upload from Computer</span>
-              <input type="file" accept="image/*" style={{display:'none'}} onChange={e=>{const f=e.target.files?.[0]; if(f) handleFileUpload(photoKey,f)}}/>
-            </label>
-            <div style={{display:'flex',gap:6}}>
-              <input id={urlInputId} type="text" placeholder="Paste image URL and click Use…"
-                style={{flex:1,padding:'7px 10px',border:'1px solid #ccc',borderRadius:5,fontSize:11,background:'#fff',color:'#1a1a1a'}}
-                onKeyDown={e=>{if(e.key==='Enter') applyUrl()}}/>
-              <button onClick={applyUrl}
-                style={{background:'#1a1a1a',color:'#fff',border:'none',borderRadius:5,padding:'7px 14px',fontSize:11,cursor:'pointer',fontWeight:600,whiteSpace:'nowrap' as const}}>Use URL</button>
-            </div>
-            {photoOverrides[photoKey]&&(
-              <button onClick={()=>{setPhotoOverrides(p=>{const n={...p};delete n[photoKey];return n});setEditingKey(null)}}
-                style={{background:'none',border:'1px solid #ccc',borderRadius:5,padding:'5px 10px',fontSize:11,cursor:'pointer',color:'#666',width:'fit-content'}}>
-                ↺ Reset to Street View
-              </button>
-            )}
-          </div>
-        )}
-      </div>
-    )
+  const clearPhoto = (key: string) => {
+    setPhotoOverrides(p=>{const n={...p};delete n[key];return n})
+    setEditingKey(null)
   }
+  // Shorthand to render a PhotoSlot with OPVReport state wired in
+  const Photo = (photoKey: string, defaultSrc: string, height=280) => (
+    <PhotoSlot
+      photoKey={photoKey} defaultSrc={defaultSrc} height={height}
+      override={photoOverrides[photoKey]}
+      isEditing={editingKey===photoKey}
+      onToggleEdit={()=>setEditingKey(editingKey===photoKey?null:photoKey)}
+      onSetPhoto={setCustomPhoto}
+      onClearPhoto={clearPhoto}
+      onFileUpload={handleFileUpload}
+    />
+  )
 
   const downloadWord = async () => {
     setDownloading(true)
@@ -2425,8 +2433,7 @@ function OPVReport({subject,comps,leaseComps,avails,analytics,aiText,setPage}: {
           <div style={{marginBottom:6,fontSize:11,color:'#888',textTransform:'uppercase' as const,letterSpacing:'.1em'}}>Property Address</div>
           <div style={{fontSize:24,fontWeight:900,color:'#1a1a1a',textTransform:'uppercase' as const,marginBottom:4}}>{subject.address}</div>
           {subject.city&&<div style={{fontSize:16,color:'#444',marginBottom:24}}>{subject.city.toUpperCase()}, NEW YORK</div>}
-          <EditablePhoto photoKey="subject_cover" height={320}
-            defaultSrc={`/api/street-view?address=${encodeURIComponent(subject.address+(subject.city?', '+subject.city:'')+', NY')}`}/>
+          {Photo('subject_cover', `/api/street-view?address=${encodeURIComponent(subject.address+(subject.city?', '+subject.city:'')+', NY')}`, 320)}
           <div style={{fontSize:10,color:'#aaa',marginBottom:8,fontStyle:'italic'}}>Property Photo  ·  {subject.address}{subject.city?', '+subject.city:''}</div>
           <div style={{width:'100%',height:1,background:'#ddd',margin:'24px 0'}}/>
           <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:24,width:'100%',marginBottom:24}}>
@@ -2576,8 +2583,7 @@ function OPVReport({subject,comps,leaseComps,avails,analytics,aiText,setPage}: {
                   <span>COMPARABLE {i+1}  —  {(c.address||'').toUpperCase()}{c.city?', '+c.city.toUpperCase():''}</span>
                   {psf>0&&<span style={{color:gold,fontSize:16}}>${Number(psf).toFixed(2)}/SF</span>}
                 </div>
-                <EditablePhoto photoKey={`comp_${c.id}`}
-                  defaultSrc={`/api/street-view?address=${encodeURIComponent(c.address+(c.city?', '+c.city:'')+', NY')}`}/>
+                {Photo(`comp_${c.id}`, `/api/street-view?address=${encodeURIComponent(c.address+(c.city?', '+c.city:'')+', NY')}`)}
                 <div style={{border:'1px solid #ccc'}}>
                   <LabelRow label="PROPERTY ADDRESS" value={`${c.address||'—'}${c.city?', '+c.city:''}`}/>
                   <LabelRow label="BUILDING SIZE" value={fmt(c.building_sf,'',c.building_sf?' SF':'')} shade/>
@@ -2615,8 +2621,7 @@ function OPVReport({subject,comps,leaseComps,avails,analytics,aiText,setPage}: {
               <div style={{fontWeight:700,fontSize:14,paddingBottom:8,borderBottom:`2px solid ${gold}`,marginBottom:16}}>
                 LEASE COMPARABLE {i+1}  —  {(c.address||'').toUpperCase()}{c.city?', '+c.city.toUpperCase():''}
               </div>
-              <EditablePhoto photoKey={`lease_${c.id}`}
-                defaultSrc={`/api/street-view?address=${encodeURIComponent(c.address+(c.city?', '+c.city:'')+', NY')}`}/>
+              {Photo(`lease_${c.id}`, `/api/street-view?address=${encodeURIComponent(c.address+(c.city?', '+c.city:'')+', NY')}`)}
               <div style={{border:'1px solid #ccc'}}>
                 <LabelRow label="PROPERTY ADDRESS" value={`${c.address||'—'}${c.city?', '+c.city:''}`}/>
                 <LabelRow label="BUILDING SIZE" value={fmt(c.building_sf,'',c.building_sf?' SF':'')} shade/>
@@ -2656,8 +2661,7 @@ function OPVReport({subject,comps,leaseComps,avails,analytics,aiText,setPage}: {
                   <span>AVAILABILITY {i+1}  —  {(a.address||'').toUpperCase()}{a.city?', '+a.city.toUpperCase():''}</span>
                   {psf>0&&<span style={{color:'#3b82f6',fontSize:16}}>${Number(psf).toFixed(2)}/SF</span>}
                 </div>
-                <EditablePhoto photoKey={`avail_${a.id}`}
-                  defaultSrc={`/api/street-view?address=${encodeURIComponent(a.address+(a.city?', '+a.city:'')+', NY')}`}/>
+                {Photo(`avail_${a.id}`, `/api/street-view?address=${encodeURIComponent(a.address+(a.city?', '+a.city:'')+', NY')}`)}
                 <div style={{border:'1px solid #ccc'}}>
                   <LabelRow label="PROPERTY ADDRESS" value={`${a.address||'—'}${a.city?', '+a.city:''}`}/>
                   <LabelRow label="BUILDING SIZE" value={fmt(a.building_sf,'',a.building_sf?' SF':'')} shade/>
