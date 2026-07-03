@@ -2222,32 +2222,39 @@ function OPVReport({subject,comps,leaseComps,avails,analytics,aiText,setPage}: {
   const EditablePhoto = ({photoKey, defaultSrc, height=280}: {photoKey:string, defaultSrc:string, height?:number}) => {
     const src = photoOverrides[photoKey] || defaultSrc
     const isEditing = editingKey === photoKey
+    const urlInputId = `url-input-${photoKey}`
+    const applyUrl = () => {
+      const inp = document.getElementById(urlInputId) as HTMLInputElement|null
+      const v = inp?.value?.trim()
+      if(v) setCustomPhoto(photoKey, v)
+    }
     return (
-      <div style={{marginBottom:20}}>
+      <div style={{width:'100%',alignSelf:'stretch' as const,marginBottom:20}}>
         <div style={{width:'100%',height,borderRadius:6,overflow:'hidden' as const,background:'#f0ede6',border:'1px solid #ddd',position:'relative' as const}}>
           <img src={src} alt="" onError={e=>{(e.target as HTMLImageElement).style.opacity='0'}}
             style={{width:'100%',height:'100%',objectFit:'cover' as const,display:'block'}}/>
           <button onClick={()=>setEditingKey(isEditing?null:photoKey)}
-            style={{position:'absolute' as const,top:8,right:8,background:'rgba(0,0,0,0.55)',color:'#fff',border:'none',borderRadius:5,padding:'5px 10px',fontSize:11,cursor:'pointer',fontWeight:600,backdropFilter:'blur(4px)'}}>
+            style={{position:'absolute' as const,top:8,right:8,background:'rgba(0,0,0,0.6)',color:'#fff',border:'none',borderRadius:5,padding:'5px 11px',fontSize:11,cursor:'pointer',fontWeight:600}}>
             ✏️ {isEditing?'Cancel':'Edit Photo'}
           </button>
         </div>
         {isEditing&&(
-          <div style={{background:'#f7f7f5',border:'1px solid #ddd',borderRadius:6,padding:'12px 14px',marginTop:4,display:'flex',flexDirection:'column' as const,gap:8}}>
-            <div style={{fontSize:11,fontWeight:700,color:'#555',marginBottom:2}}>Replace Photo</div>
-            <label style={{display:'flex',alignItems:'center',gap:8,cursor:'pointer'}}>
-              <span style={{background:'#1a1a1a',color:'#fff',padding:'6px 12px',borderRadius:5,fontSize:11,fontWeight:600,cursor:'pointer',whiteSpace:'nowrap' as const}}>📁 Upload from Computer</span>
+          <div style={{background:'#f7f7f5',border:'1px solid #ddd',borderTop:'none',borderRadius:'0 0 6px 6px',padding:'12px 14px',display:'flex',flexDirection:'column' as const,gap:8}}>
+            <div style={{fontSize:11,fontWeight:700,color:'#555'}}>Replace Photo</div>
+            <label style={{display:'inline-flex',alignItems:'center',gap:8,cursor:'pointer',width:'fit-content'}}>
+              <span style={{background:'#1a1a1a',color:'#fff',padding:'6px 14px',borderRadius:5,fontSize:11,fontWeight:600,cursor:'pointer'}}>📁 Upload from Computer</span>
               <input type="file" accept="image/*" style={{display:'none'}} onChange={e=>{const f=e.target.files?.[0]; if(f) handleFileUpload(photoKey,f)}}/>
             </label>
             <div style={{display:'flex',gap:6}}>
-              <input type="text" placeholder="Or paste image URL here..." style={{flex:1,padding:'6px 10px',border:'1px solid #ccc',borderRadius:5,fontSize:11,background:'#fff',color:'#1a1a1a'}}
-                onKeyDown={e=>{if(e.key==='Enter'){const v=(e.target as HTMLInputElement).value.trim();if(v)setCustomPhoto(photoKey,v)}}}/>
-              <button onClick={e=>{const inp=(e.currentTarget.previousSibling as HTMLInputElement);if(inp.value.trim())setCustomPhoto(photoKey,inp.value.trim())}}
-                style={{background:'#1a1a1a',color:'#fff',border:'none',borderRadius:5,padding:'6px 12px',fontSize:11,cursor:'pointer',fontWeight:600}}>Use</button>
+              <input id={urlInputId} type="text" placeholder="Paste image URL and click Use…"
+                style={{flex:1,padding:'7px 10px',border:'1px solid #ccc',borderRadius:5,fontSize:11,background:'#fff',color:'#1a1a1a'}}
+                onKeyDown={e=>{if(e.key==='Enter') applyUrl()}}/>
+              <button onClick={applyUrl}
+                style={{background:'#1a1a1a',color:'#fff',border:'none',borderRadius:5,padding:'7px 14px',fontSize:11,cursor:'pointer',fontWeight:600,whiteSpace:'nowrap' as const}}>Use URL</button>
             </div>
             {photoOverrides[photoKey]&&(
               <button onClick={()=>{setPhotoOverrides(p=>{const n={...p};delete n[photoKey];return n});setEditingKey(null)}}
-                style={{background:'none',border:'1px solid #ccc',borderRadius:5,padding:'5px 10px',fontSize:11,cursor:'pointer',color:'#666',alignSelf:'flex-start' as const}}>
+                style={{background:'none',border:'1px solid #ccc',borderRadius:5,padding:'5px 10px',fontSize:11,cursor:'pointer',color:'#666',width:'fit-content'}}>
                 ↺ Reset to Street View
               </button>
             )}
