@@ -2206,33 +2206,38 @@ function PhotoSlot({photoKey,defaultSrc,height=280,override,isEditing,onToggleEd
   onToggleEdit:()=>void, onSetPhoto:(key:string,url:string)=>void,
   onClearPhoto:(key:string)=>void, onFileUpload:(key:string,file:File)=>void,
 }) {
-  const urlRef = useRef<HTMLInputElement>(null)
+  const [urlInput, setUrlInput] = useState('')
+  const [imgError, setImgError] = useState(false)
   const src = override || defaultSrc
+
+  // Reset error flag whenever src changes
+  useEffect(()=>{ setImgError(false) }, [src])
+
   const applyUrl = () => {
-    const v = urlRef.current?.value?.trim()
+    const v = urlInput.trim()
     if(!v) return
+    // Proxy external http URLs through our server to bypass CORS / hotlink protection
     const proxied = v.startsWith('http') ? `/api/proxy-image?url=${encodeURIComponent(v)}` : v
     onSetPhoto(photoKey, proxied)
-    if(urlRef.current) urlRef.current.value = ''
+    setUrlInput('')
   }
+
   return (
     <div style={{width:'100%',alignSelf:'stretch' as const,marginBottom:20}}>
-      <div style={{width:'100%',height,borderRadius:6,overflow:'hidden' as const,background:'#f0ede6',border:'1px solid #ddd',position:'relative' as const}}>
-        <img src={src} alt="" style={{width:'100%',height:'100%',objectFit:'cover' as const,display:'block'}}
-          onError={e=>{
-            const img=e.target as HTMLImageElement; img.style.display='none'
-            const err=img.parentElement?.querySelector('.photo-err') as HTMLElement|null
-            if(err) err.style.display='flex'
-          }}
-          onLoad={e=>{
-            const img=e.target as HTMLImageElement; img.style.display='block'
-            const err=img.parentElement?.querySelector('.photo-err') as HTMLElement|null
-            if(err) err.style.display='none'
-          }}/>
-        <div className="photo-err" style={{display:'none',position:'absolute' as const,inset:0,alignItems:'center',justifyContent:'center',flexDirection:'column' as const,gap:6,background:'#f0ede6',color:'#aaa',fontSize:12,textAlign:'center' as const,pointerEvents:'none'}}>
-          <span style={{fontSize:24}}>📍</span><span>No photo available</span><span style={{fontSize:10}}>Click Edit Photo to add one</span>
-        </div>
-        <button onClick={onToggleEdit} style={{position:'absolute' as const,top:8,right:8,background:'rgba(0,0,0,0.6)',color:'#fff',border:'none',borderRadius:5,padding:'5px 11px',fontSize:11,cursor:'pointer',fontWeight:600}}>
+      <div style={{width:'100%',height,borderRadius:6,overflow:'hidden' as const,background:'#f0ede6',border:'1px solid #ddd',position:'relative' as const,display:'flex',alignItems:'center',justifyContent:'center'}}>
+        {imgError ? (
+          <div style={{display:'flex',flexDirection:'column' as const,alignItems:'center',gap:6,color:'#aaa',fontSize:12,textAlign:'center' as const}}>
+            <span style={{fontSize:24}}>📍</span>
+            <span>No photo available</span>
+            <span style={{fontSize:10}}>Click Edit Photo to add one</span>
+          </div>
+        ) : (
+          <img src={src} alt=""
+            style={{width:'100%',height:'100%',objectFit:'cover' as const,display:'block',position:'absolute' as const,inset:0}}
+            onError={()=>setImgError(true)}
+            onLoad={()=>setImgError(false)}/>
+        )}
+        <button onClick={onToggleEdit} style={{position:'absolute' as const,top:8,right:8,background:'rgba(0,0,0,0.6)',color:'#fff',border:'none',borderRadius:5,padding:'5px 11px',fontSize:11,cursor:'pointer',fontWeight:600,zIndex:2}}>
           ✏️ {isEditing?'Cancel':'Edit Photo'}
         </button>
       </div>
@@ -2244,10 +2249,19 @@ function PhotoSlot({photoKey,defaultSrc,height=280,override,isEditing,onToggleEd
             <input type="file" accept="image/*" style={{display:'none'}} onChange={e=>{const f=e.target.files?.[0];if(f) onFileUpload(photoKey,f)}}/>
           </label>
           <div style={{display:'flex',gap:6}}>
-            <input ref={urlRef} type="text" placeholder="Paste image URL and press Use…"
+            <input
+              type="text"
+              value={urlInput}
+              onChange={e=>setUrlInput(e.target.value)}
+              placeholder="Paste a direct image URL…"
               style={{flex:1,padding:'7px 10px',border:'1px solid #ccc',borderRadius:5,fontSize:11,background:'#fff',color:'#1a1a1a'}}
               onKeyDown={e=>{if(e.key==='Enter') applyUrl()}}/>
-            <button onClick={applyUrl} style={{background:'#1a1a1a',color:'#fff',border:'none',borderRadius:5,padding:'7px 14px',fontSize:11,cursor:'pointer',fontWeight:600,whiteSpace:'nowrap' as const}}>Use URL</button>
+            <button onClick={applyUrl} style={{background:urlInput.trim()?'#1a1a1a':'#999',color:'#fff',border:'none',borderRadius:5,padding:'7px 14px',fontSize:11,cursor:'pointer',fontWeight:600,whiteSpace:'nowrap' as const}}>
+              Use URL
+            </button>
+          </div>
+          <div style={{fontSize:10,color:'#888',fontStyle:'italic'}}>
+            Tip: right-click any image on Google → "Copy image address", then paste here
           </div>
           {override&&(
             <button onClick={()=>onClearPhoto(photoKey)} style={{background:'none',border:'1px solid #ccc',borderRadius:5,padding:'5px 10px',fontSize:11,cursor:'pointer',color:'#666',width:'fit-content'}}>
