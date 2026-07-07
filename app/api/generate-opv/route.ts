@@ -316,35 +316,70 @@ export async function POST(req: NextRequest) {
     includeAvails = true,
     includeMarketingStrategy = true,
     includePcreProfile = true,
+    photoOverrides = {} as Record<string, string>,
   } = body
 
   // Load logo
   const logoPath = path.join(process.cwd(), 'public', 'pcre_logo.png')
   const logoData = fs.existsSync(logoPath) ? fs.readFileSync(logoPath) : null
 
-  async function fetchPropertyPhoto(photoUrl: string | undefined, address: string | undefined): Promise<Buffer | null> {
+  // Convert base64 data URL to Buffer
+  function dataUrlToBuffer(dataUrl: string): Buffer | null {
+    try {
+      const [, base64] = dataUrl.split(',')
+      if (!base64) return null
+      return Buffer.from(base64, 'base64')
+    } catch { return null }
+  }
+
+  async function fetchPropertyPhoto(
+    overrideKey: string,
+    photoUrl: string | undefined,
+    address: string | undefined
+  ): Promise<Buffer | null> {
+    // 1. Use custom photo override if set (uploaded from computer)
+    const override = (photoOverrides as Record<string, string>)[overrideKey]
+    if (override) {
+      if (override.startsWith('data:image/')) return dataUrlToBuffer(override)
+      if (override.startsWith('http')) return fetchImageBuffer(override)
+    }
+    // 2. Use stored photo_url if available
     if (photoUrl) return fetchImageBuffer(photoUrl)
+    // 3. Fall back to Street View / satellite
     if (!address) return null
     const key = process.env.GOOGLE_MAPS_KEY
     if (!key) return null
     const encoded = encodeURIComponent(address + ', NY')
-    return fetchImageBuffer(`https://maps.googleapis.com/maps/api/streetview?size=600x400&location=${encoded}&key=${key}&return_error_code=true`)
+    // Try Street View first, fall back to satellite map
+    const svBuf = await fetchImageBuffer(
+      `https://maps.googleapis.com/maps/api/streetview?size=800x500&location=${encoded}&key=${key}&return_error_code=true`
+    )
+    if (svBuf) return svBuf
+    return fetchImageBuffer(
+      `https://maps.googleapis.com/maps/api/staticmap?center=${encoded}&zoom=18&size=800x500&maptype=satellite&markers=color:red%7C${encoded}&key=${key}`
+    )
   }
 
-  // Pre-fetch all photos
+  // Pre-fetch all photos in parallel
+  const subjectPhotoBuffer = await fetchPropertyPhoto(
+    'subject_cover',
+    undefined,
+    subject ? `${subject.address}${subject.city ? ', ' + subject.city : ''}` : undefined
+  )
+
   const compPhotos = await Promise.all(
     (comps || []).map((c: Record<string, unknown>) =>
-      fetchPropertyPhoto(c.photo_url as string | undefined, c.address as string | undefined)
+      fetchPropertyPhoto(`comp_${c.id}`, c.photo_url as string | undefined, c.address as string | undefined)
     )
   )
   const leaseCompPhotos = await Promise.all(
     (leaseComps || []).map((c: Record<string, unknown>) =>
-      fetchPropertyPhoto(c.photo_url as string | undefined, c.address as string | undefined)
+      fetchPropertyPhoto(`lease_${c.id}`, c.photo_url as string | undefined, c.address as string | undefined)
     )
   )
   const availPhotos = await Promise.all(
     (avails || []).map((a: Record<string, unknown>) =>
-      fetchPropertyPhoto(a.photo_url as string | undefined, a.address as string | undefined)
+      fetchPropertyPhoto(`avail_${a.id}`, a.photo_url as string | undefined, a.address as string | undefined)
     )
   )
 
@@ -426,8 +461,21 @@ export async function POST(req: NextRequest) {
     new Paragraph({
       alignment: AlignmentType.CENTER,
       children: [new TextRun({ text: `${subject?.city ? subject.city.toUpperCase() + ', ' : ''}NEW YORK`, size: 24, font: 'Arial', color: '444444' })],
-      spacing: { after: 280 },
+      spacing: { after: 240 },
     }),
+    // Subject property photo
+    ...(subjectPhotoBuffer ? [
+      new Paragraph({
+        alignment: AlignmentType.CENTER,
+        children: [new ImageRun({ type: 'jpg', data: subjectPhotoBuffer, transformation: { width: 580, height: 300 } })],
+        spacing: { after: 120 },
+      }),
+      new Paragraph({
+        alignment: AlignmentType.CENTER,
+        children: [new TextRun({ text: `${subject?.address || ''}${subject?.city ? ', ' + subject.city : ''}`, italic: true, size: 16, font: 'Arial', color: '999999' })],
+        spacing: { after: 240 },
+      }),
+    ] : [spacer(120, 240)]),
     new Paragraph({
       alignment: AlignmentType.CENTER,
       children: [new TextRun({ text: 'PREPARED BY:', bold: true, size: 20, font: 'Arial', color: '555555' })],

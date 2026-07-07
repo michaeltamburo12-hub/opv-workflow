@@ -2248,21 +2248,7 @@ function PhotoSlot({photoKey,defaultSrc,height=280,override,isEditing,onToggleEd
             <span style={{background:'#1a1a1a',color:'#fff',padding:'6px 14px',borderRadius:5,fontSize:11,fontWeight:600,cursor:'pointer'}}>📁 Upload from Computer</span>
             <input type="file" accept="image/*" style={{display:'none'}} onChange={e=>{const f=e.target.files?.[0];if(f) onFileUpload(photoKey,f)}}/>
           </label>
-          <div style={{display:'flex',gap:6}}>
-            <input
-              type="text"
-              value={urlInput}
-              onChange={e=>setUrlInput(e.target.value)}
-              placeholder="Paste a direct image URL…"
-              style={{flex:1,padding:'7px 10px',border:'1px solid #ccc',borderRadius:5,fontSize:11,background:'#fff',color:'#1a1a1a'}}
-              onKeyDown={e=>{if(e.key==='Enter') applyUrl()}}/>
-            <button onClick={applyUrl} style={{background:urlInput.trim()?'#1a1a1a':'#999',color:'#fff',border:'none',borderRadius:5,padding:'7px 14px',fontSize:11,cursor:'pointer',fontWeight:600,whiteSpace:'nowrap' as const}}>
-              Use URL
-            </button>
-          </div>
-          <div style={{fontSize:10,color:'#888',fontStyle:'italic'}}>
-            Tip: right-click any image on Google → "Copy image address", then paste here
-          </div>
+          <div style={{fontSize:10,color:'#888',fontStyle:'italic'}}>Right-click any photo online → "Save image as…" → Upload here</div>
           {override&&(
             <button onClick={()=>onClearPhoto(photoKey)} style={{background:'none',border:'1px solid #ccc',borderRadius:5,padding:'5px 10px',fontSize:11,cursor:'pointer',color:'#666',width:'fit-content'}}>
               ↺ Reset to Street View
@@ -2317,7 +2303,7 @@ function OPVReport({subject,comps,leaseComps,avails,analytics,aiText,setPage}: {
       const res = await fetch('/api/generate-opv', {
         method: 'POST',
         headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({subject, comps, leaseComps: includeLeaseComps ? leaseComps : [], avails: includeAvails ? avails : [], analytics, aiText, includeLeaseComps, includeAvails, includeMarketingStrategy, includePcreProfile})
+        body: JSON.stringify({subject, comps, leaseComps: includeLeaseComps ? leaseComps : [], avails: includeAvails ? avails : [], analytics, aiText, includeLeaseComps, includeAvails, includeMarketingStrategy, includePcreProfile, photoOverrides})
       })
       if (!res.ok) { alert('Error generating report: ' + await res.text()); return }
       const blob = await res.blob()
