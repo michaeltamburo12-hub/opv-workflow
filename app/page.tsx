@@ -990,7 +990,7 @@ function DatabaseManager() {
   const COLUMN_ALIASES: Record<string,string> = {
     'street_address':'address','property_address':'address','full_address':'address','property_name':'address','building_address':'address',
     'rentable_building_area_(sf)':'building_sf','rentable_building_area':'building_sf','building_size':'building_sf','bldg_sf':'building_sf','total_sf':'building_sf','gla_(sf)':'building_sf','building_size_(sf)':'building_sf',
-    'clear_ceiling_height':'ceiling_height','clear_height':'ceiling_height',
+    'clear_ceiling_height':'ceiling_height','clear_height':'ceiling_height','ceiling_ht':'ceiling_height','ceil_ht':'ceiling_height','clr_ht':'ceiling_height',
     'number_of_loading_docks':'loading_docks','dock_doors':'loading_docks','docks':'loading_docks',
     'drive_in_doors':'drive_ins','grade_level_doors':'drive_ins','drive-in_doors':'drive_ins',
     'electric_service':'power','electrical_service':'power','electrical':'power',

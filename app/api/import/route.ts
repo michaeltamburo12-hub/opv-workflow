@@ -102,6 +102,31 @@ export async function POST(req: NextRequest) {
     // Remove empty header columns
     headers = headers.filter(h => h && h !== '_')
 
+    // Remap common column name variations to canonical names
+    const COLUMN_ALIASES: Record<string,string> = {
+      street_address:'address', property_address:'address', full_address:'address', building_address:'address',
+      building_size:'building_sf', bldg_sf:'building_sf', total_sf:'building_sf', rentable_building_area:'building_sf',
+      ceiling_ht:'ceiling_height', ceil_ht:'ceiling_height', clr_ht:'ceiling_height',
+      clear_ceiling_height:'ceiling_height', clear_height:'ceiling_height',
+      number_of_loading_docks:'loading_docks', dock_doors:'loading_docks', docks:'loading_docks',
+      drive_in_doors:'drive_ins', grade_level_doors:'drive_ins',
+      electric_service:'power', electrical_service:'power', electrical:'power',
+      sewer_connection:'sewer',
+      sprinkler_system:'sprinkler', fire_sprinklers:'sprinkler',
+      lot_size_ac_:'lot_size_ac', land_area:'lot_size_ac', lot_acres:'lot_size_ac',
+      list_price:'asking_price', for_sale_price:'asking_price',
+      transaction_date:'sale_date', close_of_escrow:'sale_date',
+      grantor:'seller', grantee:'buyer',
+      re_taxes:'real_estate_taxes', annual_taxes:'real_estate_taxes',
+    }
+    headers = headers.map(h => COLUMN_ALIASES[h] || h)
+    // Update rows to use new header names
+    rows = rows.map(row => {
+      const newRow: Record<string,string> = {}
+      Object.entries(row).forEach(([k, v]) => { newRow[COLUMN_ALIASES[k] || k] = v })
+      return newRow
+    })
+
     // Detect column types
     const columnTypes = headers.map(h => ({
       name: h,
