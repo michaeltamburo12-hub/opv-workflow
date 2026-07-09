@@ -1,24 +1,27 @@
 import { NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
-
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-)
 
 export async function GET() {
   try {
-    const { data, error } = await supabaseAdmin
-      .from('information_schema.tables')
-      .select('table_name')
-      .eq('table_schema', 'public')
-      .eq('table_type', 'BASE TABLE')
+    const url = process.env.NEXT_PUBLIC_SUPABASE_URL!
+    const key = process.env.SUPABASE_SERVICE_ROLE_KEY!
 
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    // Use PostgREST to query pg_tables — works with service role key
+    const res = await fetch(`${url}/rest/v1/pg_tables?select=tablename&schemaname=eq.public`, {
+      headers: {
+        'apikey': key,
+        'Authorization': `Bearer ${key}`,
+      },
+    })
 
-    const tables = (data || [])
-      .map((t: Record<string, string>) => t.table_name)
-      .filter((n: string) => !n.startsWith('_'))
+    if (!res.ok) {
+      const text = await res.text()
+      return NextResponse.json({ error: text }, { status: 500 })
+    }
+
+    const data: Array<{ tablename: string }> = await res.json()
+    const tables = data
+      .map(t => t.tablename)
+      .filter(n => !n.startsWith('_') && !n.startsWith('pg_') && n !== 'spatial_ref_sys')
       .sort()
 
     return NextResponse.json({ tables })
