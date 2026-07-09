@@ -732,7 +732,22 @@ function FileImport() {
   const [importProgress, setImportProgress] = useState('')
   const [importError, setImportError] = useState('')
   const [result, setResult] = useState<{inserted:number,failed:number,total:number,firstError?:string}|null>(null)
+  const [availableTables, setAvailableTables] = useState<string[]>([])
   const fileRef = useRef<HTMLInputElement>(null)
+
+  // Fetch table list on mount and after successful imports
+  const fetchTables = useCallback(async () => {
+    try {
+      const res = await fetch('/api/tables')
+      const data = await res.json()
+      if (data.tables) {
+        setAvailableTables(data.tables)
+        setTargetTable(t => t || data.tables[0] || '')
+      }
+    } catch {}
+  }, [])
+
+  useEffect(() => { fetchTables() }, [fetchTables])
 
   const processFile = async (file: File) => {
     setParsing(true); setParsed(null); setResult(null); setCreateSQL(''); setNewTableName(''); setIsNewTable(false)
@@ -742,7 +757,13 @@ function FileImport() {
       const data = await res.json()
       if (data.error) { alert('Parse error: ' + data.error); setParsing(false); return }
       setParsed(data)
-      if (data.existingTables?.length) setTargetTable(data.existingTables[0])
+      // Merge any newly discovered tables
+      if (data.existingTables?.length) {
+        setAvailableTables(prev => {
+          const merged = Array.from(new Set([...prev, ...data.existingTables])).sort()
+          return merged
+        })
+      }
     } catch(e) { alert('Upload failed: ' + (e as Error).message) }
     setParsing(false)
   }
@@ -788,6 +809,7 @@ function FileImport() {
         if (data.firstError && !lastError) lastError = data.firstError
       }
       setResult({inserted: totalInserted, failed: totalFailed, total: rowsToInsert.length, firstError: lastError})
+      fetchTables() // Refresh table list in case a new table was created
     } catch(e) { setImportError((e as Error).message) }
     setImporting(false); setImportProgress('')
   }
@@ -795,14 +817,32 @@ function FileImport() {
   return (
     <div>
       {!parsed&&(
-        <div onDragOver={e=>{e.preventDefault();setDragging(true)}} onDragLeave={()=>setDragging(false)} onDrop={handleDrop} onClick={()=>fileRef.current?.click()}
-          style={{border:`2px dashed ${dragging?D.blue:D.border}`,borderRadius:14,padding:'56px 32px',textAlign:'center' as const,cursor:'pointer',background:dragging?`rgba(59,130,246,0.08)`:D.surface2,transition:'all .2s',marginBottom:20}}>
-          <div style={{fontSize:48,marginBottom:16,opacity:.5}}>📂</div>
-          <div style={{fontSize:16,fontWeight:600,marginBottom:8,color:D.text}}>Drop your file here</div>
-          <div style={{fontSize:12,color:D.textSec,marginBottom:16}}>Supports CSV, Excel (.xlsx), TSV, and Apple Numbers (.numbers) files</div>
-          <Btn variant="blue" style={{padding:'10px 24px'}}>Browse Files</Btn>
-          <input ref={fileRef} type="file" accept={ACCEPTED} style={{display:'none'}} onChange={e=>{ const f=e.target.files?.[0]; if(f) processFile(f) }}/>
-        </div>
+        <>
+          {/* Table selector shown before file upload */}
+          <Card style={{marginBottom:16}}>
+            <div style={{display:'flex',gap:16,alignItems:'flex-end',flexWrap:'wrap' as const}}>
+              <div style={{flex:1,minWidth:200}}>
+                <Field label="Import into table">
+                  <Sel value={availableTables.includes(targetTable)?targetTable:''} onChange={e=>setTargetTable(e.target.value)}>
+                    {!availableTables.length&&<option value="">Loading tables...</option>}
+                    {availableTables.map(t=><option key={t} value={t}>{t}</option>)}
+                  </Sel>
+                </Field>
+              </div>
+              <div style={{fontSize:11,color:D.textMuted,paddingBottom:14}}>
+                {availableTables.length} table{availableTables.length!==1?'s':''} found
+              </div>
+            </div>
+          </Card>
+          <div onDragOver={e=>{e.preventDefault();setDragging(true)}} onDragLeave={()=>setDragging(false)} onDrop={handleDrop} onClick={()=>fileRef.current?.click()}
+            style={{border:`2px dashed ${dragging?D.blue:D.border}`,borderRadius:14,padding:'56px 32px',textAlign:'center' as const,cursor:'pointer',background:dragging?`rgba(59,130,246,0.08)`:D.surface2,transition:'all .2s',marginBottom:20}}>
+            <div style={{fontSize:48,marginBottom:16,opacity:.5}}>📂</div>
+            <div style={{fontSize:16,fontWeight:600,marginBottom:8,color:D.text}}>Drop your file here</div>
+            <div style={{fontSize:12,color:D.textSec,marginBottom:16}}>Supports CSV, Excel (.xlsx), TSV, and Apple Numbers (.numbers) files</div>
+            <Btn variant="blue" style={{padding:'10px 24px'}}>Browse Files</Btn>
+            <input ref={fileRef} type="file" accept={ACCEPTED} style={{display:'none'}} onChange={e=>{ const f=e.target.files?.[0]; if(f) processFile(f) }}/>
+          </div>
+        </>
       )}
       {parsing&&<Card style={{textAlign:'center' as const,padding:48}}>
         <div style={{width:36,height:36,border:`2px solid ${D.border}`,borderTopColor:D.blue,borderRadius:'50%',margin:'0 auto 16px',animation:'spin 1s linear infinite'}}/>
@@ -820,14 +860,11 @@ function FileImport() {
                 <div onClick={()=>{setIsNewTable(true)}} style={{flex:1,padding:'8px',borderRadius:7,cursor:'pointer',fontSize:11,fontWeight:600,textAlign:'center' as const,background:isNewTable?`rgba(16,185,129,0.12)`:'transparent',color:isNewTable?D.green:D.textMuted,border:`1px solid ${isNewTable?`${D.green}55`:D.border}`}}>New Table</div>
               </div>
               {!isNewTable&&(
-                <Field label="Select or type table name">
-                  <Sel value={parsed.existingTables.includes(targetTable)?targetTable:'__custom__'} onChange={e=>{if(e.target.value!=='__custom__')setTargetTable(e.target.value)}}>
-                    {parsed.existingTables.map(t=><option key={t} value={t}>{t}</option>)}
-                    <option value="__custom__">Type a name...</option>
+                <Field label="Select table">
+                  <Sel value={availableTables.includes(targetTable)?targetTable:''} onChange={e=>setTargetTable(e.target.value)}>
+                    {!availableTables.length&&<option value="">Loading tables...</option>}
+                    {availableTables.map(t=><option key={t} value={t}>{t}</option>)}
                   </Sel>
-                  {(!parsed.existingTables.includes(targetTable)||targetTable==='__custom__')&&(
-                    <Input placeholder="table_name" style={{marginTop:8}} value={targetTable==='__custom__'?'':targetTable} onChange={e=>setTargetTable(sanitizeTableName(e.target.value))}/>
-                  )}
                 </Field>
               )}
               {isNewTable&&(
