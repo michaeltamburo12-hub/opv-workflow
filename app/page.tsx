@@ -908,7 +908,7 @@ function DatabaseManager() {
   const [importText, setImportText] = useState('')
   const [importPreview, setImportPreview] = useState<Record<string,string>[]>([])
   const [importing, setImporting] = useState(false)
-  const [importResult, setImportResult] = useState<{ok:number,fail:number,skipped:number}|null>(null)
+  const [importResult, setImportResult] = useState<{ok:number,fail:number,skipped:number,skippedAddresses:string[]}|null>(null)
   type BrowseRow = {id:string,address?:string,city?:string,county?:string,building_sf?:number,price_per_sf?:number,sale_date?:string,asking_price?:number,status?:string,[key:string]:unknown}
   const [browseData, setBrowseData] = useState<BrowseRow[]>([])
   const [browseLoading, setBrowseLoading] = useState(false)
@@ -994,6 +994,7 @@ function DatabaseManager() {
     setImporting(true); setImportResult(null)
     const table = tab==='comps'?'industrial_sale_comps':'market_availabilities'
     let ok=0, fail=0, skipped=0
+    const skippedAddresses: string[] = []
     const BATCH=50
     for (let i=0;i<rows.length;i+=BATCH) {
       const rawBatch = rows.slice(i,i+BATCH)
@@ -1001,9 +1002,15 @@ function DatabaseManager() {
       const addresses = rawBatch.map(r=>r.address).filter(Boolean)
       const {data: existing} = await supabase.from(table).select('address').in('address', addresses)
       const existingSet = new Set((existing||[]).map((r: {address:string})=>r.address?.toLowerCase().trim()))
-      // Filter out duplicates
-      const newRows = rawBatch.filter(r => !existingSet.has((r.address||'').toLowerCase().trim()))
-      skipped += rawBatch.length - newRows.length
+      // Filter out duplicates, track which were skipped
+      const newRows = rawBatch.filter(r => {
+        if (existingSet.has((r.address||'').toLowerCase().trim())) {
+          skippedAddresses.push(r.address||'Unknown')
+          skipped++
+          return false
+        }
+        return true
+      })
       if (!newRows.length) continue
       const batch = newRows.map(r=>{
         const payload: Record<string,unknown> = {...r}
@@ -1017,7 +1024,7 @@ function DatabaseManager() {
       if (error) fail+=batch.length
       else ok+=(data?.length||0)
     }
-    setImporting(false); setImportResult({ok,fail,skipped})
+    setImporting(false); setImportResult({ok,fail,skipped,skippedAddresses})
     if (ok>0) { setImportText(''); setImportPreview([]) }
   }
   const loadBrowse = async (offset=0) => {
@@ -1153,11 +1160,19 @@ function DatabaseManager() {
             </div>
             {importResult&&(
               <div style={{marginTop:12,padding:'12px 16px',borderRadius:8,background:importResult.fail>0?`rgba(239,68,68,0.1)`:`rgba(16,185,129,0.1)`,border:`1px solid ${importResult.fail>0?`rgba(239,68,68,0.2)`:`rgba(16,185,129,0.2)`}`}}>
-                <div style={{fontSize:13,fontWeight:700,color:importResult.fail>0?D.red:D.green,marginBottom:4}}>
-                  {importResult.ok>0?`✅ ${importResult.ok} records imported successfully`:''}
-                  {importResult.skipped>0?` · ⏭️ ${importResult.skipped} skipped (already exist)`:''}
+                <div style={{fontSize:13,fontWeight:700,color:importResult.fail>0?D.red:D.green,marginBottom:importResult.skippedAddresses?.length?8:0}}>
+                  {importResult.ok>0?`✅ ${importResult.ok} record${importResult.ok!==1?'s':''} imported successfully`:''}
+                  {importResult.ok===0&&importResult.skipped>0?'⏭️ No new records — all already exist':''}
                   {importResult.fail>0?` · ⚠️ ${importResult.fail} failed`:''}
                 </div>
+                {importResult.skippedAddresses?.length>0&&(
+                  <div style={{marginTop:6}}>
+                    <div style={{fontSize:11,fontWeight:600,color:D.textSec,marginBottom:4}}>Already in database — skipped:</div>
+                    {importResult.skippedAddresses.map((addr,i)=>(
+                      <div key={i} style={{fontSize:11,color:D.textMuted,padding:'2px 0',borderBottom:`1px solid rgba(255,255,255,0.04)`}}>⏭️ {addr}</div>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
           </Card>
