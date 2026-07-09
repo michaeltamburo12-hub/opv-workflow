@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import * as XLSX from 'xlsx'
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const pdfParse = require('pdf-parse')
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -95,8 +97,67 @@ export async function POST(req: NextRequest) {
         rawHeaders.forEach((rh, i) => { row[headers[i]] = String(r[rh] ?? '') })
         return row
       })
+    } else if (fileName.endsWith('.pdf')) {
+      // PDF parsing — extract text and detect table rows
+      const pdfData = await pdfParse(buffer)
+      const text = pdfData.text
+      const lines = text.split('\n').map((l: string) => l.trim()).filter((l: string) => l.length > 0)
+
+      // Find the header row — look for a line containing known column keywords
+      const headerKeywords = ['address','building','ceiling','loading','price','date','buyer','seller','county','lot']
+      const headerIdx = lines.findIndex((l: string) => {
+        const lower = l.toLowerCase()
+        return headerKeywords.filter(k => lower.includes(k)).length >= 3
+      })
+
+      if (headerIdx === -1) {
+        // No clear header row — try to auto-detect PCRE comps format by pattern
+        // Pattern: line starts with a date (M/D/YYYY), "UNDER CONTRACT", or "IN CONTRACT"
+        const datePattern = /^(\d{1,2}\/\d{1,2}\/\d{4}|UNDER CONTRACT|IN CONTRACT)/i
+        const dataLines = lines.filter((l: string) => datePattern.test(l))
+        if (!dataLines.length) {
+          return NextResponse.json({ error: 'Could not detect table structure in PDF. Try converting to CSV or Excel first.' }, { status: 400 })
+        }
+        // Parse PCRE comps format
+        headers = ['sale_date','address','city','county','building_sf','lot_size_ac','ceiling_height','loading_docks','drive_ins','sale_price','real_estate_taxes','buyer','seller']
+        rows = dataLines.map((line: string) => {
+          const tokens = line.split(/\s{2,}|\t/).map((t: string) => t.trim()).filter((t: string) => t)
+          const row: Record<string,string> = {}
+          headers.forEach((h, i) => { row[h] = tokens[i] || '' })
+          // Clean up date
+          if (row.sale_date && /^\d{1,2}\/\d{1,2}\/\d{4}$/.test(row.sale_date)) {
+            const [m, d, y] = row.sale_date.split('/')
+            row.sale_date = `${y}-${m.padStart(2,'0')}-${d.padStart(2,'0')}`
+          } else if (/under contract|in contract/i.test(row.sale_date || '')) {
+            row.sale_type = row.sale_date
+            row.sale_date = ''
+          }
+          // Clean county
+          row.county = (row.county || '').replace(/\s*COUNTY\s*/i, '').trim()
+          // Clean building_sf
+          row.building_sf = (row.building_sf || '').replace(/[^0-9.]/g, '')
+          // Clean lot_size_ac
+          row.lot_size_ac = (row.lot_size_ac || '').replace(/[^0-9.]/g, '')
+          // Clean sale_price — take first dollar figure
+          const priceMatch = (row.sale_price || '').match(/\$?([\d,]+)/)
+          row.sale_price = priceMatch ? priceMatch[1].replace(/,/g, '') : ''
+          return row
+        })
+      } else {
+        // Has a header row — parse as whitespace-delimited table
+        const rawHeaders = lines[headerIdx].split(/\s{2,}|\t/).map((h: string) =>
+          h.trim().toLowerCase().replace(/[\s\-\/\(\)\.]+/g, '_').replace(/[^a-z0-9_]/g, '').replace(/_+/g, '_').replace(/^_|_$/g, '')
+        ).filter((h: string) => h)
+        headers = rawHeaders
+        rows = lines.slice(headerIdx + 1).map((line: string) => {
+          const vals = line.split(/\s{2,}|\t/).map((v: string) => v.trim())
+          const row: Record<string,string> = {}
+          headers.forEach((h, i) => { row[h] = vals[i] || '' })
+          return row
+        }).filter((row: Record<string,string>) => Object.values(row).some(v => v))
+      }
     } else {
-      return NextResponse.json({ error: 'Unsupported file type. Use CSV, TSV, XLSX, or XLS.' }, { status: 400 })
+      return NextResponse.json({ error: 'Unsupported file type. Use PDF, CSV, TSV, XLSX, or XLS.' }, { status: 400 })
     }
 
     // Remove empty header columns

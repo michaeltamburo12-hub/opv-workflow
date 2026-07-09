@@ -813,7 +813,7 @@ function FileImport() {
     } catch(e) { setImportError((e as Error).message) }
     setImporting(false); setImportProgress('')
   }
-  const ACCEPTED = '.csv,.tsv,.xlsx,.xls,.numbers,.txt'
+  const ACCEPTED = '.csv,.tsv,.xlsx,.xls,.numbers,.txt,.pdf'
   return (
     <div>
       {!parsed&&(
@@ -838,7 +838,7 @@ function FileImport() {
             style={{border:`2px dashed ${dragging?D.blue:D.border}`,borderRadius:14,padding:'56px 32px',textAlign:'center' as const,cursor:'pointer',background:dragging?`rgba(59,130,246,0.08)`:D.surface2,transition:'all .2s',marginBottom:20}}>
             <div style={{fontSize:48,marginBottom:16,opacity:.5}}>📂</div>
             <div style={{fontSize:16,fontWeight:600,marginBottom:8,color:D.text}}>Drop your file here</div>
-            <div style={{fontSize:12,color:D.textSec,marginBottom:16}}>Supports CSV, Excel (.xlsx), TSV, and Apple Numbers (.numbers) files</div>
+            <div style={{fontSize:12,color:D.textSec,marginBottom:16}}>Supports PDF, CSV, Excel (.xlsx), TSV, and Apple Numbers (.numbers) files</div>
             <Btn variant="blue" style={{padding:'10px 24px'}}>Browse Files</Btn>
             <input ref={fileRef} type="file" accept={ACCEPTED} style={{display:'none'}} onChange={e=>{ const f=e.target.files?.[0]; if(f) processFile(f) }}/>
           </div>
