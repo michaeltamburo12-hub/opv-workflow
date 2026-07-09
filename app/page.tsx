@@ -908,7 +908,7 @@ function DatabaseManager() {
   const [importText, setImportText] = useState('')
   const [importPreview, setImportPreview] = useState<Record<string,string>[]>([])
   const [importing, setImporting] = useState(false)
-  const [importResult, setImportResult] = useState<{ok:number,fail:number}|null>(null)
+  const [importResult, setImportResult] = useState<{ok:number,fail:number,skipped:number}|null>(null)
   type BrowseRow = {id:string,address?:string,city?:string,county?:string,building_sf?:number,price_per_sf?:number,sale_date?:string,asking_price?:number,status?:string,[key:string]:unknown}
   const [browseData, setBrowseData] = useState<BrowseRow[]>([])
   const [browseLoading, setBrowseLoading] = useState(false)
@@ -993,10 +993,19 @@ function DatabaseManager() {
     if (!rows.length) return
     setImporting(true); setImportResult(null)
     const table = tab==='comps'?'industrial_sale_comps':'market_availabilities'
-    let ok=0, fail=0
+    let ok=0, fail=0, skipped=0
     const BATCH=50
     for (let i=0;i<rows.length;i+=BATCH) {
-      const batch = rows.slice(i,i+BATCH).map(r=>{
+      const rawBatch = rows.slice(i,i+BATCH)
+      // Collect addresses in this batch and check for existing records
+      const addresses = rawBatch.map(r=>r.address).filter(Boolean)
+      const {data: existing} = await supabase.from(table).select('address').in('address', addresses)
+      const existingSet = new Set((existing||[]).map((r: {address:string})=>r.address?.toLowerCase().trim()))
+      // Filter out duplicates
+      const newRows = rawBatch.filter(r => !existingSet.has((r.address||'').toLowerCase().trim()))
+      skipped += rawBatch.length - newRows.length
+      if (!newRows.length) continue
+      const batch = newRows.map(r=>{
         const payload: Record<string,unknown> = {...r}
         numFields.forEach(k=>{ payload[k]=r[k]?parseFloat(r[k])||null:null })
         if (tab==='comps' && !r.sale_date) payload.sale_date=null
@@ -1008,7 +1017,7 @@ function DatabaseManager() {
       if (error) fail+=batch.length
       else ok+=(data?.length||0)
     }
-    setImporting(false); setImportResult({ok,fail})
+    setImporting(false); setImportResult({ok,fail,skipped})
     if (ok>0) { setImportText(''); setImportPreview([]) }
   }
   const loadBrowse = async (offset=0) => {
@@ -1146,6 +1155,7 @@ function DatabaseManager() {
               <div style={{marginTop:12,padding:'12px 16px',borderRadius:8,background:importResult.fail>0?`rgba(239,68,68,0.1)`:`rgba(16,185,129,0.1)`,border:`1px solid ${importResult.fail>0?`rgba(239,68,68,0.2)`:`rgba(16,185,129,0.2)`}`}}>
                 <div style={{fontSize:13,fontWeight:700,color:importResult.fail>0?D.red:D.green,marginBottom:4}}>
                   {importResult.ok>0?`✅ ${importResult.ok} records imported successfully`:''}
+                  {importResult.skipped>0?` · ⏭️ ${importResult.skipped} skipped (already exist)`:''}
                   {importResult.fail>0?` · ⚠️ ${importResult.fail} failed`:''}
                 </div>
               </div>
@@ -2268,8 +2278,15 @@ function OPVReport({subject,comps,leaseComps,avails,analytics,aiText,setPage}: {
   const [includeAvails, setIncludeAvails] = useState(true)
   const [includeMarketingStrategy, setIncludeMarketingStrategy] = useState(true)
   const [includePcreProfile, setIncludePcreProfile] = useState(true)
-  const [photoOverrides, setPhotoOverrides] = useState<Record<string,string>>({})
+  const [photoOverrides, setPhotoOverrides] = useState<Record<string,string>>(() => {
+    try { return JSON.parse(localStorage.getItem('opv_photo_overrides') || '{}') } catch { return {} }
+  })
   const [editingKey, setEditingKey] = useState<string|null>(null)
+
+  // Persist photo overrides to localStorage whenever they change
+  useEffect(() => {
+    try { localStorage.setItem('opv_photo_overrides', JSON.stringify(photoOverrides)) } catch {}
+  }, [photoOverrides])
 
   const setCustomPhoto = (key: string, url: string) => {
     setPhotoOverrides(p=>({...p,[key]:url}))
@@ -2982,7 +2999,7 @@ export default function App() {
             <button onClick={startNewOPV} style={{background:'transparent',border:`1px solid ${D.border}`,color:D.textMuted,fontFamily:"'Inter',sans-serif",fontSize:10,fontWeight:500,padding:'7px 12px',borderRadius:7,cursor:'pointer',width:'100%'}}>
               ＋ New OPV
             </button>
-            <div onClick={()=>setUser(null)} style={{fontSize:11,color:D.textMuted,cursor:'pointer',display:'flex',alignItems:'center',gap:7,padding:'4px',marginTop:2}}>
+            <div onClick={async()=>{ await fetch('/api/auth',{method:'DELETE'}); window.location.href='/login' }} style={{fontSize:11,color:D.textMuted,cursor:'pointer',display:'flex',alignItems:'center',gap:7,padding:'4px',marginTop:2}}>
               <span>⏻</span> Sign Out
             </div>
           </div>
