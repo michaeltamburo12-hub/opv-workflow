@@ -2777,7 +2777,7 @@ const PAGE_TITLES: Record<string,string> = {
 
 // ── APP ───────────────────────────────────────────────────────────────────────
 export default function App() {
-  const [user,setUser]=useState<{name:string,role:string,init:string}|null>(null)
+  const [user,setUser]=useState<{name:string,role:string,init:string}>({name:'Premier',role:'Commercial Broker',init:'PC'})
   const [page,setPage]=useState('dashboard')
   const [assignmentData,setAssignmentData]=useState<AssignmentData>(()=>{
     if(typeof window==='undefined') return {clientName:'',propertyAddress:'',opvType:'For Sale',dueDate:'',preparedBy:'',notes:''}
@@ -2852,7 +2852,7 @@ export default function App() {
 
   const handleSetPage=useCallback((p:string)=>setPage(p),[])
 
-  if (!user) return <><style>{css}</style><Auth onLogin={setUser}/></>
+  if (!user) return null
 
   // Step completion logic
   const completedSteps: Record<string,boolean> = {
