@@ -939,7 +939,7 @@ function FileImport() {
 
 // ── DATABASE MANAGER ──────────────────────────────────────────────────────────
 function DatabaseManager() {
-  const [tab, setTab] = useState<'comps'|'avails'>('comps')
+  const [tab, setTab] = useState<'comps'|'avails'|'pcre-sales'|'pcre-leases'>('comps')
   const [subTab, setSubTab] = useState<'add'|'import'|'file'|'browse'>('add')
   const [saving, setSaving] = useState(false)
   const [importText, setImportText] = useState('')
@@ -959,6 +959,28 @@ function DatabaseManager() {
   const [availForm, setAvailForm] = useState({...blankAvail})
   const setC = (k:string,v:string) => setCompForm(f=>({...f,[k]:v}))
   const setA = (k:string,v:string) => setAvailForm(f=>({...f,[k]:v}))
+
+  const blankPcreSale = {address:'',city:'',county:'Nassau',property_type:'Industrial',building_sf:'',sale_price_text:'',sale_date:'',buyer:'',seller:'',notes:''}
+  const blankPcreLease = {address:'',city:'',county:'Nassau',tenant:'',landlord:'',building_sf:'',lease_price:'',lease_date:'',lease_term:'',notes:''}
+  const [pcreSaleForm, setPcreSaleForm] = useState({...blankPcreSale})
+  const [pcreLeaseForm, setPcreLeaseForm] = useState({...blankPcreLease})
+  const setPS = (k:string,v:string) => setPcreSaleForm(f=>({...f,[k]:v}))
+  const setPL = (k:string,v:string) => setPcreLeaseForm(f=>({...f,[k]:v}))
+  const pcreSetupAttempted = useRef(false)
+  const [pcreSetupSQL, setPcreSetupSQL] = useState<{sales?:string,leases?:string}|null>(null)
+  const setupPcreTables = useCallback(async () => {
+    if (pcreSetupAttempted.current) return
+    pcreSetupAttempted.current = true
+    try {
+      const res = await fetch('/api/setup-pcre-tables', {method:'POST'})
+      const data = await res.json()
+      if (data.sales_sql || data.leases_sql) {
+        setPcreSetupSQL({sales: data.sales_sql, leases: data.leases_sql})
+      }
+    } catch {}
+  }, [])
+
+  const tableForTab = (t: typeof tab) => t==='comps'?'industrial_sale_comps':t==='avails'?'market_availabilities':t==='pcre-sales'?'pcre_sale_transactions':'pcre_lease_transactions'
 
   const saveComp = async () => {
     if (!compForm.address) { alert('Address is required'); return }
@@ -985,6 +1007,32 @@ function DatabaseManager() {
     if (error) { alert('Error: '+error.message); return }
     alert('✅ Availability saved to Supabase!')
     setAvailForm({...blankAvail})
+  }
+
+  const savePcreSale = async () => {
+    if (!pcreSaleForm.address) { alert('Address is required'); return }
+    setSaving(true)
+    const payload: Record<string,unknown> = {...pcreSaleForm}
+    payload.building_sf = pcreSaleForm.building_sf ? parseFloat(pcreSaleForm.building_sf)||null : null
+    if (!pcreSaleForm.sale_date) payload.sale_date = null
+    const {error} = await supabase.from('pcre_sale_transactions').insert([payload])
+    setSaving(false)
+    if (error) { alert('Error: '+error.message); return }
+    alert('✅ PCRE sale transaction saved!')
+    setPcreSaleForm({...blankPcreSale})
+  }
+
+  const savePcreLease = async () => {
+    if (!pcreLeaseForm.address) { alert('Address is required'); return }
+    setSaving(true)
+    const payload: Record<string,unknown> = {...pcreLeaseForm}
+    payload.building_sf = pcreLeaseForm.building_sf ? parseFloat(pcreLeaseForm.building_sf)||null : null
+    if (!pcreLeaseForm.lease_date) payload.lease_date = null
+    const {error} = await supabase.from('pcre_lease_transactions').insert([payload])
+    setSaving(false)
+    if (error) { alert('Error: '+error.message); return }
+    alert('✅ PCRE lease transaction saved!')
+    setPcreLeaseForm({...blankPcreLease})
   }
 
   const COLUMN_ALIASES: Record<string,string> = {
@@ -1024,12 +1072,12 @@ function DatabaseManager() {
     if (!rows.length) { alert('No data found.'); return }
     setImportPreview(rows.slice(0,5))
   }
-  const numFields = tab==='comps' ? ['building_sf','lot_size_ac','real_estate_taxes','sale_price','price_per_sf'] : ['building_sf','lot_size_ac','real_estate_taxes','asking_price','price_per_sf']
+  const numFields = tab==='comps' ? ['building_sf','lot_size_ac','real_estate_taxes','sale_price','price_per_sf'] : tab==='avails' ? ['building_sf','lot_size_ac','real_estate_taxes','asking_price','price_per_sf'] : ['building_sf']
   const runImport = async () => {
     const rows = parseCSV(importText)
     if (!rows.length) return
     setImporting(true); setImportResult(null)
-    const table = tab==='comps'?'industrial_sale_comps':'market_availabilities'
+    const table = tableForTab(tab)
     let ok=0, fail=0, skipped=0
     const skippedAddresses: string[] = []
     const BATCH=50
@@ -1066,22 +1114,22 @@ function DatabaseManager() {
   }
   const loadBrowse = async (offset=0) => {
     setBrowseLoading(true)
-    const table = tab==='comps'?'industrial_sale_comps':'market_availabilities'
+    const table = tableForTab(tab)
     const {data, count, error} = await supabase.from(table).select('*',{count:'exact'}).order('created_at',{ascending:false}).range(offset,offset+PAGE_SIZE-1)
     if (!error) { setBrowseData((data||[]) as BrowseRow[]); setBrowseCount(count||0); setBrowseOffset(offset) }
     setBrowseLoading(false)
   }
   const deleteRow = async (id: string) => {
     if (!confirm('Delete this record?')) return
-    const table = tab==='comps'?'industrial_sale_comps':'market_availabilities'
+    const table = tableForTab(tab)
     await supabase.from(table).delete().eq('id',id)
     setBrowseData((prev: BrowseRow[])=>prev.filter((r: BrowseRow)=>r.id!==id))
     setBrowseCount(c=>c-1)
   }
   const G2 = {display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}
   const G3 = {display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:12}
-  const tabBtn = (id: 'comps'|'avails', label: string) => (
-    <div onClick={()=>{setTab(id);setSubTab('add');setBrowseData([]);setImportPreview([]);setImportResult(null)}} style={{padding:'8px 20px',borderRadius:7,cursor:'pointer',fontSize:12,fontWeight:700,background:tab===id?D.blue:'transparent',color:tab===id?'#FFFFFF':D.textSec,border:`1px solid ${tab===id?'transparent':D.border}`,transition:'all .2s'}}>{label}</div>
+  const tabBtn = (id: 'comps'|'avails'|'pcre-sales'|'pcre-leases', label: string) => (
+    <div onClick={()=>{setTab(id);setSubTab('add');setBrowseData([]);setImportPreview([]);setImportResult(null);if(id==='pcre-sales'||id==='pcre-leases')setupPcreTables()}} style={{padding:'8px 20px',borderRadius:7,cursor:'pointer',fontSize:12,fontWeight:700,background:tab===id?D.blue:'transparent',color:tab===id?'#FFFFFF':D.textSec,border:`1px solid ${tab===id?'transparent':D.border}`,transition:'all .2s'}}>{label}</div>
   )
   const subTabBtn = (id: 'add'|'import'|'file'|'browse', label: string, icon: string) => (
     <div onClick={()=>{ setSubTab(id); if(id==='browse') loadBrowse(0) }} style={{padding:'7px 16px',borderRadius:7,cursor:'pointer',fontSize:11,fontWeight:600,display:'flex',alignItems:'center',gap:6,background:subTab===id?`rgba(59,130,246,0.15)`:'transparent',color:subTab===id?D.blue:D.textSec,border:`1px solid ${subTab===id?`${D.blue}55`:D.border}`,transition:'all .2s'}}><span>{icon}</span>{label}</div>
@@ -1089,9 +1137,11 @@ function DatabaseManager() {
   return (
     <div className="anim-in">
       <SectionTitle sub="Add single records, upload files, paste CSV, or browse and manage your Supabase database directly.">Database Manager</SectionTitle>
-      <div style={{display:'flex',gap:8,marginBottom:20}}>
+      <div style={{display:'flex',gap:8,marginBottom:20,flexWrap:'wrap' as const}}>
         {tabBtn('comps','📊 Sale Comps')}
         {tabBtn('avails','🏭 Availabilities')}
+        {tabBtn('pcre-sales','📋 PCRE Sales')}
+        {tabBtn('pcre-leases','📄 PCRE Leases')}
       </div>
       <div style={{display:'flex',gap:8,marginBottom:24,flexWrap:'wrap' as const}}>
         {subTabBtn('add','Add Record','➕')}
@@ -1183,6 +1233,72 @@ function DatabaseManager() {
           </div>
         </Card>
       )}
+      {subTab==='add' && tab==='pcre-sales' && (
+        <Card>
+          <SL>Add PCRE Sale Transaction</SL>
+          {pcreSetupSQL&&(
+            <div style={{marginBottom:16,padding:'12px 16px',borderRadius:8,background:'rgba(239,68,68,0.08)',border:'1px solid rgba(239,68,68,0.2)',fontSize:12,color:D.red,lineHeight:1.6}}>
+              ⚠️ Tables not yet created. Open <a href="https://supabase.com/dashboard" target="_blank" rel="noreferrer" style={{color:D.blue}}>Supabase SQL Editor</a> and run the SQL shown below, then come back and save.
+              <details style={{marginTop:8}}><summary style={{cursor:'pointer',color:D.textSec}}>View setup SQL</summary>
+                <pre style={{marginTop:8,padding:10,background:'rgba(0,0,0,0.3)',borderRadius:6,fontSize:10,overflowX:'auto' as const,whiteSpace:'pre-wrap' as const}}>{pcreSetupSQL.sales}</pre>
+              </details>
+            </div>
+          )}
+          <Field label="Property Address" full><Input placeholder="128 Spagnoli Rd, Melville, NY" value={pcreSaleForm.address} onChange={e=>setPS('address',e.target.value)}/></Field>
+          <div style={G3}>
+            <Field label="City"><Input value={pcreSaleForm.city} onChange={e=>setPS('city',e.target.value)}/></Field>
+            <Field label="County"><Sel value={pcreSaleForm.county} onChange={e=>setPS('county',e.target.value)}>{['Nassau','Suffolk'].map(c=><option key={c}>{c}</option>)}</Sel></Field>
+            <Field label="Property Type"><Sel value={pcreSaleForm.property_type} onChange={e=>setPS('property_type',e.target.value)}>{PROP_TYPES.map(t=><option key={t}>{t}</option>)}</Sel></Field>
+          </div>
+          <div style={G3}>
+            <Field label="Building SF"><Input type="number" value={pcreSaleForm.building_sf} onChange={e=>setPS('building_sf',e.target.value)}/></Field>
+            <Field label="Sale Price"><Input placeholder="$4,700,000 or Undisclosed" value={pcreSaleForm.sale_price_text} onChange={e=>setPS('sale_price_text',e.target.value)}/></Field>
+            <Field label="Sale Date"><Input type="date" value={pcreSaleForm.sale_date} onChange={e=>setPS('sale_date',e.target.value)}/></Field>
+          </div>
+          <div style={G2}>
+            <Field label="Buyer"><Input value={pcreSaleForm.buyer} onChange={e=>setPS('buyer',e.target.value)}/></Field>
+            <Field label="Seller"><Input value={pcreSaleForm.seller} onChange={e=>setPS('seller',e.target.value)}/></Field>
+          </div>
+          <Field label="Notes" full><textarea value={pcreSaleForm.notes} onChange={e=>setPS('notes',e.target.value)} placeholder="Any additional details..." style={{...inputStyle as React.CSSProperties,minHeight:70,resize:'vertical' as const}}/></Field>
+          <div style={{display:'flex',gap:10,marginTop:4}}>
+            <Btn onClick={savePcreSale} disabled={saving} style={{flex:1,padding:12}}>{saving?'Saving...':'💾 Save PCRE Sale'}</Btn>
+            <Btn variant="ghost" onClick={()=>setPcreSaleForm({...blankPcreSale})} style={{padding:'12px 20px'}}>Clear</Btn>
+          </div>
+        </Card>
+      )}
+      {subTab==='add' && tab==='pcre-leases' && (
+        <Card>
+          <SL>Add PCRE Lease Transaction</SL>
+          {pcreSetupSQL&&(
+            <div style={{marginBottom:16,padding:'12px 16px',borderRadius:8,background:'rgba(239,68,68,0.08)',border:'1px solid rgba(239,68,68,0.2)',fontSize:12,color:D.red,lineHeight:1.6}}>
+              ⚠️ Tables not yet created. Open <a href="https://supabase.com/dashboard" target="_blank" rel="noreferrer" style={{color:D.blue}}>Supabase SQL Editor</a> and run the SQL shown below, then come back and save.
+              <details style={{marginTop:8}}><summary style={{cursor:'pointer',color:D.textSec}}>View setup SQL</summary>
+                <pre style={{marginTop:8,padding:10,background:'rgba(0,0,0,0.3)',borderRadius:6,fontSize:10,overflowX:'auto' as const,whiteSpace:'pre-wrap' as const}}>{pcreSetupSQL.leases}</pre>
+              </details>
+            </div>
+          )}
+          <Field label="Property Address" full><Input placeholder="1460 N Clinton Ave, Bay Shore, NY" value={pcreLeaseForm.address} onChange={e=>setPL('address',e.target.value)}/></Field>
+          <div style={G3}>
+            <Field label="City"><Input value={pcreLeaseForm.city} onChange={e=>setPL('city',e.target.value)}/></Field>
+            <Field label="County"><Sel value={pcreLeaseForm.county} onChange={e=>setPL('county',e.target.value)}>{['Nassau','Suffolk'].map(c=><option key={c}>{c}</option>)}</Sel></Field>
+            <Field label="Building SF"><Input type="number" value={pcreLeaseForm.building_sf} onChange={e=>setPL('building_sf',e.target.value)}/></Field>
+          </div>
+          <div style={G3}>
+            <Field label="Tenant"><Input value={pcreLeaseForm.tenant} onChange={e=>setPL('tenant',e.target.value)}/></Field>
+            <Field label="Landlord"><Input value={pcreLeaseForm.landlord} onChange={e=>setPL('landlord',e.target.value)}/></Field>
+            <Field label="Lease Term"><Input placeholder="3 years" value={pcreLeaseForm.lease_term} onChange={e=>setPL('lease_term',e.target.value)}/></Field>
+          </div>
+          <div style={G2}>
+            <Field label="Lease Price"><Input placeholder="$20.00 PSF" value={pcreLeaseForm.lease_price} onChange={e=>setPL('lease_price',e.target.value)}/></Field>
+            <Field label="Lease Date"><Input type="date" value={pcreLeaseForm.lease_date} onChange={e=>setPL('lease_date',e.target.value)}/></Field>
+          </div>
+          <Field label="Notes" full><textarea value={pcreLeaseForm.notes} onChange={e=>setPL('notes',e.target.value)} placeholder="Any additional details..." style={{...inputStyle as React.CSSProperties,minHeight:70,resize:'vertical' as const}}/></Field>
+          <div style={{display:'flex',gap:10,marginTop:4}}>
+            <Btn onClick={savePcreLease} disabled={saving} style={{flex:1,padding:12}}>{saving?'Saving...':'💾 Save PCRE Lease'}</Btn>
+            <Btn variant="ghost" onClick={()=>setPcreLeaseForm({...blankPcreLease})} style={{padding:'12px 20px'}}>Clear</Btn>
+          </div>
+        </Card>
+      )}
       {subTab==='import' && (
         <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:20,alignItems:'start'}}>
           <Card>
@@ -1218,7 +1334,11 @@ function DatabaseManager() {
             <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'4px 12px'}}>
               {(tab==='comps'
                 ? ['address','city','county','zip_code','property_type','building_sf','lot_size_ac','ceiling_height','loading_docks','drive_ins','power','heat','sprinkler','sewer','zoning','real_estate_taxes','sale_price','price_per_sf','sale_date','sale_type','buyer','seller','listing_broker','submarket','notes']
-                : ['address','city','county','zip_code','property_type','building_sf','lot_size_ac','ceiling_height','loading_docks','drive_ins','power','sprinkler','sewer','zoning','real_estate_taxes','asking_price','price_per_sf','pricing_guidance','availability_type','status','listing_broker','submarket','loopnet_url','notes']
+                : tab==='avails'
+                ? ['address','city','county','zip_code','property_type','building_sf','lot_size_ac','ceiling_height','loading_docks','drive_ins','power','sprinkler','sewer','zoning','real_estate_taxes','asking_price','price_per_sf','pricing_guidance','availability_type','status','listing_broker','submarket','loopnet_url','notes']
+                : tab==='pcre-sales'
+                ? ['address','city','county','property_type','building_sf','sale_price_text','sale_date','buyer','seller','notes']
+                : ['address','city','county','tenant','landlord','building_sf','lease_price','lease_date','lease_term','notes']
               ).map(col=>(
                 <div key={col} style={{fontFamily:"'JetBrains Mono',monospace",fontSize:10,color:'#0891B2',padding:'3px 0',borderBottom:`1px solid ${D.border}`}}>{col}</div>
               ))}
@@ -1244,7 +1364,7 @@ function DatabaseManager() {
       {subTab==='browse' && (
         <Card>
           <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:16}}>
-            <SL style={{marginBottom:0}}>{browseCount.toLocaleString()} total records in {tab==='comps'?'industrial_sale_comps':'market_availabilities'}</SL>
+            <SL style={{marginBottom:0}}>{browseCount.toLocaleString()} total records in {tableForTab(tab)}</SL>
             <Btn variant="ghost" size="sm" onClick={()=>loadBrowse(browseOffset)}>↻ Refresh</Btn>
           </div>
           {browseLoading&&<div style={{textAlign:'center' as const,padding:40}}><div className="spin" style={{width:28,height:28,border:`2px solid ${D.border}`,borderTopColor:D.blue,borderRadius:'50%',margin:'0 auto 12px'}}/><p style={{color:D.textSec,fontSize:12}}>Loading...</p></div>}
@@ -1252,14 +1372,21 @@ function DatabaseManager() {
           {!browseLoading&&browseData.map((row,i)=>(
             <div key={String(row.id)} style={{padding:'12px 0',borderBottom:`1px solid ${D.border}`,display:'flex',alignItems:'flex-start',gap:12}}>
               <div style={{flex:1,minWidth:0}}>
-                <div style={{fontSize:13,fontWeight:600,marginBottom:4,color:D.text}}>{row.address||'—'}{row.city?`, ${row.city}`:''}</div>
+                <div style={{fontSize:13,fontWeight:600,marginBottom:4,color:D.text}}>
+                  {row.address||'—'}{row.city?`, ${row.city}`:''}
+                  {tab==='pcre-leases'&&row.tenant?<span style={{color:D.textSec,fontWeight:400}}>{` — ${row.tenant}`}</span>:null}
+                </div>
                 <div style={{display:'flex',gap:8,flexWrap:'wrap' as const}}>
-                  {row.building_sf&&<Tag color={D.blue}>{Number(row.building_sf).toLocaleString()} SF</Tag>}
-                  {tab==='comps'&&row.price_per_sf&&<Tag color={D.gold}>${Number(row.price_per_sf).toFixed(2)}/SF</Tag>}
-                  {tab==='comps'&&row.sale_date&&<Tag color={D.textMuted}>{fmtDate(row.sale_date)}</Tag>}
-                  {tab==='avails'&&row.asking_price&&<Tag color={D.purple}>${Number(row.asking_price).toLocaleString()}</Tag>}
-                  {tab==='avails'&&row.status&&<Tag color={row.status==='Available'?D.green:D.textMuted}>{row.status}</Tag>}
-                  <Tag color={row.county==='Nassau'?D.blue:'#0891B2'}>{row.county||'—'}</Tag>
+                  {!!row.building_sf&&<Tag color={D.blue}>{Number(row.building_sf).toLocaleString()} SF</Tag>}
+                  {tab==='comps'&&!!row.price_per_sf&&<Tag color={D.gold}>${Number(row.price_per_sf).toFixed(2)}/SF</Tag>}
+                  {tab==='comps'&&!!row.sale_date&&<Tag color={D.textMuted}>{fmtDate(String(row.sale_date))}</Tag>}
+                  {tab==='avails'&&!!row.asking_price&&<Tag color={D.purple}>${Number(row.asking_price).toLocaleString()}</Tag>}
+                  {tab==='avails'&&!!row.status&&<Tag color={row.status==='Available'?D.green:D.textMuted}>{String(row.status)}</Tag>}
+                  {tab==='pcre-sales'&&!!row.sale_price_text&&<Tag color={D.gold}>{String(row.sale_price_text)}</Tag>}
+                  {tab==='pcre-sales'&&!!row.sale_date&&<Tag color={D.textMuted}>{fmtDate(String(row.sale_date))}</Tag>}
+                  {tab==='pcre-leases'&&!!row.lease_price&&<Tag color={D.gold}>{String(row.lease_price)}</Tag>}
+                  {tab==='pcre-leases'&&!!row.lease_date&&<Tag color={D.textMuted}>{fmtDate(String(row.lease_date))}</Tag>}
+                  {!!row.county&&<Tag color={row.county==='Nassau'?D.blue:'#0891B2'}>{String(row.county)}</Tag>}
                 </div>
               </div>
               <Btn variant="danger" size="sm" onClick={()=>deleteRow(String(row.id))} style={{fontSize:10,padding:'5px 10px',flexShrink:0}}>Delete</Btn>
@@ -2340,6 +2467,37 @@ function OPVReport({subject,comps,leaseComps,avails,analytics,aiText,setPage}: {
     try { localStorage.setItem('opv_photo_overrides', JSON.stringify(photoOverrides)) } catch {}
   }, [photoOverrides])
 
+  // Live PCRE transaction data from Supabase (last 3 years)
+  type PcreRow = {address:string,city:string,property_type?:string,building_sf?:number|string,sale_price_text?:string,sale_date?:string,tenant?:string,landlord?:string,lease_price?:string,lease_date?:string}
+  const [pcreSalesData, setPcreSalesData] = useState<string[][]>([])
+  const [pcreLeaseData, setPcreLeaseData] = useState<string[][]>([])
+  const toQtr = (ds:string) => {
+    if(!ds) return '—'
+    const d = new Date(ds+'T12:00:00')
+    const q = Math.ceil((d.getMonth()+1)/3)
+    return `${['1st','2nd','3rd','4th'][q-1]} Qtr ${d.getFullYear()}`
+  }
+  useEffect(()=>{
+    const cutoff = new Date(); cutoff.setFullYear(cutoff.getFullYear()-3)
+    const cutoffStr = cutoff.toISOString().slice(0,10)
+    supabase.from('pcre_sale_transactions').select('*').gte('sale_date',cutoffStr).order('sale_date',{ascending:false})
+      .then(({data})=>{
+        if(data?.length) setPcreSalesData((data as PcreRow[]).map(r=>[
+          r.address||'—', r.city||'—', r.property_type||'Industrial',
+          r.building_sf ? Number(r.building_sf).toLocaleString() : '—',
+          r.sale_price_text||'—', toQtr(r.sale_date||'')
+        ]))
+      })
+    supabase.from('pcre_lease_transactions').select('*').gte('lease_date',cutoffStr).order('lease_date',{ascending:false})
+      .then(({data})=>{
+        if(data?.length) setPcreLeaseData((data as PcreRow[]).map(r=>[
+          r.address||'—', r.city||'—', r.tenant||'—',
+          r.building_sf ? Number(r.building_sf).toLocaleString() : '—',
+          r.lease_price||'—', toQtr(r.lease_date||'')
+        ]))
+      })
+  },[])
+
   const setCustomPhoto = (key: string, url: string) => {
     setPhotoOverrides(p=>({...p,[key]:url}))
     setEditingKey(null)
@@ -2434,7 +2592,7 @@ function OPVReport({subject,comps,leaseComps,avails,analytics,aiText,setPage}: {
   const valHighPsf = parseFloat(subject.estimatedValueHigh||'0')
   const avgPsf = analytics?.market || (comps.length ? comps.reduce((s,c)=>s+(c.price_per_sf||0),0)/comps.length : 0)
 
-  const RECENT_SALES = [
+  const FALLBACK_SALES = [
     ['128 Spagnoli Rd','Melville','Redevelopment','150,000','$21,000,000','3rd Qtr 2025'],
     ['48 Mall Dr','Commack','Industrial','20,000','$4,700,000','2nd Qtr 2025'],
     ['22 Sutton Place','Brewster','Industrial','70,000','Undisclosed','1st Qtr 2025'],
@@ -2445,7 +2603,7 @@ function OPVReport({subject,comps,leaseComps,avails,analytics,aiText,setPage}: {
     ['30 Eastern Ave','Deer Park','Industrial','11,940','$2,200,000','1st Qtr 2024'],
     ['81 Modular Ave','Commack','Industrial','30,000','$6,150,000','4th Qtr 2023'],
   ]
-  const RECENT_LEASES = [
+  const FALLBACK_LEASES = [
     ['1460 N Clinton Ave','Bay Shore','Absolute Home Contracting','2,000','$20.00 PSF','3rd Qtr 2025'],
     ['99 Seaview Blvd','Port Washington','Pyramid Flooring','9,000','$18.00 PSF','2nd Qtr 2025'],
     ['80 13th Ave','Ronkonkoma','Demil Corp','7,500','$15.00 PSF','2nd Qtr 2025'],
@@ -2455,6 +2613,8 @@ function OPVReport({subject,comps,leaseComps,avails,analytics,aiText,setPage}: {
     ['47 Mall Dr','Commack','eBizware','10,000','$17.50 Gross','2nd Qtr 2025'],
     ['1980 New Highway','Farmingdale','Top Bright Inc.','26,500','$16.00 Gross','1st Qtr 2025'],
   ]
+  const RECENT_SALES = pcreSalesData.length > 0 ? pcreSalesData : FALLBACK_SALES
+  const RECENT_LEASES = pcreLeaseData.length > 0 ? pcreLeaseData : FALLBACK_LEASES
 
   return (
     <div className="anim-in">
