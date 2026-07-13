@@ -2590,29 +2590,88 @@ function OPVReport({subject,comps,leaseComps,avails,analytics,aiText,setPage}: {
   const downloadWord = async () => {
     setDownloading(true)
     try {
-      const res = await fetch('/api/generate-opv', {
-        method: 'POST',
-        headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({
-          subject,
-          comps,
-          leaseComps: includeLeaseComps ? leaseComps : [],
-          avails: includeAvails ? avails : [],
-          analytics, aiText,
-          includeLeaseComps, includeAvails, includeMarketingStrategy, includePcreProfile,
-          photoOverrides,
-          textEdits,  // pass all manual text edits so Word doc reflects them
+      const reportEl = reportRef.current
+      if (!reportEl) { setDownloading(false); return }
+
+      // Clone and strip UI controls
+      const clone = reportEl.cloneNode(true) as HTMLElement
+      clone.querySelectorAll('.no-print, button, input, textarea').forEach(el => el.remove())
+
+      // Convert CSS grid divs → real HTML tables so Word renders them correctly
+      const convertGrids = (root: HTMLElement) => {
+        // Find all parents whose children use display:grid
+        const parents = new Set<HTMLElement>()
+        root.querySelectorAll<HTMLElement>('[style]').forEach(el => {
+          if (el.style.display === 'grid' || el.style.gridTemplateColumns) {
+            if (el.parentElement) parents.add(el.parentElement)
+          }
         })
-      })
-      if (!res.ok) { alert('Error generating report: ' + await res.text()); return }
-      const blob = await res.blob()
+        parents.forEach(parent => {
+          const gridRows = Array.from(parent.children).filter(
+            c => (c as HTMLElement).style?.display === 'grid' || (c as HTMLElement).style?.gridTemplateColumns
+          ) as HTMLElement[]
+          if (!gridRows.length) return
+          const table = document.createElement('table')
+          table.setAttribute('border', '1')
+          table.style.cssText = 'width:100%;border-collapse:collapse;margin-bottom:2px;'
+          gridRows.forEach(row => {
+            const tr = document.createElement('tr')
+            Array.from(row.children).forEach(cell => {
+              const td = document.createElement('td')
+              const c = cell as HTMLElement
+              td.innerHTML = c.innerHTML
+              td.style.padding = '6px 10px'
+              td.style.fontSize = '11px'
+              td.style.border = '1px solid #ccc'
+              td.style.verticalAlign = 'middle'
+              if (c.style.background) td.style.background = c.style.background
+              if (c.style.backgroundColor) td.style.backgroundColor = c.style.backgroundColor
+              if (c.style.color) td.style.color = c.style.color
+              if (c.style.fontWeight) td.style.fontWeight = c.style.fontWeight
+              if (c.style.textAlign) td.style.textAlign = c.style.textAlign
+              tr.appendChild(td)
+            })
+            table.appendChild(tr)
+          })
+          // Replace grid rows with the table
+          const first = gridRows[0]
+          parent.insertBefore(table, first)
+          gridRows.forEach(r => parent.removeChild(r))
+        })
+        // Handle any remaining lone grid elements
+        root.querySelectorAll<HTMLElement>('[style]').forEach(el => {
+          if (el.style.display === 'grid' || el.style.gridTemplateColumns) {
+            el.style.display = 'block'
+          }
+        })
+      }
+      convertGrids(clone)
+
+      const wordHTML = `<html xmlns:o='urn:schemas-microsoft-com:office:office'
+xmlns:w='urn:schemas-microsoft-com:office:word'
+xmlns='http://www.w3.org/TR/REC-html40'>
+<head><meta charset="utf-8">
+<!--[if gte mso 9]><xml><w:WordDocument><w:View>Print</w:View></w:WordDocument></xml><![endif]-->
+<style>
+@page WordSection1{size:8.5in 11.0in;margin:1.0in 1.0in 1.0in 1.0in;}
+div.WordSection1{page:WordSection1;}
+html,body{background:#fff!important;color:#1a1a1a!important;font-family:Arial,sans-serif;font-size:13px;line-height:1.7;margin:0;padding:0;}
+table{border-collapse:collapse;width:100%;}
+td,th{padding:6px 10px;border:1px solid #ccc;font-size:11px;vertical-align:middle;}
+img{max-width:100%;height:auto;}
+*{background-color:transparent;}
+</style></head>
+<body style="background:#fff;color:#1a1a1a;">
+<div class="WordSection1">${clone.innerHTML}</div>
+</body></html>`
+
+      const blob = new Blob(['﻿', wordHTML], { type: 'application/msword' })
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
-      a.download = res.headers.get('Content-Disposition')?.match(/filename="(.+)"/)?.[1] || 'OPV_Report.docx'
-      document.body.appendChild(a)
-      a.click()
-      document.body.removeChild(a)
+      const addr = (subject?.address || 'OPV').replace(/[^a-zA-Z0-9\s]/g,'').trim().replace(/\s+/g,'_')
+      a.download = `OPV_${addr}.doc`
+      document.body.appendChild(a); a.click(); document.body.removeChild(a)
       URL.revokeObjectURL(url)
     } catch(e) { alert('Download failed: ' + (e as Error).message) }
     setDownloading(false)
