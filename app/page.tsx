@@ -2698,6 +2698,61 @@ img{max-width:100%;height:auto;}
     setDownloading(false)
   }
 
+  const downloadPDF = async () => {
+    setDownloading(true)
+    try {
+      const reportEl = reportRef.current
+      if (!reportEl) { setDownloading(false); return }
+
+      const clone = reportEl.cloneNode(true) as HTMLElement
+      clone.querySelectorAll('.no-print, button, input, textarea').forEach(el => el.remove())
+
+      // Embed images as base64
+      const imgs = Array.from(clone.querySelectorAll('img'))
+      await Promise.all(imgs.map(async img => {
+        try {
+          const src = img.getAttribute('src')
+          if (!src || src.startsWith('data:')) return
+          const fetchUrl = src.startsWith('http') ? `/api/proxy-image?url=${encodeURIComponent(src)}` : src
+          const res = await fetch(fetchUrl)
+          if (!res.ok) return
+          const blob = await res.blob()
+          const b64 = await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader()
+            reader.onload = () => resolve(reader.result as string)
+            reader.onerror = reject
+            reader.readAsDataURL(blob)
+          })
+          img.setAttribute('src', b64)
+        } catch { /* leave as-is */ }
+      }))
+
+      const addr = (subject?.address || 'OPV').replace(/[^a-zA-Z0-9\s]/g,'').trim().replace(/\s+/g,'_')
+      const html = `<!DOCTYPE html><html><head><meta charset="utf-8">
+<title>OPV_${addr}</title>
+<style>
+  @page{size:8.5in 11in;margin:0.9in 1in;}
+  *{box-sizing:border-box}
+  html,body{background:#fff;color:#1a1a1a;font-family:Arial,sans-serif;font-size:13px;line-height:1.7;margin:0;padding:0}
+  img{max-width:100%;height:auto}
+  table{border-collapse:collapse;width:100%}
+  td,th{padding:6px 10px;border:1px solid #ccc;font-size:11px;vertical-align:middle}
+  [style*="display: grid"],[style*="display:grid"]{display:flex!important;flex-wrap:wrap}
+  @media print{body{margin:0}}
+</style></head>
+<body>${clone.innerHTML}</body></html>`
+
+      const w = window.open('', '_blank')
+      if (!w) { alert('Allow popups for PDF export.'); setDownloading(false); return }
+      w.document.write(html)
+      w.document.close()
+      w.focus()
+      // Wait for images to render then print
+      setTimeout(() => { w.print() }, 800)
+    } catch(e) { alert('PDF export failed: ' + (e as Error).message) }
+    setDownloading(false)
+  }
+
   if (!subject) return (
     <div className="anim-in">
       <Card style={{textAlign:'center' as const,padding:'56px 20px'}}><p style={{color:D.textSec,marginBottom:16}}>Complete the workflow before generating the OPV report.</p><Btn onClick={()=>setPage('subject')}>Start with Subject Property →</Btn></Card>
@@ -2785,7 +2840,9 @@ img{max-width:100%;height:auto;}
             <Btn onClick={downloadWord} disabled={downloading} style={{padding:'9px 20px',fontSize:12,background:`rgba(217,119,6,0.12)`,color:D.gold,border:`1px solid rgba(217,119,6,0.3)`}}>
               {downloading ? 'Generating...' : '📄 Download Word'}
             </Btn>
-            <Btn variant="ghost" onClick={()=>window.print()} style={{padding:'9px 16px',fontSize:12}}>🖨 Print / PDF</Btn>
+            <Btn onClick={downloadPDF} disabled={downloading} style={{padding:'9px 20px',fontSize:12,background:`rgba(239,68,68,0.10)`,color:'#EF4444',border:`1px solid rgba(239,68,68,0.3)`}}>
+              {downloading ? 'Generating...' : '📕 Download PDF'}
+            </Btn>
           </div>
         </div>
         <Card style={{padding:'14px 18px'}}>
@@ -3272,6 +3329,16 @@ export default function App() {
     setSaving(false)
   }
 
+  // Auto-save every 2 minutes when a subject property exists
+  const saveReportRef = useRef(saveReport)
+  useEffect(() => { saveReportRef.current = saveReport })
+  useEffect(() => {
+    const id = setInterval(() => {
+      if (saveReportRef.current) saveReportRef.current(true)
+    }, 120000)
+    return () => clearInterval(id)
+  }, [])
+
   const restoreOPV=async(id:string)=>{
     try {
       const res = await fetch(`/api/opv-history?id=${id}`,{method:'PATCH'})
@@ -3376,7 +3443,7 @@ export default function App() {
               {saving?<><span className="spin" style={{display:'inline-block',width:10,height:10,border:'1.5px solid rgba(255,255,255,0.3)',borderTopColor:'#fff',borderRadius:'50%'}}/>Saving...</>:'💾 Save Progress'}
             </button>
             {lastSaved&&<div style={{fontSize:9,color:D.textMuted,textAlign:'center' as const,lineHeight:1.4}}>
-              Saved {lastSaved.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'})}
+              ✓ Auto-saved {lastSaved.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'})}
               {savedOPVId&&<span> · #{savedOPVId.slice(0,6)}</span>}
             </div>}
             <button onClick={()=>{setShowSavedPanel(true);loadSavedOPVs()}} style={{background:`rgba(255,255,255,0.04)`,border:`1px solid ${D.border}`,color:D.textSec,fontFamily:"'Inter',sans-serif",fontSize:11,fontWeight:500,padding:'8px 12px',borderRadius:7,cursor:'pointer',width:'100%'}}>
