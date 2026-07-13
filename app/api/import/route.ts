@@ -98,115 +98,118 @@ export async function POST(req: NextRequest) {
         return row
       })
     } else if (fileName.endsWith('.pdf')) {
-      // PDF parsing — regex-based field extraction, no header dependency
       const pdfData = await pdfParse(buffer)
       const text = pdfData.text
 
-      // Group all lines, merge continuation lines into property blocks
-      const allLines = text.split('\n').map((l: string) => l.trim())
+      // ── PARSER A: "date-per-row" format (MM/DD/YYYY or UNDER/IN CONTRACT at row start) ──
       const rowPattern = /^(\d{1,2}\/\d{1,2}\/\d{4}|UNDER CONTRACT|IN CONTRACT)/i
-      const skipPattern = /^(SALE COMPS|AVAILABILITIES|Transaction Date|IF:|Q[1-4]|::|Page \d)/i
-
-      const blocks: string[] = []
+      const skipPatternA = /^(SALE COMPS|AVAILABILITIES|Transaction Date|IF:|Q[1-4]|::|Page \d)/i
+      const blocksA: string[] = []
       let cur = ''
-      for (const line of allLines) {
-        if (!line || skipPattern.test(line)) continue
-        if (rowPattern.test(line)) {
-          if (cur) blocks.push(cur)
-          cur = line
-        } else if (cur) {
-          cur += ' ' + line
+      for (const line of text.split('\n').map((l: string) => l.trim())) {
+        if (!line || skipPatternA.test(line)) continue
+        if (rowPattern.test(line)) { if (cur) blocksA.push(cur); cur = line }
+        else if (cur) cur += ' ' + line
+      }
+      if (cur) blocksA.push(cur)
+
+      if (blocksA.length > 0) {
+        // Use existing field-extraction logic for this format
+        headers = ['sale_date','address','city','county','building_sf','lot_size_ac','ceiling_height','loading_docks','drive_ins','sale_price','real_estate_taxes','buyer','sale_type']
+        rows = blocksA.map((block: string) => {
+          const row: Record<string,string> = {}
+          const dateM = block.match(/^(\d{1,2}\/\d{1,2}\/\d{4})/)
+          if (dateM) { const [m,d,y] = dateM[1].split('/'); row.sale_date = `${y}-${m.padStart(2,'0')}-${d.padStart(2,'0')}`; block = block.slice(dateM[0].length).trim() }
+          else if (/^UNDER CONTRACT/i.test(block)) { row.sale_type = 'Under Contract'; block = block.replace(/^UNDER CONTRACT\s*/i,'') }
+          else if (/^IN CONTRACT/i.test(block)) { row.sale_type = 'In Contract'; block = block.replace(/^IN CONTRACT\s*/i,'') }
+          const countyM = block.match(/\b(NASSAU|SUFFOLK)\s*COUNTY\b/i)
+          if (countyM) {
+            row.county = countyM[1][0].toUpperCase() + countyM[1].slice(1).toLowerCase()
+            const idx = block.toUpperCase().indexOf(countyM[0].toUpperCase())
+            const before = block.slice(0,idx).trim(); const after = block.slice(idx+countyM[0].length).trim()
+            const parts = before.split(/\s+/)
+            const streetSuffix = /\b(ST|AVE|BLVD|DR|RD|CT|PL|PLZ|WAY|LN|CIR|TER|PKWY|HWY)\b/i
+            let splitAt = -1; for (let i=parts.length-1;i>=0;i--) { if (streetSuffix.test(parts[i])){splitAt=i;break} }
+            if (splitAt>=0&&splitAt<parts.length-1) { row.address=parts.slice(0,splitAt+1).join(' '); row.city=parts.slice(splitAt+1).join(' ') }
+            else { row.address=parts.slice(0,-2).join(' '); row.city=parts.slice(-2).join(' ') }
+            block = after
+          }
+          const sfM = block.match(/(\d[\d,]*)\s*SF\b/i); if (sfM) row.building_sf = sfM[1].replace(/,/g,'')
+          const lotM = block.match(/([\d.]+)\s*ACRES?\b/i); if (lotM) row.lot_size_ac = lotM[1]
+          const ceilM = block.match(/(\d+[''][^']*''?|\d+'\s*(?:to|-)\s*\d+'|\bTBD\b)/i); if (ceilM&&!/^\d+$/.test(ceilM[1])) row.ceiling_height=ceilM[1].trim()
+          const priceMatches = [...block.matchAll(/\$\s*([\d,]+)(?!\s*PSF)/gi)]
+          if (priceMatches.length) { const amounts=priceMatches.map(m=>parseInt(m[1].replace(/,/g,''),10)).filter(n=>!isNaN(n)); if (amounts.length) row.sale_price=String(Math.max(...amounts)) }
+          const taxM = block.match(/\$\s*([\d,]+(?:\.\d+)?)\s*\(?\$?[\d.]+\s*PSF\)?/i); if (taxM) row.real_estate_taxes=taxM[1].replace(/,/g,'')
+          const afterSF = block.replace(/[\d,]+\s*SF\b/i,'').replace(/([\d.]+)\s*ACRES?\b/i,'')
+          const numTokens = afterSF.match(/\b(\d+)\b/g)||[]; if (numTokens[0]) row.loading_docks=numTokens[0]; if (numTokens[1]&&numTokens[1]!=='NONE') row.drive_ins=numTokens[1]
+          const buyerM = block.match(/([A-Z][A-Za-z'.&,\s]+(?:LLC|Inc|Corp|Co|Ltd|360|Solutions|Industries|Technologies|Construction|Meats|Realty|Holdings?|Distributors?)\.?)\s*$/i); if (buyerM) row.buyer=buyerM[1].trim()
+          return row
+        }).filter((row: Record<string,string>) => row.address || row.sale_price)
+      } else {
+        // ── PARSER B: PCRE column-table format ──
+        // The PDF is a multi-column table; pdfminer reads columns separately rather than row-by-row.
+        // Strategy: classify every token, collect each type in order, then zip by index.
+        const SKIP = /^(pcre|property address|property\s+type|building size|sale\s+price|transaction date|city|page \d|\d{3}[-.]\d{3}|\d{3}\.\d{3}|www\.|http|tel\b|fax\b)/i
+        const SKIP_CHARS = /[│|@]/
+        const QUARTER_DATE = /^(\d+)(st|nd|rd|th)\s+quarter\s+(\d{4})/i
+        const PRICE_PAT = /^\$[\d,]+(\.\d+)?$|^undisclosed$/i
+        const SF_PAT = /^[\d,]+$|^\d+\s*acres?$/i
+        const TYPE_PAT = /^(industrial|investment|redevelopment|flex|warehouse|manufacturing|distribution|commercial|retail|office|medical)$/i
+        const LEASE_PAT = /^\$[\d.,]+\s*(psf|gross|nnn|net|modified|mg)?$/i
+
+        const quarterToIso = (s: string) => {
+          const m = s.match(/(\d+)\w+\s+quarter\s+(\d{4})/i)
+          if (!m) return ''
+          const qMap: Record<string,string> = {'1':'01','2':'04','3':'07','4':'10'}
+          return `${m[2]}-${qMap[m[1]] || '01'}-01`
+        }
+        const cleanSf = (s: string) => { const n = s.replace(/,/g,'').replace(/\s*acres?/i,'').trim(); return isNaN(Number(n)) ? '' : n }
+        const toTitle = (s: string) => s.split(' ').map((w:string)=>w[0]?.toUpperCase()+(w.slice(1).toLowerCase()||'')).join(' ')
+
+        const tokens = text.split('\n').map((l:string)=>l.trim()).filter((l:string)=>l && !SKIP.test(l) && !SKIP_CHARS.test(l))
+
+        const addrs: string[] = [], cities: string[] = [], types: string[] = []
+        const sfs: string[] = [], prices: string[] = [], dates: string[] = [], leasePrices: string[] = []
+
+        // "last" tracks the most recent classified token type so we know when an
+        // unclassified token is a city (it always follows an address token)
+        let last = ''
+
+        for (const tok of tokens) {
+          if (QUARTER_DATE.test(tok)) { dates.push(quarterToIso(tok)); last='date' }
+          else if (PRICE_PAT.test(tok)) { prices.push(tok); last='price' }
+          else if (LEASE_PAT.test(tok) && !PRICE_PAT.test(tok)) { leasePrices.push(tok); last='price' }
+          else if (SF_PAT.test(tok)) { sfs.push(cleanSf(tok)); last='sf' }
+          else if (TYPE_PAT.test(tok)) { types.push(toTitle(tok)); last='type' }
+          else if (/^\d[\d-]*\s+\S/.test(tok)) { addrs.push(toTitle(tok)); last='addr' }
+          else if (last === 'addr') { cities.push(toTitle(tok)); last='city' }
+          // else: noise / header fragment — skip
+        }
+
+        // Detect whether this is a sales or lease PDF
+        const isLease = leasePrices.length > prices.length
+        const finalPrices = isLease ? leasePrices : prices
+        const n = Math.min(addrs.length, finalPrices.length, dates.length)
+
+        if (n === 0) {
+          return NextResponse.json({ error: 'Could not parse PDF. Please convert to CSV and use the Paste CSV option instead.' }, { status: 400 })
+        }
+
+        if (isLease) {
+          headers = ['address','city','building_sf','lease_price','lease_date']
+          rows = Array.from({length:n},(_,i) => ({
+            address: addrs[i]||'', city: cities[i]||'',
+            building_sf: sfs[i]||'', lease_price: finalPrices[i]||'', lease_date: dates[i]||''
+          }))
+        } else {
+          headers = ['address','city','property_type','building_sf','sale_price_text','sale_date']
+          rows = Array.from({length:n},(_,i) => ({
+            address: addrs[i]||'', city: cities[i]||'',
+            property_type: types[i]||'Industrial', building_sf: sfs[i]||'',
+            sale_price_text: finalPrices[i]||'', sale_date: dates[i]||''
+          }))
         }
       }
-      if (cur) blocks.push(cur)
-
-      if (!blocks.length) {
-        return NextResponse.json({ error: 'Could not detect property rows in PDF. Each row must start with a date, "UNDER CONTRACT", or "IN CONTRACT".' }, { status: 400 })
-      }
-
-      headers = ['sale_date','address','city','county','building_sf','lot_size_ac','ceiling_height','loading_docks','drive_ins','sale_price','real_estate_taxes','buyer','seller','sale_type']
-
-      rows = blocks.map((block: string) => {
-        const row: Record<string,string> = {}
-
-        // Sale date / status
-        const dateM = block.match(/^(\d{1,2}\/\d{1,2}\/\d{4})/)
-        if (dateM) {
-          const [m,d,y] = dateM[1].split('/')
-          row.sale_date = `${y}-${m.padStart(2,'0')}-${d.padStart(2,'0')}`
-          block = block.slice(dateM[0].length).trim()
-        } else if (/^UNDER CONTRACT/i.test(block)) {
-          row.sale_type = 'Under Contract'
-          block = block.replace(/^UNDER CONTRACT\s*/i,'')
-        } else if (/^IN CONTRACT/i.test(block)) {
-          row.sale_type = 'In Contract'
-          block = block.replace(/^IN CONTRACT\s*/i,'')
-        }
-
-        // County (NASSAU or SUFFOLK)
-        const countyM = block.match(/\b(NASSAU|SUFFOLK)\s*COUNTY\b/i)
-        if (countyM) {
-          row.county = countyM[1].charAt(0).toUpperCase() + countyM[1].slice(1).toLowerCase()
-          const idx = block.toUpperCase().indexOf(countyM[0].toUpperCase())
-          const before = block.slice(0, idx).trim()
-          const after  = block.slice(idx + countyM[0].length).trim()
-          // Address + city are before county — city is typically last 1-2 words
-          const parts = before.split(/\s+/)
-          // Find where address ends: look for street suffix
-          const streetSuffix = /\b(ST|AVE|BLVD|DR|RD|CT|PL|PLZ|WAY|LN|CIR|TER|PKWY|HWY)\b/i
-          let splitAt = -1
-          for (let i = parts.length - 1; i >= 0; i--) {
-            if (streetSuffix.test(parts[i])) { splitAt = i; break }
-          }
-          if (splitAt >= 0 && splitAt < parts.length - 1) {
-            row.address = parts.slice(0, splitAt + 1).join(' ')
-            row.city = parts.slice(splitAt + 1).join(' ')
-          } else {
-            // Fallback: last 2 words = city
-            row.address = parts.slice(0, -2).join(' ')
-            row.city = parts.slice(-2).join(' ')
-          }
-          block = after
-        }
-
-        // Building SF
-        const sfM = block.match(/(\d[\d,]*)\s*SF\b/i)
-        if (sfM) row.building_sf = sfM[1].replace(/,/g,'')
-
-        // Lot size
-        const lotM = block.match(/([\d.]+)\s*ACRES?\b/i)
-        if (lotM) row.lot_size_ac = lotM[1]
-
-        // Ceiling height (e.g. 14', 15'6'', 16' to 22', TBD)
-        const ceilM = block.match(/(\d+[''][^']*''?|\d+'\s*(?:to|-)\s*\d+'|\bTBD\b)/i)
-        if (ceilM && !/^\d+$/.test(ceilM[1])) row.ceiling_height = ceilM[1].trim()
-
-        // Sale price — largest dollar amount in block (not PSF)
-        const prices = [...block.matchAll(/\$\s*([\d,]+)(?!\s*PSF)/gi)]
-        if (prices.length) {
-          const amounts = prices.map(m => parseInt(m[1].replace(/,/g,''),10)).filter(n=>!isNaN(n))
-          if (amounts.length) row.sale_price = String(Math.max(...amounts))
-        }
-
-        // Taxes — look for dollar amount followed by ($ X PSF) pattern or standalone $XX,XXX
-        const taxM = block.match(/\$\s*([\d,]+(?:\.\d+)?)\s*\(?\$?[\d.]+\s*PSF\)?/i)
-        if (taxM) row.real_estate_taxes = taxM[1].replace(/,/g,'')
-
-        // Loading docks — first standalone number after lot/ceiling area
-        const afterSF = block.replace(/[\d,]+\s*SF\b/i,'').replace(/([\d.]+)\s*ACRES?\b/i,'')
-        const numTokens = afterSF.match(/\b(\d+)\b/g) || []
-        if (numTokens[0]) row.loading_docks = numTokens[0]
-        if (numTokens[1] && numTokens[1] !== 'NONE') row.drive_ins = numTokens[1]
-
-        // Buyer — last capitalized name-like token(s) at end of block
-        const buyerM = block.match(/([A-Z][A-Za-z'.&,\s]+(?:LLC|Inc|Corp|Co|Ltd|360|Solutions|Industries|Technologies|Construction|Meats|Realty|Holdings?|Distributors?)\.?)\s*$/i)
-        if (buyerM) row.buyer = buyerM[1].trim()
-
-        return row
-      }).filter((row: Record<string,string>) => row.address || row.sale_price)
-
-      // Deduplicate headers to what we actually use
-      headers = ['sale_date','address','city','county','building_sf','lot_size_ac','ceiling_height','loading_docks','drive_ins','sale_price','real_estate_taxes','buyer','sale_type']
     } else {
       return NextResponse.json({ error: 'Unsupported file type. Use PDF, CSV, TSV, XLSX, or XLS.' }, { status: 400 })
     }
