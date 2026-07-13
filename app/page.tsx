@@ -2587,85 +2587,96 @@ function OPVReport({subject,comps,leaseComps,avails,analytics,aiText,setPage}: {
     />
   )
 
+  // ── Shared export helpers ────────────────────────────────────────────────────
+  const embedImages = async (root: HTMLElement) => {
+    const imgs = Array.from(root.querySelectorAll('img'))
+    await Promise.all(imgs.map(async img => {
+      try {
+        const src = img.getAttribute('src')
+        if (!src || src.startsWith('data:')) return
+        const fetchUrl = src.startsWith('http') ? `/api/proxy-image?url=${encodeURIComponent(src)}` : src
+        const res = await fetch(fetchUrl)
+        if (!res.ok) return
+        const blob = await res.blob()
+        const b64 = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader()
+          reader.onload = () => resolve(reader.result as string)
+          reader.onerror = reject
+          reader.readAsDataURL(blob)
+        })
+        img.setAttribute('src', b64)
+      } catch { /* leave as-is */ }
+    }))
+  }
+
+  const convertGrids = (root: HTMLElement) => {
+    const parents = new Set<HTMLElement>()
+    root.querySelectorAll<HTMLElement>('[style]').forEach(el => {
+      if (el.style.display === 'grid' || el.style.gridTemplateColumns) {
+        if (el.parentElement) parents.add(el.parentElement)
+      }
+    })
+    parents.forEach(parent => {
+      const gridRows = Array.from(parent.children).filter(
+        c => (c as HTMLElement).style?.display === 'grid' || (c as HTMLElement).style?.gridTemplateColumns
+      ) as HTMLElement[]
+      if (!gridRows.length) return
+      const table = document.createElement('table')
+      table.setAttribute('border', '1')
+      table.style.cssText = 'width:100%;border-collapse:collapse;margin-bottom:2px;'
+      // First pass: determine max column count for consistent widths
+      const colCounts = gridRows.map(r => r.children.length)
+      const maxCols = Math.max(...colCounts)
+      gridRows.forEach(row => {
+        const tr = document.createElement('tr')
+        const cells = Array.from(row.children)
+        cells.forEach((cell, i) => {
+          const td = document.createElement('td')
+          const c = cell as HTMLElement
+          td.innerHTML = c.innerHTML
+          td.style.padding = '6px 10px'
+          td.style.fontSize = '11px'
+          td.style.border = '1px solid #ccc'
+          td.style.verticalAlign = 'middle'
+          // Lock label column width to 200px for consistent label/value split
+          if (i === 0 && maxCols === 2) td.style.width = '200px'
+          if (c.style.background) td.style.background = c.style.background
+          if (c.style.backgroundColor) td.style.backgroundColor = c.style.backgroundColor
+          if (c.style.color) td.style.color = c.style.color
+          if (c.style.fontWeight) td.style.fontWeight = c.style.fontWeight
+          if (c.style.textAlign) td.style.textAlign = c.style.textAlign
+          // Span remaining cols if this row has fewer cells than max
+          if (i === cells.length - 1 && cells.length < maxCols) {
+            td.setAttribute('colspan', String(maxCols - cells.length + 1))
+          }
+          tr.appendChild(td)
+        })
+        table.appendChild(tr)
+      })
+      const first = gridRows[0]
+      parent.insertBefore(table, first)
+      gridRows.forEach(r => parent.removeChild(r))
+    })
+    root.querySelectorAll<HTMLElement>('[style]').forEach(el => {
+      if (el.style.display === 'grid' || el.style.gridTemplateColumns) el.style.display = 'block'
+    })
+  }
+
+  const cloneReport = () => {
+    const reportEl = reportRef.current
+    if (!reportEl) return null
+    const clone = reportEl.cloneNode(true) as HTMLElement
+    clone.querySelectorAll('.no-print, button, input, textarea').forEach(el => el.remove())
+    return clone
+  }
+  // ─────────────────────────────────────────────────────────────────────────────
+
   const downloadWord = async () => {
     setDownloading(true)
     try {
-      const reportEl = reportRef.current
-      if (!reportEl) { setDownloading(false); return }
-
-      // Clone and strip UI controls
-      const clone = reportEl.cloneNode(true) as HTMLElement
-      clone.querySelectorAll('.no-print, button, input, textarea').forEach(el => el.remove())
-
-      // Embed all images as base64 so Word can display them without internet access
-      const imgs = Array.from(clone.querySelectorAll('img'))
-      await Promise.all(imgs.map(async img => {
-        try {
-          const src = img.getAttribute('src')
-          if (!src || src.startsWith('data:')) return
-          // Route external URLs through the proxy to avoid CORS
-          const fetchUrl = src.startsWith('http') ? `/api/proxy-image?url=${encodeURIComponent(src)}` : src
-          const res = await fetch(fetchUrl)
-          if (!res.ok) return
-          const blob = await res.blob()
-          const b64 = await new Promise<string>((resolve, reject) => {
-            const reader = new FileReader()
-            reader.onload = () => resolve(reader.result as string)
-            reader.onerror = reject
-            reader.readAsDataURL(blob)
-          })
-          img.setAttribute('src', b64)
-        } catch { /* leave src as-is on failure */ }
-      }))
-
-      // Convert CSS grid divs → real HTML tables so Word renders them correctly
-      const convertGrids = (root: HTMLElement) => {
-        // Find all parents whose children use display:grid
-        const parents = new Set<HTMLElement>()
-        root.querySelectorAll<HTMLElement>('[style]').forEach(el => {
-          if (el.style.display === 'grid' || el.style.gridTemplateColumns) {
-            if (el.parentElement) parents.add(el.parentElement)
-          }
-        })
-        parents.forEach(parent => {
-          const gridRows = Array.from(parent.children).filter(
-            c => (c as HTMLElement).style?.display === 'grid' || (c as HTMLElement).style?.gridTemplateColumns
-          ) as HTMLElement[]
-          if (!gridRows.length) return
-          const table = document.createElement('table')
-          table.setAttribute('border', '1')
-          table.style.cssText = 'width:100%;border-collapse:collapse;margin-bottom:2px;'
-          gridRows.forEach(row => {
-            const tr = document.createElement('tr')
-            Array.from(row.children).forEach(cell => {
-              const td = document.createElement('td')
-              const c = cell as HTMLElement
-              td.innerHTML = c.innerHTML
-              td.style.padding = '6px 10px'
-              td.style.fontSize = '11px'
-              td.style.border = '1px solid #ccc'
-              td.style.verticalAlign = 'middle'
-              if (c.style.background) td.style.background = c.style.background
-              if (c.style.backgroundColor) td.style.backgroundColor = c.style.backgroundColor
-              if (c.style.color) td.style.color = c.style.color
-              if (c.style.fontWeight) td.style.fontWeight = c.style.fontWeight
-              if (c.style.textAlign) td.style.textAlign = c.style.textAlign
-              tr.appendChild(td)
-            })
-            table.appendChild(tr)
-          })
-          // Replace grid rows with the table
-          const first = gridRows[0]
-          parent.insertBefore(table, first)
-          gridRows.forEach(r => parent.removeChild(r))
-        })
-        // Handle any remaining lone grid elements
-        root.querySelectorAll<HTMLElement>('[style]').forEach(el => {
-          if (el.style.display === 'grid' || el.style.gridTemplateColumns) {
-            el.style.display = 'block'
-          }
-        })
-      }
+      const clone = cloneReport()
+      if (!clone) { setDownloading(false); return }
+      await embedImages(clone)
       convertGrids(clone)
 
       const wordHTML = `<html xmlns:o='urn:schemas-microsoft-com:office:office'
@@ -2701,31 +2712,10 @@ img{max-width:100%;height:auto;}
   const downloadPDF = async () => {
     setDownloading(true)
     try {
-      const reportEl = reportRef.current
-      if (!reportEl) { setDownloading(false); return }
-
-      const clone = reportEl.cloneNode(true) as HTMLElement
-      clone.querySelectorAll('.no-print, button, input, textarea').forEach(el => el.remove())
-
-      // Embed images as base64
-      const imgs = Array.from(clone.querySelectorAll('img'))
-      await Promise.all(imgs.map(async img => {
-        try {
-          const src = img.getAttribute('src')
-          if (!src || src.startsWith('data:')) return
-          const fetchUrl = src.startsWith('http') ? `/api/proxy-image?url=${encodeURIComponent(src)}` : src
-          const res = await fetch(fetchUrl)
-          if (!res.ok) return
-          const blob = await res.blob()
-          const b64 = await new Promise<string>((resolve, reject) => {
-            const reader = new FileReader()
-            reader.onload = () => resolve(reader.result as string)
-            reader.onerror = reject
-            reader.readAsDataURL(blob)
-          })
-          img.setAttribute('src', b64)
-        } catch { /* leave as-is */ }
-      }))
+      const clone = cloneReport()
+      if (!clone) { setDownloading(false); return }
+      await embedImages(clone)
+      convertGrids(clone)
 
       const addr = (subject?.address || 'OPV').replace(/[^a-zA-Z0-9\s]/g,'').trim().replace(/\s+/g,'_')
       const html = `<!DOCTYPE html><html><head><meta charset="utf-8">
@@ -2737,7 +2727,7 @@ img{max-width:100%;height:auto;}
   img{max-width:100%;height:auto}
   table{border-collapse:collapse;width:100%}
   td,th{padding:6px 10px;border:1px solid #ccc;font-size:11px;vertical-align:middle}
-  [style*="display: grid"],[style*="display:grid"]{display:flex!important;flex-wrap:wrap}
+  td:first-child{font-weight:bold;width:200px;background:#f5f5f5}
   @media print{body{margin:0}}
 </style></head>
 <body>${clone.innerHTML}</body></html>`
