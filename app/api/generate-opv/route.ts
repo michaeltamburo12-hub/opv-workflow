@@ -319,39 +319,11 @@ export async function POST(req: NextRequest) {
     includeMarketingStrategy = true,
     includePcreProfile = true,
     photoOverrides = {} as Record<string, string>,
-    editedHTML = null as string | null,
+    textEdits = {} as Record<string, string>,
   } = body
 
-  // If the user manually edited the report, convert the current HTML directly to DOCX
-  if (editedHTML) {
-    try {
-      const fullHTML = `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
-        body{font-family:Arial,sans-serif;font-size:13px;color:#1a1a1a;line-height:1.7}
-        table{width:100%;border-collapse:collapse}
-        td,th{padding:7px 10px;border:1px solid #ccc;font-size:11px}
-        th{background:#2D2D2D;color:#fff;font-weight:700}
-        .no-print{display:none}
-        button{display:none}
-        input{display:none}
-      </style></head><body>${editedHTML}</body></html>`
-      const docxBuffer = await HTMLtoDOCX(fullHTML, null, {
-        table: { row: { cantSplit: true } },
-        footer: false, header: false,
-        pageNumber: false,
-        margins: { top: 1080, right: 1080, bottom: 1080, left: 1080 },
-      })
-      const fname = `OPV_${(subject?.address||'Report').replace(/[^a-zA-Z0-9]/g,'_')}.docx`
-      return new NextResponse(docxBuffer, {
-        headers: {
-          'Content-Type': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-          'Content-Disposition': `attachment; filename="${fname}"`,
-        }
-      })
-    } catch(e) {
-      console.error('html-to-docx error:', e)
-      // Fall through to standard generation
-    }
-  }
+  // Helper: return edited text if user changed it, otherwise use default
+  const t = (key: string, def: string) => textEdits[key] !== undefined ? textEdits[key] : def
 
   // Load logo
   const logoPath = path.join(process.cwd(), 'public', 'pcre_logo.png')
@@ -448,7 +420,7 @@ export async function POST(req: NextRequest) {
       border: { top: { style: BorderStyle.SINGLE, size: 2, color: BORDER_CLR, space: 2 } },
       tabStops: [{ type: TabStopType.RIGHT, position: TabStopPosition.MAX }],
       children: [
-        new TextRun({ text: '"Complex Issues – Simple Solutions"', italic: true, size: 16, font: 'Arial', color: '666666' }),
+        new TextRun({ text: t('tagline', '"Complex Issues – Simple Solutions"'), italic: true, size: 16, font: 'Arial', color: '666666' }),
         new TextRun({ text: '\tPage ', size: 16, font: 'Arial', color: '666666' }),
         new TextRun({ children: [PageNumber.CURRENT], size: 16, font: 'Arial', color: '666666' }),
       ],
@@ -699,7 +671,7 @@ export async function POST(req: NextRequest) {
     new Paragraph({ children: [new PageBreak()] }),
     sectionHeading('III', 'OPINION OF VALUE'),
     spacer(80, 80),
-    bodyText('Based upon the aforementioned assumptions, our knowledge of current market conditions, and a review of the Comparables found in Section IV.'),
+    bodyText(t('opv_intro', 'Based upon the aforementioned assumptions, our knowledge of current market conditions, and a review of the Comparables found in Section IV.')),
     spacer(80, 60),
     // Header row: Per SF | Total
     new Table({
@@ -859,21 +831,21 @@ export async function POST(req: NextRequest) {
       sectionHeading('VII', 'MARKETING STRATEGY'),
       spacer(80, 60),
       subHeading('FOCUSED DEDICATION / HARD WORK… TO INCLUDE:'),
-      bullet('PREMIER COMMERCIAL REAL ESTATE will prepare electronic marketing material and meet with selected "Highly qualified" buyers.'),
-      bullet('PREMIER COMMERCIAL REAL ESTATE will distribute e-Blast marketing flyers to the local brokerage community (including the outer NYC Boroughs).'),
-      bullet('PREMIER COMMERCIAL REAL ESTATE will prepare all proposals and respond to proposals submitted by prospective purchasers after receiving authorization from ownership.'),
-      bullet('PREMIER COMMERCIAL REAL ESTATE will conduct all site inspections and conduct marketing presentations for purchasers.'),
-      bullet('PREMIER COMMERCIAL REAL ESTATE will implement and follow up on a direct marketing program including: Identification of qualified prospects; Mailings (electronic and regular) to prospective Investors; Regular follow-up phone canvassing; Regular follow-up "in-person" canvassing; and Follow-up correspondence.'),
+      bullet(t('mkt1', 'PREMIER COMMERCIAL REAL ESTATE will prepare electronic marketing material and meet with selected "Highly qualified" buyers.')),
+      bullet(t('mkt2', 'PREMIER COMMERCIAL REAL ESTATE will distribute e-Blast marketing flyers to the local brokerage community (including the outer NYC Boroughs).')),
+      bullet(t('mkt3', 'PREMIER COMMERCIAL REAL ESTATE will prepare all proposals and respond to proposals submitted by prospective purchasers after receiving authorization from ownership.')),
+      bullet(t('mkt4', 'PREMIER COMMERCIAL REAL ESTATE will conduct all site inspections and conduct marketing presentations for purchasers.')),
+      bullet(t('mkt5', 'PREMIER COMMERCIAL REAL ESTATE will implement and follow up on a direct marketing program including: Identification of qualified prospects; Mailings (electronic and regular) to prospective Investors; Regular follow-up phone canvassing; Regular follow-up "in-person" canvassing; and Follow-up correspondence.')),
       spacer(120, 80),
       subHeading('HOW DOES PARTNERING WITH PREMIER DIFFER FROM "THE CROWD"?'),
-      bullet('We always maintain a "Client First" philosophy.'),
-      bullet('We view our clients as "Partners" – our economic interests are precisely aligned.'),
-      bullet('Industrial leasing & sales are all that we do.'),
-      bullet('Our market knowledge is "top in the business" which will serve us to maximize value.'),
-      bullet('Combined over 40 years experience – specializing in Industrial Properties (Total Sales Transactions exceed $500 Million).'),
-      bullet('In 2020 we brokered the largest industrial sales transactions in both Suffolk and Nassau counties ($35.5 Million and $33 Million respectively).'),
-      bullet('We have built strong relationships with highly qualified purchasers and investors over several decades.'),
-      bullet('We are recognized as "leaders" within the commercial brokerage community.'),
+      bullet(t('diff1', 'We always maintain a "Client First" philosophy.')),
+      bullet(t('diff2', 'We view our clients as "Partners" – our economic interests are precisely aligned.')),
+      bullet(t('diff3', 'Industrial leasing & sales are all that we do.')),
+      bullet(t('diff4', 'Our market knowledge is "top in the business" which will serve us to maximize value.')),
+      bullet(t('diff5', 'Combined over 40 years experience – specializing in Industrial Properties (Total Sales Transactions exceed $500 Million).')),
+      bullet(t('diff6', 'In 2020 we brokered the largest industrial sales transactions in both Suffolk and Nassau counties ($35.5 Million and $33 Million respectively).')),
+      bullet(t('diff7', 'We have built strong relationships with highly qualified purchasers and investors over several decades.')),
+      bullet(t('diff8', 'We are recognized as "leaders" within the commercial brokerage community.')),
       bullet('Our Brokerage Agreement is simple; doesn\'t lock you in; lets you cancel at any time and for any reason.'),
     )
   }
@@ -885,9 +857,9 @@ export async function POST(req: NextRequest) {
       new Paragraph({ children: [new PageBreak()] }),
       sectionHeading('VIII', 'PREMIER COMMERCIAL REAL ESTATE PROFILE'),
       spacer(80, 60),
-      bodyText('Premier Commercial Real Estate, LLC is a full-service commercial real estate service provider offering personalized and strategic solutions for investors, property owners, tenants and diverse businesses. With a laser-sharp focus on, and in-depth knowledge of the Long Island market, Premier\'s seasoned professionals work together as a team to identify the best real estate opportunities for its clients.'),
+      bodyText(t('pcre_p1', 'Premier Commercial Real Estate, LLC is a full-service commercial real estate service provider offering personalized and strategic solutions for investors, property owners, tenants and diverse businesses. With a laser-sharp focus on, and in-depth knowledge of the Long Island market, Premier\'s seasoned professionals work together as a team to identify the best real estate opportunities for its clients.')),
       spacer(60, 60),
-      bodyText('From property sales and leasing to tax-advantaged 1031 exchanges and portfolio development, Premier applies the full force of its experience, know-how and network to effectively achieve the real estate goals of its clients. This approach, combined with Premier\'s strong work ethic, professional integrity and unwavering commitment to meeting its clients\' needs has made the company one of the region\'s fastest-growing real estate firms.'),
+      bodyText(t('pcre_p2', 'From property sales and leasing to tax-advantaged 1031 exchanges and portfolio development, Premier applies the full force of its experience, know-how and network to effectively achieve the real estate goals of its clients. This approach, combined with Premier\'s strong work ethic, professional integrity and unwavering commitment to meeting its clients\' needs has made the company one of the region\'s fastest-growing real estate firms.')),
       spacer(120, 80),
       ...buildRecentSalesTable(),
       spacer(80, 80),

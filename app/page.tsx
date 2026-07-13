@@ -2590,49 +2590,26 @@ function OPVReport({subject,comps,leaseComps,avails,analytics,aiText,setPage}: {
   const downloadWord = async () => {
     setDownloading(true)
     try {
-      const reportEl = reportRef.current
-      if (!reportEl) { alert('Report not ready'); setDownloading(false); return }
-
-      // Clone the report, strip no-print UI elements (buttons, photo editors, etc.)
-      const clone = reportEl.cloneNode(true) as HTMLElement
-      clone.querySelectorAll('.no-print, button, input[type="file"], input[type="text"], textarea').forEach(el => el.remove())
-      // Unwrap any remaining input/edit overlays — replace with their text content
-      clone.querySelectorAll('input').forEach(el => {
-        const span = document.createElement('span')
-        span.textContent = (el as HTMLInputElement).value
-        el.replaceWith(span)
+      const res = await fetch('/api/generate-opv', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({
+          subject,
+          comps,
+          leaseComps: includeLeaseComps ? leaseComps : [],
+          avails: includeAvails ? avails : [],
+          analytics, aiText,
+          includeLeaseComps, includeAvails, includeMarketingStrategy, includePcreProfile,
+          photoOverrides,
+          textEdits,  // pass all manual text edits so Word doc reflects them
+        })
       })
-
-      const wordHTML = `
-<html xmlns:o='urn:schemas-microsoft-com:office:office'
-      xmlns:w='urn:schemas-microsoft-com:office:word'
-      xmlns='http://www.w3.org/TR/REC-html40'>
-<head>
-<meta charset="utf-8">
-<title>OPV Report</title>
-<!--[if gte mso 9]><xml><w:WordDocument><w:View>Print</w:View><w:DoNotOptimizeForBrowser/></w:WordDocument></xml><![endif]-->
-<style>
-@page WordSection1 { size:8.5in 11.0in; margin:1.0in 1.0in 1.0in 1.0in; }
-div.WordSection1 { page:WordSection1; }
-* { box-sizing:border-box; }
-html, body { background:#ffffff !important; color:#1a1a1a !important; font-family:Arial,sans-serif; font-size:13px; line-height:1.7; margin:0; padding:0; }
-table { border-collapse:collapse; width:100%; }
-td, th { padding:7px 10px; border:1px solid #ccc; font-size:11px; }
-img { max-width:100%; height:auto; }
-div { background:transparent; }
-</style>
-</head>
-<body style="background:#ffffff;color:#1a1a1a;">
-<div class="WordSection1">${clone.innerHTML}</div>
-</body>
-</html>`
-
-      const blob = new Blob(['﻿', wordHTML], { type: 'application/msword' })
+      if (!res.ok) { alert('Error generating report: ' + await res.text()); return }
+      const blob = await res.blob()
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
-      const addr = (subject?.address || 'OPV_Report').replace(/[^a-zA-Z0-9\s]/g, '').trim().replace(/\s+/g, '_')
-      a.download = `OPV_${addr}.doc`
+      a.download = res.headers.get('Content-Disposition')?.match(/filename="(.+)"/)?.[1] || 'OPV_Report.docx'
       document.body.appendChild(a)
       a.click()
       document.body.removeChild(a)
