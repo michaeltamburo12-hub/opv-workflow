@@ -2603,11 +2603,6 @@ function OPVReport({subject,comps,leaseComps,avails,analytics,aiText,setPage}: {
         el.replaceWith(span)
       })
 
-      // Collect all inline styles from the document so the Word file looks right
-      const styles = Array.from(document.styleSheets).reduce((acc, sheet) => {
-        try { return acc + Array.from(sheet.cssRules).map(r=>r.cssText).join('\n') } catch { return acc }
-      }, '')
-
       const wordHTML = `
 <html xmlns:o='urn:schemas-microsoft-com:office:office'
       xmlns:w='urn:schemas-microsoft-com:office:word'
@@ -2617,16 +2612,19 @@ function OPVReport({subject,comps,leaseComps,avails,analytics,aiText,setPage}: {
 <title>OPV Report</title>
 <!--[if gte mso 9]><xml><w:WordDocument><w:View>Print</w:View><w:DoNotOptimizeForBrowser/></w:WordDocument></xml><![endif]-->
 <style>
-@page WordSection1 { size:8.5in 11.0in; margin:1.0in 1.0in 1.0in 1.0in; mso-header-margin:.5in; mso-footer-margin:.5in; }
+@page WordSection1 { size:8.5in 11.0in; margin:1.0in 1.0in 1.0in 1.0in; }
 div.WordSection1 { page:WordSection1; }
-body { font-family:Arial,sans-serif; font-size:13px; color:#1a1a1a; line-height:1.7; }
+* { box-sizing:border-box; }
+html, body { background:#ffffff !important; color:#1a1a1a !important; font-family:Arial,sans-serif; font-size:13px; line-height:1.7; margin:0; padding:0; }
 table { border-collapse:collapse; width:100%; }
-td,th { padding:7px 10px; border:1px solid #ccc; font-size:11px; }
-img { max-width:100%; }
-${styles}
+td, th { padding:7px 10px; border:1px solid #ccc; font-size:11px; }
+img { max-width:100%; height:auto; }
+div { background:transparent; }
 </style>
 </head>
-<body><div class="WordSection1">${clone.innerHTML}</div></body>
+<body style="background:#ffffff;color:#1a1a1a;">
+<div class="WordSection1">${clone.innerHTML}</div>
+</body>
 </html>`
 
       const blob = new Blob(['﻿', wordHTML], { type: 'application/msword' })
