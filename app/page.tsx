@@ -2462,7 +2462,21 @@ function OPVReport({subject,comps,leaseComps,avails,analytics,aiText,setPage}: {
   })
   const [editingKey, setEditingKey] = useState<string|null>(null)
   const [editMode, setEditMode] = useState(false)
+  const [frozenHTML, setFrozenHTML] = useState<string|null>(null)
   const reportRef = useRef<HTMLDivElement>(null)
+
+  // Toggle edit mode: freeze/unfreeze HTML so React can't overwrite user edits
+  const toggleEditMode = () => {
+    if (!editMode) {
+      // Entering edit mode — capture current rendered HTML and freeze it
+      if (reportRef.current) setFrozenHTML(reportRef.current.innerHTML)
+      setEditMode(true)
+    } else {
+      // Leaving edit mode — save whatever the user typed
+      if (reportRef.current) setFrozenHTML(reportRef.current.innerHTML)
+      setEditMode(false)
+    }
+  }
 
   // ── INLINE TEXT EDITING ──
   const [textEdits, setTextEdits] = useState<Record<string,string>>(() => {
@@ -2576,10 +2590,21 @@ function OPVReport({subject,comps,leaseComps,avails,analytics,aiText,setPage}: {
   const downloadWord = async () => {
     setDownloading(true)
     try {
+      // Get current HTML — either the frozen/edited version or the live render
+      const currentHTML = reportRef.current?.innerHTML || frozenHTML || ''
+      const hasEdits = !!frozenHTML
+
       const res = await fetch('/api/generate-opv', {
         method: 'POST',
         headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({subject, comps, leaseComps: includeLeaseComps ? leaseComps : [], avails: includeAvails ? avails : [], analytics, aiText, includeLeaseComps, includeAvails, includeMarketingStrategy, includePcreProfile, photoOverrides})
+        body: JSON.stringify({
+          subject, comps, leaseComps: includeLeaseComps ? leaseComps : [],
+          avails: includeAvails ? avails : [], analytics, aiText,
+          includeLeaseComps, includeAvails, includeMarketingStrategy, includePcreProfile,
+          photoOverrides,
+          // Send edited HTML so server can use it when user has made manual changes
+          editedHTML: hasEdits ? currentHTML : null,
+        })
       })
       if (!res.ok) { alert('Error generating report: ' + await res.text()); return }
       const blob = await res.blob()
@@ -2672,9 +2697,10 @@ function OPVReport({subject,comps,leaseComps,avails,analytics,aiText,setPage}: {
         <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:12}}>
           <SectionTitle>Generate Package</SectionTitle>
           <div style={{display:'flex',gap:10,alignItems:'center'}}>
-            <Btn onClick={()=>setEditMode(m=>!m)} style={{padding:'9px 16px',fontSize:12,background:editMode?'rgba(16,185,129,0.15)':'rgba(59,130,246,0.1)',color:editMode?D.green:D.blue,border:`1px solid ${editMode?'rgba(16,185,129,0.4)':'rgba(59,130,246,0.3)'}`}}>
-              {editMode ? '✅ Done Editing' : '✏️ Edit Report'}
+            <Btn onClick={toggleEditMode} style={{padding:'9px 16px',fontSize:12,background:editMode?'rgba(16,185,129,0.15)':frozenHTML?'rgba(217,119,6,0.1)':'rgba(59,130,246,0.1)',color:editMode?D.green:frozenHTML?D.gold:D.blue,border:`1px solid ${editMode?'rgba(16,185,129,0.4)':frozenHTML?'rgba(217,119,6,0.3)':'rgba(59,130,246,0.3)'}`}}>
+              {editMode ? '✅ Done Editing' : frozenHTML ? '✏️ Edit Report (edited)' : '✏️ Edit Report'}
             </Btn>
+            {frozenHTML&&!editMode&&<Btn variant="ghost" onClick={()=>setFrozenHTML(null)} style={{padding:'9px 12px',fontSize:11,color:D.textMuted}}>↩ Reset</Btn>}
             <Btn onClick={downloadWord} disabled={downloading} style={{padding:'9px 20px',fontSize:12,background:`rgba(217,119,6,0.12)`,color:D.gold,border:`1px solid rgba(217,119,6,0.3)`}}>
               {downloading ? 'Generating...' : '📄 Download Word'}
             </Btn>
@@ -2706,10 +2732,15 @@ function OPVReport({subject,comps,leaseComps,avails,analytics,aiText,setPage}: {
       </div>}
 
       {/* Full OPV Document */}
+      {(editMode && frozenHTML) ? (
+        <div ref={reportRef} className="print-area"
+          contentEditable={true} suppressContentEditableWarning={true}
+          dangerouslySetInnerHTML={{__html: frozenHTML}}
+          style={{...doc,borderRadius:10,padding:'60px 72px',maxWidth:960,margin:'0 auto',boxShadow:'0 4px 32px rgba(0,0,0,.25)',outline:'2px solid rgba(16,185,129,0.4)',cursor:'text'}}
+        />
+      ) : (
       <div ref={reportRef} className="print-area"
-        contentEditable={editMode}
-        suppressContentEditableWarning={true}
-        style={{...doc,borderRadius:10,padding:'60px 72px',maxWidth:960,margin:'0 auto',boxShadow:'0 4px 32px rgba(0,0,0,.25)',outline:editMode?'2px solid rgba(16,185,129,0.4)':'none',cursor:editMode?'text':'default'}}>
+        style={{...doc,borderRadius:10,padding:'60px 72px',maxWidth:960,margin:'0 auto',boxShadow:'0 4px 32px rgba(0,0,0,.25)'}}>
 
         {/* ── COVER PAGE ── */}
         <div style={{textAlign:'center' as const,minHeight:600,display:'flex',flexDirection:'column' as const,alignItems:'center',justifyContent:'center',marginBottom:60,paddingBottom:60,borderBottom:`3px solid ${gold}`}}>
@@ -3035,6 +3066,7 @@ function OPVReport({subject,comps,leaseComps,avails,analytics,aiText,setPage}: {
           <strong>DISCLAIMER:</strong> This Opinion of Value has been prepared by Premier Commercial Real Estate for informational purposes only and does not constitute a certified appraisal. It is based upon data available at the time of preparation and may not reflect subsequent market changes. This report should not be relied upon as a substitute for a formal appraisal by a licensed appraiser.
         </div>
       </div>
+      )}
     </div>
   )
 }

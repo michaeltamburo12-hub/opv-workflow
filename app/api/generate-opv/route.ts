@@ -1,6 +1,8 @@
 export const runtime = 'nodejs'
 
 import { NextRequest, NextResponse } from 'next/server'
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const HTMLtoDOCX = require('html-to-docx')
 import {
   Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell,
   ImageRun, Header, Footer, AlignmentType, BorderStyle, WidthType,
@@ -317,7 +319,39 @@ export async function POST(req: NextRequest) {
     includeMarketingStrategy = true,
     includePcreProfile = true,
     photoOverrides = {} as Record<string, string>,
+    editedHTML = null as string | null,
   } = body
+
+  // If the user manually edited the report, convert the current HTML directly to DOCX
+  if (editedHTML) {
+    try {
+      const fullHTML = `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
+        body{font-family:Arial,sans-serif;font-size:13px;color:#1a1a1a;line-height:1.7}
+        table{width:100%;border-collapse:collapse}
+        td,th{padding:7px 10px;border:1px solid #ccc;font-size:11px}
+        th{background:#2D2D2D;color:#fff;font-weight:700}
+        .no-print{display:none}
+        button{display:none}
+        input{display:none}
+      </style></head><body>${editedHTML}</body></html>`
+      const docxBuffer = await HTMLtoDOCX(fullHTML, null, {
+        table: { row: { cantSplit: true } },
+        footer: false, header: false,
+        pageNumber: false,
+        margins: { top: 1080, right: 1080, bottom: 1080, left: 1080 },
+      })
+      const fname = `OPV_${(subject?.address||'Report').replace(/[^a-zA-Z0-9]/g,'_')}.docx`
+      return new NextResponse(docxBuffer, {
+        headers: {
+          'Content-Type': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+          'Content-Disposition': `attachment; filename="${fname}"`,
+        }
+      })
+    } catch(e) {
+      console.error('html-to-docx error:', e)
+      // Fall through to standard generation
+    }
+  }
 
   // Load logo
   const logoPath = path.join(process.cwd(), 'public', 'pcre_logo.png')
