@@ -2597,6 +2597,27 @@ function OPVReport({subject,comps,leaseComps,avails,analytics,aiText,setPage}: {
       const clone = reportEl.cloneNode(true) as HTMLElement
       clone.querySelectorAll('.no-print, button, input, textarea').forEach(el => el.remove())
 
+      // Embed all images as base64 so Word can display them without internet access
+      const imgs = Array.from(clone.querySelectorAll('img'))
+      await Promise.all(imgs.map(async img => {
+        try {
+          const src = img.getAttribute('src')
+          if (!src || src.startsWith('data:')) return
+          // Route external URLs through the proxy to avoid CORS
+          const fetchUrl = src.startsWith('http') ? `/api/proxy-image?url=${encodeURIComponent(src)}` : src
+          const res = await fetch(fetchUrl)
+          if (!res.ok) return
+          const blob = await res.blob()
+          const b64 = await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader()
+            reader.onload = () => resolve(reader.result as string)
+            reader.onerror = reject
+            reader.readAsDataURL(blob)
+          })
+          img.setAttribute('src', b64)
+        } catch { /* leave src as-is on failure */ }
+      }))
+
       // Convert CSS grid divs → real HTML tables so Word renders them correctly
       const convertGrids = (root: HTMLElement) => {
         // Find all parents whose children use display:grid
