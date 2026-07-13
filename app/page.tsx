@@ -3460,6 +3460,42 @@ export default function App() {
             {page==='broker-review'&&<BrokerReview subject={subject} comps={scoredComps.length>0?scoredComps:comps} analytics={analytics} setAnalytics={setAnalytics} aiText={aiText} setAiText={setAiText} setPage={handleSetPage} setSubject={setSubject}/>}
             {page==='opv-report'&&<OPVReport subject={subject} comps={scoredComps.length>0?scoredComps:comps} leaseComps={leaseComps} avails={avails} analytics={analytics} aiText={aiText} setPage={handleSetPage}/>}
           </div>
+          {/* ── Sticky Step Nav Bar ── */}
+          {(()=>{
+            const wfIdx = WORKFLOW_STEPS.findIndex(s=>s.id===page)
+            if (wfIdx < 1) return null // hide on dashboard and non-workflow pages
+            const prev = WORKFLOW_STEPS[wfIdx-1]
+            const next = WORKFLOW_STEPS[wfIdx+1]
+            return (
+              <div className="no-print" style={{position:'sticky',bottom:0,zIndex:50,background:`rgba(10,14,26,0.92)`,backdropFilter:'blur(12px)',borderTop:`1px solid ${D.border}`,padding:'12px 32px',display:'flex',alignItems:'center',justifyContent:'space-between',gap:12}}>
+                <button
+                  onClick={()=>setPage(prev.id)}
+                  style={{display:'flex',alignItems:'center',gap:8,background:'transparent',border:`1px solid ${D.border}`,color:D.textSec,fontFamily:"'Inter',sans-serif",fontSize:12,fontWeight:500,padding:'8px 18px',borderRadius:8,cursor:'pointer',transition:'all .15s'}}
+                  onMouseEnter={e=>{(e.currentTarget as HTMLButtonElement).style.borderColor=D.blue;(e.currentTarget as HTMLButtonElement).style.color=D.text}}
+                  onMouseLeave={e=>{(e.currentTarget as HTMLButtonElement).style.borderColor=D.border;(e.currentTarget as HTMLButtonElement).style.color=D.textSec}}
+                >
+                  ← {prev.icon} {prev.label}
+                </button>
+                <div style={{fontSize:11,color:D.textMuted,fontWeight:500}}>
+                  Step {wfIdx} of {WORKFLOW_STEPS.length - 1}
+                </div>
+                {next ? (
+                  <button
+                    onClick={()=>setPage(next.id)}
+                    style={{display:'flex',alignItems:'center',gap:8,background:D.blue,border:'none',color:'#fff',fontFamily:"'Inter',sans-serif",fontSize:12,fontWeight:600,padding:'8px 20px',borderRadius:8,cursor:'pointer',transition:'all .15s',boxShadow:'0 2px 8px rgba(59,130,246,0.35)'}}
+                    onMouseEnter={e=>{(e.currentTarget as HTMLButtonElement).style.background=D.blueHover}}
+                    onMouseLeave={e=>{(e.currentTarget as HTMLButtonElement).style.background=D.blue}}
+                  >
+                    Next: {next.icon} {next.label} →
+                  </button>
+                ) : (
+                  <div style={{fontSize:11,color:D.green,fontWeight:600,padding:'8px 16px',borderRadius:8,background:`rgba(16,185,129,0.12)`,border:`1px solid rgba(16,185,129,0.25)`}}>
+                    ✓ Workflow Complete
+                  </div>
+                )}
+              </div>
+            )
+          })()}
         </div>
       </div>
     </>
