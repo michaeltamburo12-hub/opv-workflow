@@ -2590,29 +2590,55 @@ function OPVReport({subject,comps,leaseComps,avails,analytics,aiText,setPage}: {
   const downloadWord = async () => {
     setDownloading(true)
     try {
-      // Get current HTML — either the frozen/edited version or the live render
-      const currentHTML = reportRef.current?.innerHTML || frozenHTML || ''
-      const hasEdits = !!frozenHTML
+      const reportEl = reportRef.current
+      if (!reportEl) { alert('Report not ready'); setDownloading(false); return }
 
-      const res = await fetch('/api/generate-opv', {
-        method: 'POST',
-        headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({
-          subject, comps, leaseComps: includeLeaseComps ? leaseComps : [],
-          avails: includeAvails ? avails : [], analytics, aiText,
-          includeLeaseComps, includeAvails, includeMarketingStrategy, includePcreProfile,
-          photoOverrides,
-          // Send edited HTML so server can use it when user has made manual changes
-          editedHTML: hasEdits ? currentHTML : null,
-        })
+      // Clone the report, strip no-print UI elements (buttons, photo editors, etc.)
+      const clone = reportEl.cloneNode(true) as HTMLElement
+      clone.querySelectorAll('.no-print, button, input[type="file"], input[type="text"], textarea').forEach(el => el.remove())
+      // Unwrap any remaining input/edit overlays — replace with their text content
+      clone.querySelectorAll('input').forEach(el => {
+        const span = document.createElement('span')
+        span.textContent = (el as HTMLInputElement).value
+        el.replaceWith(span)
       })
-      if (!res.ok) { alert('Error generating report: ' + await res.text()); return }
-      const blob = await res.blob()
+
+      // Collect all inline styles from the document so the Word file looks right
+      const styles = Array.from(document.styleSheets).reduce((acc, sheet) => {
+        try { return acc + Array.from(sheet.cssRules).map(r=>r.cssText).join('\n') } catch { return acc }
+      }, '')
+
+      const wordHTML = `
+<html xmlns:o='urn:schemas-microsoft-com:office:office'
+      xmlns:w='urn:schemas-microsoft-com:office:word'
+      xmlns='http://www.w3.org/TR/REC-html40'>
+<head>
+<meta charset="utf-8">
+<title>OPV Report</title>
+<!--[if gte mso 9]><xml><w:WordDocument><w:View>Print</w:View><w:DoNotOptimizeForBrowser/></w:WordDocument></xml><![endif]-->
+<style>
+@page WordSection1 { size:8.5in 11.0in; margin:1.0in 1.0in 1.0in 1.0in; mso-header-margin:.5in; mso-footer-margin:.5in; }
+div.WordSection1 { page:WordSection1; }
+body { font-family:Arial,sans-serif; font-size:13px; color:#1a1a1a; line-height:1.7; }
+table { border-collapse:collapse; width:100%; }
+td,th { padding:7px 10px; border:1px solid #ccc; font-size:11px; }
+img { max-width:100%; }
+${styles}
+</style>
+</head>
+<body><div class="WordSection1">${clone.innerHTML}</div></body>
+</html>`
+
+      const blob = new Blob(['﻿', wordHTML], { type: 'application/msword' })
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
-      a.download = res.headers.get('Content-Disposition')?.match(/filename="(.+)"/)?.[1] || 'OPV_Report.docx'
-      a.click(); URL.revokeObjectURL(url)
+      const addr = (subject?.address || 'OPV_Report').replace(/[^a-zA-Z0-9\s]/g, '').trim().replace(/\s+/g, '_')
+      a.download = `OPV_${addr}.doc`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
     } catch(e) { alert('Download failed: ' + (e as Error).message) }
     setDownloading(false)
   }
