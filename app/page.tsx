@@ -2742,13 +2742,19 @@ img{max-width:100%;height:auto;}
 </style></head>
 <body>${clone.innerHTML}</body></html>`
 
-      const w = window.open('', '_blank')
-      if (!w) { alert('Allow popups for PDF export.'); setDownloading(false); return }
-      w.document.write(html)
-      w.document.close()
-      w.focus()
-      // Wait for images to render then print
-      setTimeout(() => { w.print() }, 800)
+      // Use a hidden iframe — avoids popup blocker entirely
+      const iframe = document.createElement('iframe')
+      iframe.style.cssText = 'position:fixed;top:-9999px;left:-9999px;width:0;height:0;border:none'
+      document.body.appendChild(iframe)
+      const iDoc = iframe.contentDocument || iframe.contentWindow?.document
+      if (!iDoc) { document.body.removeChild(iframe); setDownloading(false); return }
+      iDoc.open(); iDoc.write(html); iDoc.close()
+      // Wait for images to fully render, then print
+      setTimeout(() => {
+        iframe.contentWindow?.focus()
+        iframe.contentWindow?.print()
+        setTimeout(() => document.body.removeChild(iframe), 1000)
+      }, 800)
     } catch(e) { alert('PDF export failed: ' + (e as Error).message) }
     setDownloading(false)
   }
