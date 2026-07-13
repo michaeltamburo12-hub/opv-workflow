@@ -97,6 +97,62 @@ export async function POST(req: NextRequest) {
         rawHeaders.forEach((rh, i) => { row[headers[i]] = String(r[rh] ?? '') })
         return row
       })
+    } else if (fileName.endsWith('.docx')) {
+      // Parse DOCX using XLSX.CFB (no extra dependencies — DOCX is a ZIP+XML file)
+      const cfb = XLSX.CFB.read(buffer, { type: 'buffer' })
+      const docIdx = cfb.FileIndex.findIndex((f: { name: string }) => f.name === 'document.xml')
+      if (docIdx < 0) return NextResponse.json({ error: 'Could not find document.xml in DOCX file' }, { status: 400 })
+      const xml = Buffer.from(cfb.FileIndex[docIdx].content).toString('utf8')
+
+      // Extract table rows: each <w:tr> = one row, each <w:tc> = one cell, text in <w:t>
+      const tableRows: string[][] = []
+      const trRe = /<w:tr[ >][\s\S]*?<\/w:tr>/g
+      let trMatch: RegExpExecArray | null
+      while ((trMatch = trRe.exec(xml)) !== null) {
+        const cells: string[] = []
+        const tcRe = /<w:tc>[\s\S]*?<\/w:tc>/g
+        let tcMatch: RegExpExecArray | null
+        while ((tcMatch = tcRe.exec(trMatch[0])) !== null) {
+          const texts: string[] = []
+          const tRe = /<w:t(?:\s[^>]*)?>([^<]*)<\/w:t>/g
+          let tMatch: RegExpExecArray | null
+          while ((tMatch = tRe.exec(tcMatch[0])) !== null) texts.push(tMatch[1])
+          cells.push(texts.join('').trim())
+        }
+        if (cells.some(c => c)) tableRows.push(cells)
+      }
+
+      if (tableRows.length < 2) return NextResponse.json({ error: 'No table data found in DOCX' }, { status: 400 })
+
+      // First non-empty row = headers; normalize them
+      const rawHeaders = tableRows[0].filter(h => h)
+      headers = rawHeaders.map(h => h.trim().toLowerCase().replace(/[\s\-\/()]+/g, '_').replace(/[^a-z0-9_]/g, ''))
+
+      // Quarter-date helper: "2nd Quarter 2026" → "2026-04-01"
+      const quarterToDate = (s: string) => {
+        const m = s.match(/(\d+)\w+\s+quarter\s+(\d{4})/i)
+        if (!m) return s
+        const qMap: Record<string,string> = {'1':'01','2':'04','3':'07','4':'10'}
+        return `${m[2]}-${qMap[m[1]] || '01'}-01`
+      }
+
+      // Data rows: skip header row, skip blank rows
+      const colCount = tableRows[0].length
+      rows = tableRows.slice(1).filter(r => r.some(c => c)).map(r => {
+        // Pad/align: some DOCX tables have a blank first column
+        const aligned = r.length === colCount ? r : r.length === colCount - 1 ? ['', ...r] : r
+        const row: Record<string, string> = {}
+        rawHeaders.forEach((_, i) => {
+          let val = (aligned[r.length === colCount ? i : i + 1] ?? '').trim()
+          // Convert quarter dates
+          if (/quarter/i.test(val)) val = quarterToDate(val)
+          // Clean SF: remove commas
+          if (headers[i] === 'building_size_sf_' || headers[i].includes('size')) val = val.replace(/,/g, '')
+          row[headers[i]] = val
+        })
+        return row
+      })
+
     } else if (fileName.endsWith('.pdf')) {
       const pdfData = await pdfParse(buffer)
       const text = pdfData.text
@@ -220,7 +276,7 @@ export async function POST(req: NextRequest) {
     // Remap common column name variations to canonical names
     const COLUMN_ALIASES: Record<string,string> = {
       street_address:'address', property_address:'address', full_address:'address', building_address:'address',
-      building_size:'building_sf', bldg_sf:'building_sf', total_sf:'building_sf', rentable_building_area:'building_sf',
+      building_size:'building_sf', building_size_sf_:'building_sf', bldg_sf:'building_sf', total_sf:'building_sf', rentable_building_area:'building_sf',
       ceiling_ht:'ceiling_height', ceil_ht:'ceiling_height', clr_ht:'ceiling_height',
       clear_ceiling_height:'ceiling_height', clear_height:'ceiling_height',
       number_of_loading_docks:'loading_docks', dock_doors:'loading_docks', docks:'loading_docks',
@@ -230,7 +286,7 @@ export async function POST(req: NextRequest) {
       sprinkler_system:'sprinkler', fire_sprinklers:'sprinkler',
       lot_size_ac_:'lot_size_ac', land_area:'lot_size_ac', lot_acres:'lot_size_ac',
       list_price:'asking_price', for_sale_price:'asking_price',
-      transaction_date:'sale_date', close_of_escrow:'sale_date',
+      transaction_date:'sale_date', close_of_escrow:'sale_date', sale_price:'sale_price_text', asking_price_:'asking_price',
       grantor:'seller', grantee:'buyer',
       re_taxes:'real_estate_taxes', annual_taxes:'real_estate_taxes',
     }

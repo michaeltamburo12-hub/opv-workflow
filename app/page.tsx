@@ -2462,6 +2462,53 @@ function OPVReport({subject,comps,leaseComps,avails,analytics,aiText,setPage}: {
   })
   const [editingKey, setEditingKey] = useState<string|null>(null)
 
+  // ── INLINE TEXT EDITING ──
+  const [textEdits, setTextEdits] = useState<Record<string,string>>(() => {
+    try { return JSON.parse(localStorage.getItem('opv_text_edits') || '{}') } catch { return {} }
+  })
+  const [activeTextKey, setActiveTextKey] = useState<string|null>(null)
+  useEffect(() => {
+    try { localStorage.setItem('opv_text_edits', JSON.stringify(textEdits)) } catch {}
+  }, [textEdits])
+  const getText = (key: string, def: string) => textEdits[key] !== undefined ? textEdits[key] : def
+  const saveText = (key: string, val: string, def: string) => {
+    if (val === def) { setTextEdits(p=>{const n={...p};delete n[key];return n}) }
+    else setTextEdits(p=>({...p,[key]:val}))
+    setActiveTextKey(null)
+  }
+  // Editable inline span — click to edit, blur to save
+  const E = ({k, d, multi=false, style={}}: {k:string, d:string, multi?:boolean, style?:React.CSSProperties}) => {
+    const val = getText(k, d)
+    const isActive = activeTextKey === k
+    const changed = textEdits[k] !== undefined
+    const editStyle: React.CSSProperties = {
+      background: isActive ? '#fffde7' : changed ? '#fff8e1' : 'transparent',
+      border: isActive ? '1.5px solid #f59e0b' : changed ? '1px dashed #f59e0b' : '1px dashed transparent',
+      borderRadius: 3, padding: isActive ? '2px 6px' : changed ? '2px 6px' : '2px 4px',
+      cursor: 'text', outline: 'none', width: '100%', fontFamily: 'inherit',
+      fontSize: 'inherit', color: 'inherit', lineHeight: 'inherit', resize: 'none' as const,
+      ...style,
+    }
+    if (isActive) {
+      if (multi) return <textarea autoFocus rows={Math.max(3, val.split('\n').length+1)} defaultValue={val}
+        onBlur={e=>saveText(k, e.target.value, d)}
+        onKeyDown={e=>{ if(e.key==='Escape'){setActiveTextKey(null)} }}
+        style={{...editStyle,display:'block',minHeight:60}}/>
+      return <input autoFocus type="text" defaultValue={val}
+        onBlur={e=>saveText(k, e.target.value, d)}
+        onKeyDown={e=>{ if(e.key==='Enter')e.currentTarget.blur(); if(e.key==='Escape'){setActiveTextKey(null)} }}
+        style={editStyle}/>
+    }
+    return (
+      <span title="Click to edit" onClick={()=>setActiveTextKey(k)}
+        style={{...editStyle, display:'inline-block', minWidth:20,
+          ':hover':{borderColor:'#f59e0b'}} as React.CSSProperties}>
+        {val || <span style={{color:'#aaa',fontStyle:'italic'}}>Click to add text…</span>}
+        {!isActive && <span className="no-print" style={{fontSize:9,marginLeft:4,color:'#bbb',verticalAlign:'middle'}}>✏</span>}
+      </span>
+    )
+  }
+
   // Persist photo overrides to localStorage whenever they change
   useEffect(() => {
     try { localStorage.setItem('opv_photo_overrides', JSON.stringify(photoOverrides)) } catch {}
@@ -2627,6 +2674,7 @@ function OPVReport({subject,comps,leaseComps,avails,analytics,aiText,setPage}: {
               {downloading ? 'Generating...' : '📄 Download Word Report'}
             </Btn>
             <Btn variant="ghost" onClick={()=>window.print()} style={{padding:'9px 16px',fontSize:12}}>🖨 Print / Save PDF</Btn>
+            {Object.keys(textEdits).length>0&&<Btn variant="ghost" onClick={()=>{setTextEdits({});localStorage.removeItem('opv_text_edits')}} style={{padding:'9px 14px',fontSize:12,color:D.textMuted}}>↩ Reset Edits</Btn>}
           </div>
         </div>
         <Card style={{padding:'14px 18px'}}>
@@ -2652,7 +2700,7 @@ function OPVReport({subject,comps,leaseComps,avails,analytics,aiText,setPage}: {
 
         {/* ── COVER PAGE ── */}
         <div style={{textAlign:'center' as const,minHeight:600,display:'flex',flexDirection:'column' as const,alignItems:'center',justifyContent:'center',marginBottom:60,paddingBottom:60,borderBottom:`3px solid ${gold}`}}>
-          <div style={{fontSize:12,fontStyle:'italic',color:'#555',marginBottom:24}}>"Complex Issues – Simple Solutions"</div>
+          <div style={{fontSize:12,fontStyle:'italic',color:'#555',marginBottom:24}}><E k="tagline" d='"Complex Issues – Simple Solutions"'/></div>
           <div style={{fontSize:28,fontWeight:900,color:'#1a1a1a',letterSpacing:'.15em',marginBottom:4}}>PREMIER COMMERCIAL REAL ESTATE</div>
           <div style={{width:120,height:3,background:gold,margin:'12px auto 40px'}}/>
           <div style={{fontSize:42,fontWeight:900,color:'#1a1a1a',letterSpacing:'.08em',marginBottom:8}}>OPINION OF VALUE</div>
@@ -2764,7 +2812,7 @@ function OPVReport({subject,comps,leaseComps,avails,analytics,aiText,setPage}: {
 
         {/* ── SECTION III: OPINION OF VALUE ── */}
         <SecHeading num="III" title="OPINION OF VALUE"/>
-        <p style={{fontSize:13,marginBottom:16,lineHeight:1.7}}>Based upon the aforementioned assumptions, our knowledge of current market conditions, and a review of the Comparables found in Section IV.</p>
+        <p style={{fontSize:13,marginBottom:16,lineHeight:1.7}}><E k="opv_intro" d="Based upon the aforementioned assumptions, our knowledge of current market conditions, and a review of the Comparables found in Section IV." multi style={{width:'100%'}}/></p>
         <div style={{display:'grid',gridTemplateColumns:'200px 1fr 1fr',border:'1px solid #ccc',marginBottom:24}}>
           <div style={{background:darkBg,color:'#fff',padding:'10px 12px',fontWeight:700,fontSize:11,borderRight:'1px solid #444'}}>Estimated Value For Sale</div>
           <div style={{background:darkBg,color:'#fff',padding:'10px 12px',fontWeight:700,fontSize:11,textAlign:'center' as const,borderRight:'1px solid #444'}}>Per SF</div>
@@ -2920,27 +2968,27 @@ function OPVReport({subject,comps,leaseComps,avails,analytics,aiText,setPage}: {
         {includeMarketingStrategy&&<>
           <SecHeading num="VII" title="MARKETING STRATEGY"/>
           <SubHead>FOCUSED DEDICATION / HARD WORK… TO INCLUDE:</SubHead>
-          <Bullet>PREMIER COMMERCIAL REAL ESTATE will prepare electronic marketing material and meet with selected "Highly qualified" buyers.</Bullet>
-          <Bullet>PREMIER COMMERCIAL REAL ESTATE will distribute e-Blast marketing flyers to the local brokerage community (including the outer NYC Boroughs).</Bullet>
-          <Bullet>PREMIER COMMERCIAL REAL ESTATE will prepare all proposals and respond to proposals submitted by prospective purchasers after receiving authorization from ownership.</Bullet>
-          <Bullet>PREMIER COMMERCIAL REAL ESTATE will conduct all site inspections and conduct marketing presentations for purchasers.</Bullet>
-          <Bullet>PREMIER COMMERCIAL REAL ESTATE will implement and follow up on a direct marketing program including: Identification of qualified prospects; Mailings (electronic and regular) to prospective Investors; Regular follow-up phone canvassing; Regular follow-up "in-person" canvassing; and Follow-up correspondence.</Bullet>
+          <Bullet><E k="mkt1" d='PREMIER COMMERCIAL REAL ESTATE will prepare electronic marketing material and meet with selected "Highly qualified" buyers.'/></Bullet>
+          <Bullet><E k="mkt2" d="PREMIER COMMERCIAL REAL ESTATE will distribute e-Blast marketing flyers to the local brokerage community (including the outer NYC Boroughs)."/></Bullet>
+          <Bullet><E k="mkt3" d="PREMIER COMMERCIAL REAL ESTATE will prepare all proposals and respond to proposals submitted by prospective purchasers after receiving authorization from ownership."/></Bullet>
+          <Bullet><E k="mkt4" d="PREMIER COMMERCIAL REAL ESTATE will conduct all site inspections and conduct marketing presentations for purchasers."/></Bullet>
+          <Bullet><E k="mkt5" d="PREMIER COMMERCIAL REAL ESTATE will implement and follow up on a direct marketing program including: Identification of qualified prospects; Mailings (electronic and regular) to prospective Investors; Regular follow-up phone canvassing; Regular follow-up &quot;in-person&quot; canvassing; and Follow-up correspondence."/></Bullet>
           <SubHead>HOW DOES PARTNERING WITH PREMIER DIFFER FROM "THE CROWD"?</SubHead>
-          <Bullet>We always maintain a "Client First" philosophy.</Bullet>
-          <Bullet>We view our clients as "Partners" – our economic interests are precisely aligned.</Bullet>
-          <Bullet>Industrial leasing & sales are all that we do.</Bullet>
-          <Bullet>Our market knowledge is "top in the business" which will serve us to maximize value.</Bullet>
-          <Bullet>Combined over 40 years experience – specializing in Industrial Properties (Total Sales Transactions exceed $500 Million).</Bullet>
-          <Bullet>In 2020 we brokered the largest industrial sales transactions in both Suffolk and Nassau counties ($35.5 Million and $33 Million respectively).</Bullet>
-          <Bullet>We have built strong relationships with highly qualified purchasers and investors over several decades.</Bullet>
-          <Bullet>We are recognized as "leaders" within the commercial brokerage community.</Bullet>
+          <Bullet><E k="diff1" d='We always maintain a "Client First" philosophy.'/></Bullet>
+          <Bullet><E k="diff2" d="We view our clients as &quot;Partners&quot; – our economic interests are precisely aligned."/></Bullet>
+          <Bullet><E k="diff3" d="Industrial leasing & sales are all that we do."/></Bullet>
+          <Bullet><E k="diff4" d='Our market knowledge is "top in the business" which will serve us to maximize value.'/></Bullet>
+          <Bullet><E k="diff5" d="Combined over 40 years experience – specializing in Industrial Properties (Total Sales Transactions exceed $500 Million)."/></Bullet>
+          <Bullet><E k="diff6" d="In 2020 we brokered the largest industrial sales transactions in both Suffolk and Nassau counties ($35.5 Million and $33 Million respectively)."/></Bullet>
+          <Bullet><E k="diff7" d="We have built strong relationships with highly qualified purchasers and investors over several decades."/></Bullet>
+          <Bullet><E k="diff8" d='We are recognized as "leaders" within the commercial brokerage community.'/></Bullet>
         </>}
 
         {/* ── SECTION VIII: PCRE PROFILE ── */}
         {includePcreProfile&&<>
           <SecHeading num="VIII" title="PREMIER COMMERCIAL REAL ESTATE PROFILE"/>
-          <p style={{fontSize:13,lineHeight:1.8,marginBottom:12}}>Premier Commercial Real Estate, LLC is a full-service commercial real estate service provider offering personalized and strategic solutions for investors, property owners, tenants and diverse businesses. With a laser-sharp focus on, and in-depth knowledge of the Long Island market, Premier's seasoned professionals work together as a team to identify the best real estate opportunities for its clients.</p>
-          <p style={{fontSize:13,lineHeight:1.8,marginBottom:24}}>From property sales and leasing to tax-advantaged 1031 exchanges and portfolio development, Premier applies the full force of its experience, know-how and network to effectively achieve the real estate goals of its clients.</p>
+          <p style={{fontSize:13,lineHeight:1.8,marginBottom:12}}><E k="pcre_p1" d="Premier Commercial Real Estate, LLC is a full-service commercial real estate service provider offering personalized and strategic solutions for investors, property owners, tenants and diverse businesses. With a laser-sharp focus on, and in-depth knowledge of the Long Island market, Premier's seasoned professionals work together as a team to identify the best real estate opportunities for its clients." multi style={{width:'100%'}}/></p>
+          <p style={{fontSize:13,lineHeight:1.8,marginBottom:24}}><E k="pcre_p2" d="From property sales and leasing to tax-advantaged 1031 exchanges and portfolio development, Premier applies the full force of its experience, know-how and network to effectively achieve the real estate goals of its clients." multi style={{width:'100%'}}/></p>
           <SubHead>PCRE'S SAMPLE OF OUR RECENTLY COMPLETED SALES TRANSACTIONS</SubHead>
           <div style={{border:'1px solid #ccc',marginBottom:24}}>
             <TblHeader cols={['Property Address','City','Property Type','Building Size (SF)','Sale Price','Transaction Date']}/>
