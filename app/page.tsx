@@ -2461,6 +2461,8 @@ function OPVReport({subject,comps,leaseComps,avails,analytics,aiText,setPage}: {
     try { return JSON.parse(localStorage.getItem('opv_photo_overrides') || '{}') } catch { return {} }
   })
   const [editingKey, setEditingKey] = useState<string|null>(null)
+  const [editMode, setEditMode] = useState(false)
+  const reportRef = useRef<HTMLDivElement>(null)
 
   // ── INLINE TEXT EDITING ──
   const [textEdits, setTextEdits] = useState<Record<string,string>>(() => {
@@ -2669,12 +2671,14 @@ function OPVReport({subject,comps,leaseComps,avails,analytics,aiText,setPage}: {
       <div className="no-print" style={{marginBottom:20}}>
         <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:12}}>
           <SectionTitle>Generate Package</SectionTitle>
-          <div style={{display:'flex',gap:10}}>
-            <Btn onClick={downloadWord} disabled={downloading} style={{padding:'9px 20px',fontSize:12,background:`rgba(217,119,6,0.12)`,color:D.gold,border:`1px solid rgba(217,119,6,0.3)`}}>
-              {downloading ? 'Generating...' : '📄 Download Word Report'}
+          <div style={{display:'flex',gap:10,alignItems:'center'}}>
+            <Btn onClick={()=>setEditMode(m=>!m)} style={{padding:'9px 16px',fontSize:12,background:editMode?'rgba(16,185,129,0.15)':'rgba(59,130,246,0.1)',color:editMode?D.green:D.blue,border:`1px solid ${editMode?'rgba(16,185,129,0.4)':'rgba(59,130,246,0.3)'}`}}>
+              {editMode ? '✅ Done Editing' : '✏️ Edit Report'}
             </Btn>
-            <Btn variant="ghost" onClick={()=>window.print()} style={{padding:'9px 16px',fontSize:12}}>🖨 Print / Save PDF</Btn>
-            {Object.keys(textEdits).length>0&&<Btn variant="ghost" onClick={()=>{setTextEdits({});localStorage.removeItem('opv_text_edits')}} style={{padding:'9px 14px',fontSize:12,color:D.textMuted}}>↩ Reset Edits</Btn>}
+            <Btn onClick={downloadWord} disabled={downloading} style={{padding:'9px 20px',fontSize:12,background:`rgba(217,119,6,0.12)`,color:D.gold,border:`1px solid rgba(217,119,6,0.3)`}}>
+              {downloading ? 'Generating...' : '📄 Download Word'}
+            </Btn>
+            <Btn variant="ghost" onClick={()=>window.print()} style={{padding:'9px 16px',fontSize:12}}>🖨 Print / PDF</Btn>
           </div>
         </div>
         <Card style={{padding:'14px 18px'}}>
@@ -2695,8 +2699,17 @@ function OPVReport({subject,comps,leaseComps,avails,analytics,aiText,setPage}: {
         </Card>
       </div>
 
+      {/* Edit mode banner */}
+      {editMode&&<div className="no-print" style={{background:'rgba(16,185,129,0.1)',border:'1px solid rgba(16,185,129,0.3)',borderRadius:8,padding:'10px 16px',marginBottom:12,display:'flex',alignItems:'center',gap:10,fontSize:13,color:D.green}}>
+        <span style={{fontSize:18}}>✏️</span>
+        <span><strong>Edit Mode is on</strong> — click any text in the report below and type to change it. Click <strong>Done Editing</strong> when finished.</span>
+      </div>}
+
       {/* Full OPV Document */}
-      <div className="print-area" style={{...doc,borderRadius:10,padding:'60px 72px',maxWidth:960,margin:'0 auto',boxShadow:'0 4px 32px rgba(0,0,0,.25)'}}>
+      <div ref={reportRef} className="print-area"
+        contentEditable={editMode}
+        suppressContentEditableWarning={true}
+        style={{...doc,borderRadius:10,padding:'60px 72px',maxWidth:960,margin:'0 auto',boxShadow:'0 4px 32px rgba(0,0,0,.25)',outline:editMode?'2px solid rgba(16,185,129,0.4)':'none',cursor:editMode?'text':'default'}}>
 
         {/* ── COVER PAGE ── */}
         <div style={{textAlign:'center' as const,minHeight:600,display:'flex',flexDirection:'column' as const,alignItems:'center',justifyContent:'center',marginBottom:60,paddingBottom:60,borderBottom:`3px solid ${gold}`}}>
