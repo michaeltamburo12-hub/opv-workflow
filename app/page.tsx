@@ -3296,6 +3296,16 @@ export default function App() {
   const [savedOPVs,setSavedOPVs]=useState<{id:string,address:string,current_step:string,updated_at:string,saved_by:string}[]>([])
   const [showSavedPanel,setShowSavedPanel]=useState(false)
   const [editedReportHTML,setEditedReportHTML]=useState<string|null>(null)
+
+  // Mirror editedReportHTML to localStorage so it survives across sessions reliably
+  useEffect(()=>{
+    if (!savedOPVId) return
+    try {
+      if (editedReportHTML) localStorage.setItem(`opv_edited_html_${savedOPVId}`, editedReportHTML)
+      else localStorage.removeItem(`opv_edited_html_${savedOPVId}`)
+    } catch {}
+  }, [editedReportHTML, savedOPVId])
+
   const [folders,setFolders]=useState<Folder[]>(()=>{
     if (typeof window==='undefined') return []
     try { return JSON.parse(localStorage.getItem('opv_folders')||'[]') } catch { return [] }
@@ -3345,7 +3355,7 @@ export default function App() {
       const res = await fetch('/api/opv-history',{
         method:'POST',
         headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({savedBy:user.name, address:subject.address, subject, comps, leaseComps, avails, analytics, aiText, currentStep:page, existingId:savedOPVId, assignmentData, folders, editedReportHTML})
+        body:JSON.stringify({savedBy:user.name, address:subject.address, subject, comps, leaseComps, avails, analytics, aiText, currentStep:page, existingId:savedOPVId, assignmentData, folders})
       })
       const data = await res.json()
       if(data.error) throw new Error(data.error)
@@ -3380,7 +3390,11 @@ export default function App() {
       if(data.aiText) setAiText(data.aiText)
       if(data.assignmentData) setAssignmentData(data.assignmentData)
       if(data.folders?.length) updateFolders(data.folders)
-      if(data.editedReportHTML) setEditedReportHTML(data.editedReportHTML)
+      // Restore edited report HTML from localStorage
+      try {
+        const localHTML = localStorage.getItem(`opv_edited_html_${id}`)
+        setEditedReportHTML(localHTML || null)
+      } catch { setEditedReportHTML(null) }
       setSavedOPVId(id)
       setLastSaved(new Date(data.updatedAt||data.createdAt))
       setShowSavedPanel(false)
@@ -3411,7 +3425,10 @@ export default function App() {
     setVerificationStatus({})
     setFolders([])
     setEditedReportHTML(null)
-    setSavedOPVId(null)
+    setSavedOPVId(prev=>{
+      if(prev) { try{localStorage.removeItem(`opv_edited_html_${prev}`)}catch{} }
+      return null
+    })
     setLastSaved(null)
     try{localStorage.removeItem('opv_saved_id')}catch{}
     setPage('assignment')
