@@ -223,7 +223,7 @@ function ProgressStepper({current, completedSteps}: {current:string, completedSt
 // ── ASSIGNMENT PAGE ───────────────────────────────────────────────────────────
 type AssignmentData = {clientName:string,propertyAddress:string,opvType:string,dueDate:string,preparedBy:string,notes:string}
 
-function Dashboard({user,subject,comps,avails,leaseComps,analytics,savedOPVs,setPage,loadSavedOPVs,restoreOPV}: {user:{name:string,role:string,init:string},subject:SubjectForm|null,comps:Comp[],avails:Avail[],leaseComps:LeaseComp[],analytics:AnalyticsData|null,savedOPVs:{id:string,address:string,current_step:string,updated_at:string,saved_by:string}[],setPage:(p:string)=>void,loadSavedOPVs:()=>void,restoreOPV:(id:string)=>void}) {
+function Dashboard({user,subject,comps,avails,leaseComps,analytics,savedOPVs,setPage,loadSavedOPVs,restoreOPV,onNewOPV}: {user:{name:string,role:string,init:string},subject:SubjectForm|null,comps:Comp[],avails:Avail[],leaseComps:LeaseComp[],analytics:AnalyticsData|null,savedOPVs:{id:string,address:string,current_step:string,updated_at:string,saved_by:string}[],setPage:(p:string)=>void,loadSavedOPVs:()=>void,restoreOPV:(id:string)=>void,onNewOPV:()=>void}) {
   useEffect(()=>{loadSavedOPVs()},[])
   const hour = new Date().getHours()
   const hasActiveOPV = subject||comps.length>0
@@ -248,7 +248,7 @@ function Dashboard({user,subject,comps,avails,leaseComps,analytics,savedOPVs,set
 
       {/* Quick actions */}
       <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:16,marginBottom:32}}>
-        <div onClick={()=>setPage('assignment')} style={{background:D.blue,borderRadius:10,padding:24,cursor:'pointer',transition:'all .2s',border:`1px solid ${D.blue}`}}
+        <div onClick={onNewOPV} style={{background:D.blue,borderRadius:10,padding:24,cursor:'pointer',transition:'all .2s',border:`1px solid ${D.blue}`}}
           onMouseEnter={e=>(e.currentTarget as HTMLDivElement).style.background=D.blueHover}
           onMouseLeave={e=>(e.currentTarget as HTMLDivElement).style.background=D.blue}>
           <div style={{fontSize:28,marginBottom:12}}>📋</div>
@@ -3399,12 +3399,21 @@ export default function App() {
 
   const startNewOPV=()=>{
     if(!confirm('Start a new OPV? Your current progress is saved — you can reload it anytime.')) return
-    setSubject(null); setComps([]); setLeaseComps([]); setAvails([]); setAnalytics(null); setAiText('')
+    setSubject(null)
+    setComps([])
+    setLeaseComps([])
+    setAvails([])
+    setScoredComps([])
+    setAnalytics(null)
+    setAiText('')
     setAssignmentData({clientName:'',propertyAddress:'',opvType:'For Sale',dueDate:'',preparedBy:'',notes:''})
-    setPhotoUrls({}); setVerificationStatus({})
-    setSavedOPVId(null); setLastSaved(null)
+    setPhotoUrls({})
+    setVerificationStatus({})
+    setFolders([])
+    setSavedOPVId(null)
+    setLastSaved(null)
     try{localStorage.removeItem('opv_saved_id')}catch{}
-    setPage('dashboard')
+    setPage('assignment')
   }
 
   const isWorkflowPage = WORKFLOW_STEPS.some(s=>s.id===page)
@@ -3566,7 +3575,7 @@ export default function App() {
             {isWorkflowPage&&page!=='dashboard'&&(
               <ProgressStepper current={page} completedSteps={completedSteps}/>
             )}
-            {page==='dashboard'&&<Dashboard user={user} subject={subject} comps={comps} avails={avails} leaseComps={leaseComps} analytics={analytics} savedOPVs={savedOPVs} setPage={handleSetPage} loadSavedOPVs={loadSavedOPVs} restoreOPV={restoreOPV}/>}
+            {page==='dashboard'&&<Dashboard user={user} subject={subject} comps={comps} avails={avails} leaseComps={leaseComps} analytics={analytics} savedOPVs={savedOPVs} setPage={handleSetPage} loadSavedOPVs={loadSavedOPVs} restoreOPV={restoreOPV} onNewOPV={startNewOPV}/>}
             {page==='assignment'&&<Assignment assignmentData={assignmentData} setAssignmentData={setAssignmentData} user={user} setPage={handleSetPage} setSubject={setSubject} subject={subject}/>}
             {page==='subject'&&<SubjectProperty subject={subject} setSubject={setSubject} setPage={handleSetPage} folders={folders} setFolders={updateFolders} assignmentData={assignmentData}/>}
             {page==='database'&&<DatabaseManager/>}
