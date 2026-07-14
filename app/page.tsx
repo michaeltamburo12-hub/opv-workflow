@@ -950,6 +950,7 @@ function DatabaseManager() {
   const [browseLoading, setBrowseLoading] = useState(false)
   const [browseCount, setBrowseCount] = useState(0)
   const [browseOffset, setBrowseOffset] = useState(0)
+  const [updatingStatus, setUpdatingStatus] = useState<Set<string>>(new Set())
   const PAGE_SIZE = 20
 
   const blankComp = {address:'',city:'',county:'Nassau',state:'NY',property_type:'Warehouse',building_sf:'',lot_size_ac:'',ceiling_height:'',loading_docks:'',drive_ins:'',power:'',heat:'',parking:'',sprinkler:'',sewer:'Municipal',zoning:'',real_estate_taxes:'',sale_price:'',price_per_sf:'',sale_date:'',sale_type:"Arm's Length",buyer:'',seller:'',listing_broker:'',market:'',submarket:'',zip_code:'',notes:''}
@@ -1379,8 +1380,9 @@ function DatabaseManager() {
                   {!!row.building_sf&&<Tag color={D.blue}>{Number(row.building_sf).toLocaleString()} SF</Tag>}
                   {tab==='comps'&&!!row.price_per_sf&&<Tag color={D.gold}>${Number(row.price_per_sf).toFixed(2)}/SF</Tag>}
                   {tab==='comps'&&!!row.sale_date&&<Tag color={D.textMuted}>{fmtDate(String(row.sale_date))}</Tag>}
+                  {tab==='comps'&&<Tag color={row.status==='Back on Market'?D.gold:D.textMuted}>{String(row.status||'Closed')}</Tag>}
                   {tab==='avails'&&!!row.asking_price&&<Tag color={D.purple}>${Number(row.asking_price).toLocaleString()}</Tag>}
-                  {tab==='avails'&&!!row.status&&<Tag color={row.status==='Available'?D.green:D.textMuted}>{String(row.status)}</Tag>}
+                  {tab==='avails'&&<Tag color={row.status==='Available'?D.green:row.status==='Under Contract'?D.gold:row.status==='Sold'?D.red:D.textMuted}>{String(row.status||'Available')}</Tag>}
                   {tab==='pcre-sales'&&!!row.sale_price_text&&<Tag color={D.gold}>{String(row.sale_price_text)}</Tag>}
                   {tab==='pcre-sales'&&!!row.sale_date&&<Tag color={D.textMuted}>{fmtDate(String(row.sale_date))}</Tag>}
                   {tab==='pcre-leases'&&!!row.lease_price&&<Tag color={D.gold}>{String(row.lease_price)}</Tag>}
@@ -1388,7 +1390,20 @@ function DatabaseManager() {
                   {!!row.county&&<Tag color={row.county==='Nassau'?D.blue:'#0891B2'}>{String(row.county)}</Tag>}
                 </div>
               </div>
-              <Btn variant="danger" size="sm" onClick={()=>deleteRow(String(row.id))} style={{fontSize:10,padding:'5px 10px',flexShrink:0}}>Delete</Btn>
+              <div style={{display:'flex',alignItems:'center',gap:6,flexShrink:0}}>
+                {(tab==='comps'||tab==='avails')&&(
+                  <select value={String(row.status||(tab==='comps'?'Closed':'Available'))} disabled={updatingStatus.has(String(row.id))} onChange={async e=>{
+                    const newStatus=e.target.value; const id=String(row.id)
+                    setUpdatingStatus(prev=>{const n=new Set(prev);n.add(id);return n})
+                    await fetch(`/api/status?table=${tab==='comps'?'comps':'avails'}&id=${id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({status:newStatus})})
+                    setBrowseData(prev=>prev.map(r=>r.id===id?{...r,status:newStatus}:r))
+                    setUpdatingStatus(prev=>{const n=new Set(prev);n.delete(id);return n})
+                  }} style={{fontSize:10,padding:'4px 6px',borderRadius:5,border:`1px solid ${D.border}`,background:D.surface2,color:D.text,cursor:'pointer',opacity:updatingStatus.has(String(row.id))?0.5:1}}>
+                    {tab==='comps'?<><option value="Closed">Closed</option><option value="Back on Market">Back on Market</option></>:<><option value="Available">Available</option><option value="Under Contract">Under Contract</option><option value="Sold">Sold</option><option value="Off Market">Off Market</option></>}
+                  </select>
+                )}
+                <Btn variant="danger" size="sm" onClick={()=>deleteRow(String(row.id))} style={{fontSize:10,padding:'5px 10px'}}>Delete</Btn>
+              </div>
             </div>
           ))}
           {!browseLoading&&browseCount>PAGE_SIZE&&(
@@ -1560,6 +1575,19 @@ function CompSearch({subject,comps,setComps,setPage,folders,setFolders}: {subjec
   const [folderDropdown, setFolderDropdown] = useState<string|null>(null)
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set())
   const toggleExpand = (id:string) => setExpandedRows(prev=>{const n=new Set(prev);n.has(id)?n.delete(id):n.add(id);return n})
+  const [statusChanging,setStatusChanging]=useState<Set<string>>(new Set())
+
+  const handleBackOnMarket = async (id:string) => {
+    if (!confirm('Mark this comp as Back on Market? A new availability record will be created.')) return
+    setStatusChanging(prev=>{const n=new Set(prev);n.add(id);return n})
+    try {
+      const res=await fetch('/api/promote',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({direction:'comp-to-avail',id})})
+      if (res.ok) {
+        setResults(prev=>prev.map(r=>r.id===id?{...r,status:'Back on Market'}:r))
+        alert('✅ New availability created! Property is now listed as Back on Market.')
+      } else { const d=await res.json(); alert('Error: '+d.error) }
+    } finally { setStatusChanging(prev=>{const n=new Set(prev);n.delete(id);return n}) }
+  }
 
   const scoreComp = (c: Comp, s: SubjectForm): number => {
     const subSF = parseFloat(s.size)||0; const compSF = c.building_sf||0
@@ -1676,6 +1704,7 @@ function CompSearch({subject,comps,setComps,setPage,folders,setFolders}: {subjec
                                   <Tag color={D.blue}>{r.county||'—'}</Tag>
                                   {r.city&&<Tag color={D.textMuted}>{r.city}</Tag>}
                                   {r.sale_date&&<Tag color={D.textMuted}>{fmtDate(r.sale_date)}</Tag>}
+                                  {!!r.status&&<Tag color={(r.status as string)==='Back on Market'?D.gold:D.textMuted}>{String(r.status)}</Tag>}
                                 </div>
                                 <StreetViewPhoto address={`${r.address}, ${r.city||''}, NY`}/>
                               </div>
@@ -1730,6 +1759,11 @@ function CompSearch({subject,comps,setComps,setPage,folders,setFolders}: {subjec
                                   </div>
                                 )}
                               </div>
+                              {r.status!=='Back on Market'&&(
+                                <button onClick={()=>handleBackOnMarket(r.id)} disabled={statusChanging.has(r.id)} style={{marginLeft:'auto',background:'transparent',border:`1px solid ${D.gold}55`,borderRadius:6,color:D.gold,fontSize:11,fontWeight:600,padding:'5px 14px',cursor:'pointer',fontFamily:"'Inter',sans-serif",opacity:statusChanging.has(r.id)?0.5:1}}>
+                                  {statusChanging.has(r.id)?'…':'↗ Back on Market'}
+                                </button>
+                              )}
                             </div>
                           </div>
                         </div>
@@ -1759,10 +1793,33 @@ function AvailSearch({subject,avails,setAvails,setPage,folders,setFolders}: {sub
   const [searched,setSearched]=useState(false)
   const [selected,setSelected]=useState<Set<string>>(new Set())
   const [filters,setFilters]=useState({county:'',city:'',min_sf:'',max_sf:'',min_price:'',max_price:''})
+  const [statusFilter,setStatusFilter]=useState('Available')
   const [showAdd,setShowAdd]=useState(false)
   const [folderDropdown, setFolderDropdown] = useState<string|null>(null)
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set())
   const toggleExpand = (id:string) => setExpandedRows(prev=>{const n=new Set(prev);n.has(id)?n.delete(id):n.add(id);return n})
+  const [statusChanging,setStatusChanging]=useState<Set<string>>(new Set())
+  const [sellModal,setSellModal]=useState<{id:string,salePrice:string,saleDate:string,buyer:string,seller:string}|null>(null)
+
+  const updateAvailStatus = async (id:string,status:string) => {
+    setStatusChanging(prev=>{const n=new Set(prev);n.add(id);return n})
+    try {
+      await fetch(`/api/status?table=avails&id=${id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({status})})
+      setResults(prev=>prev.map(r=>r.id===id?{...r,status}:r))
+    } finally { setStatusChanging(prev=>{const n=new Set(prev);n.delete(id);return n}) }
+  }
+  const confirmSellAvail = async () => {
+    if (!sellModal) return
+    const {id,salePrice,saleDate,buyer,seller}=sellModal
+    setStatusChanging(prev=>{const n=new Set(prev);n.add(id);return n})
+    try {
+      const res=await fetch('/api/promote',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({direction:'avail-to-comp',id,salePrice,saleDate,buyer,seller})})
+      if (res.ok) {
+        setResults(prev=>prev.map(r=>r.id===id?{...r,status:'Sold'}:r))
+        alert('✅ Marked as Sold and added to Sale Comps!')
+      } else { const d=await res.json(); alert('Error: '+d.error) }
+    } finally { setStatusChanging(prev=>{const n=new Set(prev);n.delete(id);return n}); setSellModal(null) }
+  }
 
   const search = async () => {
     setLoading(true); setResults([]); setSearched(false)
@@ -1773,6 +1830,7 @@ function AvailSearch({subject,avails,setAvails,setPage,folders,setFolders}: {sub
     if (filters.max_sf) q = q.lte('building_sf', Number(filters.max_sf))
     if (filters.min_price) q = q.gte('asking_price', Number(filters.min_price))
     if (filters.max_price) q = q.lte('asking_price', Number(filters.max_price))
+    if (statusFilter) q = q.eq('status', statusFilter)
     q = q.order('created_at', {ascending:false}).limit(200)
     const {data,error} = await q
     if (error) { alert('Search error: ' + error.message); setLoading(false); return }
@@ -1793,6 +1851,25 @@ function AvailSearch({subject,avails,setAvails,setPage,folders,setFolders}: {sub
     if (data) { setResults(prev=>[data[0],...prev]); setShowAdd(false); setNewAvail({address:'',city:'',county:'Nassau',building_sf:'',ceiling_height:'',loading_docks:'',drive_ins:'',asking_price:'',pricing_guidance:'',sewer:'Municipal',zoning:'',loopnet_url:''}) }
   }
   return (
+    <>
+    {sellModal&&(
+      <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.75)',zIndex:1000,display:'flex',alignItems:'center',justifyContent:'center'}} onClick={()=>setSellModal(null)}>
+        <div style={{background:D.surface,borderRadius:12,padding:28,width:440,maxWidth:'92vw',boxShadow:'0 20px 60px rgba(0,0,0,.8)',border:`1px solid ${D.border}`}} onClick={e=>e.stopPropagation()}>
+          <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:20,color:D.gold,marginBottom:6}}>Mark as Sold → Move to Comps</div>
+          <p style={{fontSize:12,color:D.textSec,marginBottom:20,lineHeight:1.6}}>Enter the sale details. A matching Sale Comp record will be created automatically.</p>
+          <Field label="Sale Price ($)" full><Input type="number" placeholder="1500000" value={sellModal.salePrice} onChange={e=>setSellModal(m=>m?{...m,salePrice:e.target.value}:null)}/></Field>
+          <Field label="Sale Date" full><Input type="date" value={sellModal.saleDate} onChange={e=>setSellModal(m=>m?{...m,saleDate:e.target.value}:null)}/></Field>
+          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10}}>
+            <Field label="Buyer"><Input placeholder="Buyer entity" value={sellModal.buyer} onChange={e=>setSellModal(m=>m?{...m,buyer:e.target.value}:null)}/></Field>
+            <Field label="Seller"><Input placeholder="Seller entity" value={sellModal.seller} onChange={e=>setSellModal(m=>m?{...m,seller:e.target.value}:null)}/></Field>
+          </div>
+          <div style={{display:'flex',gap:10,marginTop:20}}>
+            <Btn onClick={confirmSellAvail} style={{flex:1,padding:12}}>✓ Confirm — Move to Sale Comps</Btn>
+            <Btn variant="ghost" onClick={()=>setSellModal(null)} style={{padding:'12px 18px'}}>Cancel</Btn>
+          </div>
+        </div>
+      </div>
+    )}
     <div className="anim-in">
       <SectionTitle sub="Search active Long Island industrial listings. Add them directly from LoopNet, CoStar, or your own database.">Market Availability Search</SectionTitle>
       <div style={{display:'grid',gridTemplateColumns:'280px 1fr',gap:20,alignItems:'start'}}>
@@ -1807,6 +1884,7 @@ function AvailSearch({subject,avails,setAvails,setPage,folders,setFolders}: {sub
               <Field label="Min Price"><Input type="number" placeholder="0" value={filters.min_price} onChange={e=>sf('min_price',e.target.value)}/></Field>
               <Field label="Max Price"><Input type="number" placeholder="Any" value={filters.max_price} onChange={e=>sf('max_price',e.target.value)}/></Field>
             </div>
+            <Field label="Status"><Sel value={statusFilter} onChange={e=>setStatusFilter(e.target.value)}><option value="">All Statuses</option><option value="Available">Available</option><option value="Under Contract">Under Contract</option><option value="Sold">Sold</option><option value="Off Market">Off Market</option></Sel></Field>
             <Btn onClick={search} disabled={loading} style={{width:'100%',padding:11,background:`rgba(59,130,246,0.15)`,border:`1px solid rgba(59,130,246,0.3)`,color:D.blue}}>{loading?'Searching...':'🔍 Search Availabilities'}</Btn>
           </Card>
           <Card>
@@ -1880,6 +1958,7 @@ function AvailSearch({subject,avails,setAvails,setPage,folders,setFolders}: {sub
                                 <Tag color={D.blue}>{r.county||'—'}</Tag>
                                 {r.city&&<Tag color={D.textMuted}>{r.city}</Tag>}
                                 {r.listing_broker&&<Tag color={D.textMuted}>{r.listing_broker}</Tag>}
+                                {!!r.status&&<Tag color={(r.status as string)==='Available'?D.green:(r.status as string)==='Under Contract'?D.gold:(r.status as string)==='Sold'?D.red:D.textMuted}>{String(r.status)}</Tag>}
                               </div>
                               <StreetViewPhoto address={`${r.address||''}, ${r.city||''}, NY`}/>
                             </div>
@@ -1905,7 +1984,7 @@ function AvailSearch({subject,avails,setAvails,setPage,folders,setFolders}: {sub
                             {sc('Zoning', r.zoning)}
                             {sc('Submarket', (r as Avail&{submarket?:string}).submarket)}
                           </div>
-                          <div style={{display:'flex',gap:8,alignItems:'center',paddingTop:10,borderTop:`1px solid ${D.border}`}}>
+                          <div style={{display:'flex',gap:8,alignItems:'center',flexWrap:'wrap' as const,paddingTop:10,borderTop:`1px solid ${D.border}`}}>
                             {isAdded
                               ? <Tag color={D.green}>✓ Added to OPV</Tag>
                               : <button onClick={()=>setAvails([...avails,r])} style={{background:`rgba(59,130,246,0.12)`,border:`1px solid rgba(59,130,246,0.25)`,borderRadius:6,color:D.blue,fontSize:12,fontWeight:700,padding:'6px 14px',cursor:'pointer',fontFamily:"'Inter',sans-serif"}}>＋ Add to OPV</button>
@@ -1931,6 +2010,18 @@ function AvailSearch({subject,avails,setAvails,setPage,folders,setFolders}: {sub
                                 </div>
                               )}
                             </div>
+                            <div style={{marginLeft:'auto',display:'flex',alignItems:'center',gap:6}}>
+                              <span style={{fontSize:10,color:D.textMuted,fontWeight:600,letterSpacing:'.06em'}}>STATUS</span>
+                              <select value={r.status!=null?String(r.status):'Available'} disabled={statusChanging.has(r.id)} onChange={e=>{
+                                if(e.target.value==='Sold') setSellModal({id:r.id,salePrice:'',saleDate:'',buyer:'',seller:''})
+                                else updateAvailStatus(r.id,e.target.value)
+                              }} style={{fontSize:11,padding:'4px 8px',borderRadius:6,border:`1px solid ${D.border}`,background:D.surface2,color:D.text,cursor:'pointer',fontFamily:"'Inter',sans-serif",opacity:statusChanging.has(r.id)?0.5:1}}>
+                                <option value="Available">Available</option>
+                                <option value="Under Contract">Under Contract</option>
+                                <option value="Sold">Sold → Comp</option>
+                                <option value="Off Market">Off Market</option>
+                              </select>
+                            </div>
                           </div>
                         </div>
                       </div>
@@ -1943,6 +2034,7 @@ function AvailSearch({subject,avails,setAvails,setPage,folders,setFolders}: {sub
         </div>
       </div>
     </div>
+    </>
   )
 }
 
