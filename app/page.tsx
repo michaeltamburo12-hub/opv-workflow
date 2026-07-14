@@ -941,6 +941,16 @@ function DatabaseManager() {
   const [tab, setTab] = useState<'comps'|'avails'|'pcre-sales'|'pcre-leases'>('comps')
   const [subTab, setSubTab] = useState<'add'|'import'|'file'|'browse'>('add')
   const [saving, setSaving] = useState(false)
+  type DupMatch = {id:string,address?:string,city?:string,sale_date?:string,sale_price?:number,asking_price?:number,building_sf?:number}
+  const [dupModal, setDupModal] = useState<{matches:DupMatch[],onConfirm:()=>void}|null>(null)
+
+  const checkDupes = async (tableName:string, address:string, onConfirm:()=>void) => {
+    const addr = address.trim()
+    const {data} = await supabase.from(tableName).select('id,address,city,sale_date,sale_price,asking_price,building_sf').ilike('address',`%${addr}%`).limit(5)
+    if (data && data.length>0) { setDupModal({matches:data as DupMatch[],onConfirm}); return }
+    onConfirm()
+  }
+
   const [importText, setImportText] = useState('')
   const [importPreview, setImportPreview] = useState<Record<string,string>[]>([])
   const [importing, setImporting] = useState(false)
@@ -986,8 +996,7 @@ function DatabaseManager() {
 
   const tableForTab = (t: typeof tab) => t==='comps'?'industrial_sale_comps':t==='avails'?'market_availabilities':t==='pcre-sales'?'pcre_sale_transactions':'pcre_lease_transactions'
 
-  const saveComp = async () => {
-    if (!compForm.address) { alert('Address is required'); return }
+  const doSaveComp = async () => {
     setSaving(true)
     const payload: Record<string,unknown> = {...compForm}
     const nums = ['building_sf','lot_size_ac','real_estate_taxes','sale_price','price_per_sf']
@@ -999,9 +1008,12 @@ function DatabaseManager() {
     alert('✅ Sale comp saved to Supabase!')
     setCompForm({...blankComp})
   }
+  const saveComp = async () => {
+    if (!compForm.address) { alert('Address is required'); return }
+    await checkDupes('industrial_sale_comps', compForm.address, doSaveComp)
+  }
 
-  const saveAvail = async () => {
-    if (!availForm.address) { alert('Address is required'); return }
+  const doSaveAvail = async () => {
     setSaving(true)
     const payload: Record<string,unknown> = {...availForm}
     const nums = ['building_sf','lot_size_ac','real_estate_taxes','asking_price','price_per_sf']
@@ -1011,6 +1023,10 @@ function DatabaseManager() {
     if (error) { alert('Error: '+error.message); return }
     alert('✅ Availability saved to Supabase!')
     setAvailForm({...blankAvail})
+  }
+  const saveAvail = async () => {
+    if (!availForm.address) { alert('Address is required'); return }
+    await checkDupes('market_availabilities', availForm.address, doSaveAvail)
   }
 
   const savePcreSale = async () => {
@@ -1139,6 +1155,37 @@ function DatabaseManager() {
     <div onClick={()=>{ setSubTab(id); if(id==='browse') loadBrowse(0) }} style={{padding:'7px 16px',borderRadius:7,cursor:'pointer',fontSize:11,fontWeight:600,display:'flex',alignItems:'center',gap:6,background:subTab===id?`rgba(59,130,246,0.15)`:'transparent',color:subTab===id?D.blue:D.textSec,border:`1px solid ${subTab===id?`${D.blue}55`:D.border}`,transition:'all .2s'}}><span>{icon}</span>{label}</div>
   )
   return (
+    <>
+    {dupModal&&(
+      <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.75)',zIndex:1000,display:'flex',alignItems:'center',justifyContent:'center'}} onClick={()=>setDupModal(null)}>
+        <div style={{background:D.surface,borderRadius:14,padding:28,width:480,maxWidth:'92vw',boxShadow:'0 20px 60px rgba(0,0,0,.8)',border:`1px solid rgba(239,68,68,0.3)`}} onClick={e=>e.stopPropagation()}>
+          <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:6}}>
+            <div style={{width:32,height:32,borderRadius:8,background:'rgba(239,68,68,0.12)',border:'1px solid rgba(239,68,68,0.3)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:16,flexShrink:0}}>⚠️</div>
+            <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:20,color:D.red}}>Possible Duplicate Detected</div>
+          </div>
+          <p style={{fontSize:12,color:D.textSec,marginBottom:18,lineHeight:1.6}}>
+            {dupModal.matches.length} existing record{dupModal.matches.length!==1?'s':''} found with a similar address. Review before saving.
+          </p>
+          <div style={{display:'flex',flexDirection:'column' as const,gap:8,marginBottom:20,maxHeight:220,overflowY:'auto' as const}}>
+            {dupModal.matches.map(m=>(
+              <div key={m.id} style={{padding:'10px 14px',borderRadius:8,background:D.surface2,border:`1px solid ${D.border}`}}>
+                <div style={{fontSize:13,fontWeight:600,color:D.text,marginBottom:4}}>{m.address}{m.city?`, ${m.city}`:''}</div>
+                <div style={{display:'flex',gap:10,flexWrap:'wrap' as const}}>
+                  {m.building_sf&&<span style={{fontSize:11,color:D.textSec}}>{Number(m.building_sf).toLocaleString()} SF</span>}
+                  {m.sale_price&&<span style={{fontSize:11,color:D.gold}}>${Number(m.sale_price).toLocaleString()}</span>}
+                  {m.asking_price&&<span style={{fontSize:11,color:D.blue}}>${Number(m.asking_price).toLocaleString()} asking</span>}
+                  {m.sale_date&&<span style={{fontSize:11,color:D.textMuted}}>{fmtDate(m.sale_date)}</span>}
+                </div>
+              </div>
+            ))}
+          </div>
+          <div style={{display:'flex',gap:10}}>
+            <Btn onClick={()=>{dupModal.onConfirm()}} style={{flex:1,padding:12,background:'rgba(239,68,68,0.12)',borderColor:'rgba(239,68,68,0.35)',color:D.red}}>Save Anyway</Btn>
+            <Btn variant="ghost" onClick={()=>setDupModal(null)} style={{flex:1,padding:12}}>Cancel — Go Back</Btn>
+          </div>
+        </div>
+      </div>
+    )}
     <div className="anim-in">
       <SectionTitle sub="Add single records, upload files, paste CSV, or browse and manage your Supabase database directly.">Database Manager</SectionTitle>
       <div style={{display:'flex',gap:8,marginBottom:20,flexWrap:'wrap' as const}}>
@@ -1442,6 +1489,7 @@ function DatabaseManager() {
         </Card>
       )}
     </div>
+  </>
   )
 }
 
@@ -1895,14 +1943,47 @@ function AvailSearch({subject,avails,setAvails,setPage,folders,setFolders}: {sub
   }
   const sf = (k:string,v:string) => setFilters(f=>({...f,[k]:v}))
   const [newAvail,setNewAvail]=useState({address:'',city:'',county:'Nassau',building_sf:'',ceiling_height:'',loading_docks:'',drive_ins:'',asking_price:'',pricing_guidance:'',sewer:'Municipal',zoning:'',loopnet_url:''})
-  const saveNewAvail = async () => {
-    if (!newAvail.address) { alert('Address required'); return }
+  const [availDupModal,setAvailDupModal]=useState<{matches:{id:string,address?:string,city?:string,asking_price?:number,building_sf?:number}[],onConfirm:()=>void}|null>(null)
+
+  const doSaveNewAvail = async () => {
     const {data,error} = await supabase.from('market_availabilities').insert([{...newAvail,building_sf:parseFloat(newAvail.building_sf)||null,asking_price:parseFloat(newAvail.asking_price)||null,status:'Available'}]).select()
     if (error) { alert('Save error: ' + error.message); return }
     if (data) { setResults(prev=>[data[0],...prev]); setShowAdd(false); setNewAvail({address:'',city:'',county:'Nassau',building_sf:'',ceiling_height:'',loading_docks:'',drive_ins:'',asking_price:'',pricing_guidance:'',sewer:'Municipal',zoning:'',loopnet_url:''}) }
   }
+  const saveNewAvail = async () => {
+    if (!newAvail.address) { alert('Address required'); return }
+    const {data} = await supabase.from('market_availabilities').select('id,address,city,asking_price,building_sf').ilike('address',`%${newAvail.address.trim()}%`).limit(5)
+    if (data && data.length>0) { setAvailDupModal({matches:data,onConfirm:()=>{setAvailDupModal(null);doSaveNewAvail()}}); return }
+    doSaveNewAvail()
+  }
   return (
     <>
+    {availDupModal&&(
+      <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.75)',zIndex:1000,display:'flex',alignItems:'center',justifyContent:'center'}} onClick={()=>setAvailDupModal(null)}>
+        <div style={{background:D.surface,borderRadius:14,padding:28,width:480,maxWidth:'92vw',boxShadow:'0 20px 60px rgba(0,0,0,.8)',border:'1px solid rgba(239,68,68,0.3)'}} onClick={e=>e.stopPropagation()}>
+          <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:6}}>
+            <div style={{width:32,height:32,borderRadius:8,background:'rgba(239,68,68,0.12)',border:'1px solid rgba(239,68,68,0.3)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:16,flexShrink:0}}>⚠️</div>
+            <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:20,color:D.red}}>Possible Duplicate Detected</div>
+          </div>
+          <p style={{fontSize:12,color:D.textSec,marginBottom:18,lineHeight:1.6}}>{availDupModal.matches.length} existing listing{availDupModal.matches.length!==1?'s':''} found with a similar address.</p>
+          <div style={{display:'flex',flexDirection:'column' as const,gap:8,marginBottom:20,maxHeight:200,overflowY:'auto' as const}}>
+            {availDupModal.matches.map(m=>(
+              <div key={m.id} style={{padding:'10px 14px',borderRadius:8,background:D.surface2,border:`1px solid ${D.border}`}}>
+                <div style={{fontSize:13,fontWeight:600,color:D.text,marginBottom:4}}>{m.address}{m.city?`, ${m.city}`:''}</div>
+                <div style={{display:'flex',gap:10}}>
+                  {m.building_sf&&<span style={{fontSize:11,color:D.textSec}}>{Number(m.building_sf).toLocaleString()} SF</span>}
+                  {m.asking_price&&<span style={{fontSize:11,color:D.blue}}>${Number(m.asking_price).toLocaleString()} asking</span>}
+                </div>
+              </div>
+            ))}
+          </div>
+          <div style={{display:'flex',gap:10}}>
+            <Btn onClick={()=>availDupModal.onConfirm()} style={{flex:1,padding:12,background:'rgba(239,68,68,0.12)',borderColor:'rgba(239,68,68,0.35)',color:D.red}}>Save Anyway</Btn>
+            <Btn variant="ghost" onClick={()=>setAvailDupModal(null)} style={{flex:1,padding:12}}>Cancel — Go Back</Btn>
+          </div>
+        </div>
+      </div>
+    )}
     {sellModal&&(
       <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.75)',zIndex:1000,display:'flex',alignItems:'center',justifyContent:'center'}} onClick={()=>setSellModal(null)}>
         <div style={{background:D.surface,borderRadius:12,padding:28,width:440,maxWidth:'92vw',boxShadow:'0 20px 60px rgba(0,0,0,.8)',border:`1px solid ${D.border}`}} onClick={e=>e.stopPropagation()}>
