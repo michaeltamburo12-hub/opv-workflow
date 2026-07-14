@@ -696,7 +696,6 @@ function FolderManager({folders, setFolders, setPage, comps, setComps, avails, s
                         setAvails([...avails,...items.filter(i=>!existing.includes(i.id)) as Avail[]])
                       }
                       alert(`${items.length} propert${items.length===1?'y':'ies'} added to your OPV.`)
-                      setPage(active.type==='comps'?'comp-search':'avail-search')
                     }} style={{flex:1,padding:'11px 16px',fontSize:13}}>
                       {selected.size===0?'Select properties to add':'➕ Add ' + selected.size + ' to OPV Report'}
                     </Btn>
