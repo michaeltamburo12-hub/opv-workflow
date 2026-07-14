@@ -1800,6 +1800,12 @@ function AvailSearch({subject,avails,setAvails,setPage,folders,setFolders}: {sub
   const toggleExpand = (id:string) => setExpandedRows(prev=>{const n=new Set(prev);n.has(id)?n.delete(id):n.add(id);return n})
   const [statusChanging,setStatusChanging]=useState<Set<string>>(new Set())
   const [sellModal,setSellModal]=useState<{id:string,salePrice:string,saleDate:string,buyer:string,seller:string}|null>(null)
+  const [statusColReady,setStatusColReady]=useState(false)
+
+  // Run migration on mount so status column exists before first search
+  useEffect(()=>{
+    fetch('/api/status').then(()=>setStatusColReady(true)).catch(()=>setStatusColReady(true))
+  },[])
 
   const updateAvailStatus = async (id:string,status:string) => {
     setStatusChanging(prev=>{const n=new Set(prev);n.add(id);return n})
@@ -1821,8 +1827,7 @@ function AvailSearch({subject,avails,setAvails,setPage,folders,setFolders}: {sub
     } finally { setStatusChanging(prev=>{const n=new Set(prev);n.delete(id);return n}); setSellModal(null) }
   }
 
-  const search = async () => {
-    setLoading(true); setResults([]); setSearched(false)
+  const buildQuery = (withStatus: boolean) => {
     let q = supabase.from('market_availabilities').select('*')
     if (filters.county) q = q.eq('county', filters.county)
     if (filters.city) q = q.ilike('city', `%${filters.city}%`)
@@ -1830,9 +1835,20 @@ function AvailSearch({subject,avails,setAvails,setPage,folders,setFolders}: {sub
     if (filters.max_sf) q = q.lte('building_sf', Number(filters.max_sf))
     if (filters.min_price) q = q.gte('asking_price', Number(filters.min_price))
     if (filters.max_price) q = q.lte('asking_price', Number(filters.max_price))
-    if (statusFilter) q = q.eq('status', statusFilter)
-    q = q.order('created_at', {ascending:false}).limit(200)
-    const {data,error} = await q
+    if (withStatus && statusFilter) q = q.eq('status', statusFilter)
+    return q.order('created_at', {ascending:false}).limit(200)
+  }
+
+  const search = async () => {
+    setLoading(true); setResults([]); setSearched(false)
+    // Ensure migration has run (idempotent)
+    if (!statusColReady) await fetch('/api/status').catch(()=>{})
+    let {data,error} = await buildQuery(true)
+    // If status column doesn't exist yet, retry without status filter
+    if (error && (error.message?.toLowerCase().includes('status') || error.message?.toLowerCase().includes('column'))) {
+      const result = await buildQuery(false)
+      data = result.data; error = result.error
+    }
     if (error) { alert('Search error: ' + error.message); setLoading(false); return }
     setResults(data||[]); setSearched(true); setLoading(false)
   }
