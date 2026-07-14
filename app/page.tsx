@@ -3313,7 +3313,7 @@ export default function App() {
       const res = await fetch('/api/opv-history',{
         method:'POST',
         headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({savedBy:user.name, address:subject.address, subject, comps, leaseComps, avails, analytics, aiText, currentStep:page, existingId:savedOPVId, assignmentData})
+        body:JSON.stringify({savedBy:user.name, address:subject.address, subject, comps, leaseComps, avails, analytics, aiText, currentStep:page, existingId:savedOPVId, assignmentData, folders})
       })
       const data = await res.json()
       if(data.error) throw new Error(data.error)
@@ -3347,6 +3347,7 @@ export default function App() {
       if(data.analytics) setAnalytics(data.analytics)
       if(data.aiText) setAiText(data.aiText)
       if(data.assignmentData) setAssignmentData(data.assignmentData)
+      if(data.folders?.length) updateFolders(data.folders)
       setSavedOPVId(id)
       setLastSaved(new Date(data.updatedAt||data.createdAt))
       setShowSavedPanel(false)
