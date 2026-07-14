@@ -2465,18 +2465,32 @@ function OPVReport({subject,comps,leaseComps,avails,analytics,aiText,setPage}: {
   const [frozenHTML, setFrozenHTML] = useState<string|null>(null)
   const reportRef = useRef<HTMLDivElement>(null)
 
-  // Toggle edit mode: freeze/unfreeze HTML so React can't overwrite user edits
+  // Toggle edit mode
+  // Key fix: set innerHTML imperatively so React never overwrites the user's typing
+  const editableRef = useRef<HTMLDivElement>(null)
+
   const toggleEditMode = () => {
     if (!editMode) {
-      // Entering edit mode — capture current rendered HTML and freeze it
-      if (reportRef.current) setFrozenHTML(reportRef.current.innerHTML)
+      // Capture current rendered HTML, then switch to edit view
+      const html = reportRef.current?.innerHTML || ''
+      setFrozenHTML(html)
       setEditMode(true)
     } else {
-      // Leaving edit mode — save whatever the user typed
-      if (reportRef.current) setFrozenHTML(reportRef.current.innerHTML)
+      // Save whatever the user typed, then switch back to React view
+      if (editableRef.current) setFrozenHTML(editableRef.current.innerHTML)
       setEditMode(false)
     }
   }
+
+  // Imperatively inject HTML into the editable div — only once when entering edit mode
+  // Using dangerouslySetInnerHTML on a contentEditable causes React to reset content on every re-render
+  useEffect(() => {
+    if (editMode && editableRef.current && frozenHTML !== null) {
+      editableRef.current.innerHTML = frozenHTML
+      editableRef.current.focus()
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editMode]) // intentionally only runs when editMode flips, not on frozenHTML changes
 
   // ── INLINE TEXT EDITING ──
   const [textEdits, setTextEdits] = useState<Record<string,string>>(() => {
@@ -2663,7 +2677,8 @@ function OPVReport({subject,comps,leaseComps,avails,analytics,aiText,setPage}: {
   }
 
   const cloneReport = () => {
-    const reportEl = reportRef.current
+    // In edit mode use the editable div, otherwise the normal report ref
+    const reportEl = editMode ? editableRef.current : reportRef.current
     if (!reportEl) return null
     const clone = reportEl.cloneNode(true) as HTMLElement
     clone.querySelectorAll('.no-print, button, input, textarea').forEach(el => el.remove())
@@ -2866,13 +2881,20 @@ img{max-width:100%;height:auto;}
       </div>}
 
       {/* Full OPV Document */}
-      {(editMode && frozenHTML) ? (
-        <div ref={reportRef} className="print-area"
+      {editMode ? (
+        /* Edit mode: bare contentEditable — innerHTML set imperatively in useEffect, never by React */
+        <div ref={editableRef} className="print-area"
           contentEditable={true} suppressContentEditableWarning={true}
+          style={{...doc,borderRadius:10,padding:'60px 72px',maxWidth:960,margin:'0 auto',boxShadow:'0 4px 32px rgba(0,0,0,.25)',outline:'2px solid rgba(16,185,129,0.4)',cursor:'text',minHeight:400}}
+        />
+      ) : frozenHTML ? (
+        /* Read mode with saved edits: show frozen HTML, ref used for downloads */
+        <div ref={reportRef} className="print-area"
           dangerouslySetInnerHTML={{__html: frozenHTML}}
-          style={{...doc,borderRadius:10,padding:'60px 72px',maxWidth:960,margin:'0 auto',boxShadow:'0 4px 32px rgba(0,0,0,.25)',outline:'2px solid rgba(16,185,129,0.4)',cursor:'text'}}
+          style={{...doc,borderRadius:10,padding:'60px 72px',maxWidth:960,margin:'0 auto',boxShadow:'0 4px 32px rgba(0,0,0,.25)'}}
         />
       ) : (
+      /* Normal React-rendered report */
       <div ref={reportRef} className="print-area"
         style={{...doc,borderRadius:10,padding:'60px 72px',maxWidth:960,margin:'0 auto',boxShadow:'0 4px 32px rgba(0,0,0,.25)'}}>
 
