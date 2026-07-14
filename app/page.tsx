@@ -2703,44 +2703,6 @@ function OPVReport({subject,comps,leaseComps,avails,analytics,aiText,setPage}: {
   }
   // ─────────────────────────────────────────────────────────────────────────────
 
-  const downloadWord = async () => {
-    setDownloading(true)
-    try {
-      const clone = cloneReport()
-      if (!clone) { setDownloading(false); return }
-      await embedImages(clone)
-      convertGrids(clone)
-
-      const wordHTML = `<html xmlns:o='urn:schemas-microsoft-com:office:office'
-xmlns:w='urn:schemas-microsoft-com:office:word'
-xmlns='http://www.w3.org/TR/REC-html40'>
-<head><meta charset="utf-8">
-<!--[if gte mso 9]><xml><w:WordDocument><w:View>Print</w:View></w:WordDocument></xml><![endif]-->
-<style>
-@page WordSection1{size:8.5in 11.0in;margin:1.0in 1.0in 1.0in 1.0in;}
-div.WordSection1{page:WordSection1;}
-html,body{background:#fff!important;color:#1a1a1a!important;font-family:Arial,sans-serif;font-size:13px;line-height:1.7;margin:0;padding:0;}
-table{border-collapse:collapse;width:100%;}
-td,th{padding:6px 10px;border:1px solid #ccc;font-size:11px;vertical-align:middle;}
-img{max-width:100%;height:auto;}
-*{background-color:transparent;}
-</style></head>
-<body style="background:#fff;color:#1a1a1a;">
-<div class="WordSection1">${clone.innerHTML}</div>
-</body></html>`
-
-      const blob = new Blob(['﻿', wordHTML], { type: 'application/msword' })
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      const addr = (subject?.address || 'OPV').replace(/[^a-zA-Z0-9\s]/g,'').trim().replace(/\s+/g,'_')
-      a.download = `OPV_${addr}.doc`
-      document.body.appendChild(a); a.click(); document.body.removeChild(a)
-      URL.revokeObjectURL(url)
-    } catch(e) { alert('Download failed: ' + (e as Error).message) }
-    setDownloading(false)
-  }
-
   const downloadPDF = async () => {
     setDownloading(true)
     try {
@@ -2865,16 +2827,13 @@ img{max-width:100%;height:auto;}
               {editMode ? '✅ Done Editing' : frozenHTML ? '✏️ Edit Report (edited)' : '✏️ Edit Report'}
             </Btn>
             {frozenHTML&&!editMode&&<Btn variant="ghost" onClick={()=>setFrozenHTML(null)} style={{padding:'9px 12px',fontSize:11,color:D.textMuted}}>↩ Reset</Btn>}
-            <Btn onClick={downloadWord} disabled={downloading} style={{padding:'9px 20px',fontSize:12,background:`rgba(217,119,6,0.12)`,color:D.gold,border:`1px solid rgba(217,119,6,0.3)`}}>
-              {downloading ? 'Generating...' : '📄 Download Word'}
-            </Btn>
             <Btn onClick={downloadPDF} disabled={downloading} style={{padding:'9px 20px',fontSize:12,background:`rgba(239,68,68,0.10)`,color:'#EF4444',border:`1px solid rgba(239,68,68,0.3)`}}>
               {downloading ? 'Generating...' : '📕 Download PDF'}
             </Btn>
           </div>
         </div>
         <Card style={{padding:'14px 18px'}}>
-          <div style={{fontSize:10,fontWeight:700,letterSpacing:'.1em',textTransform:'uppercase' as const,color:D.textSec,marginBottom:10}}>Word Report Sections</div>
+          <div style={{fontSize:10,fontWeight:700,letterSpacing:'.1em',textTransform:'uppercase' as const,color:D.textSec,marginBottom:10}}>Report Sections</div>
           <div style={{display:'flex',gap:20,flexWrap:'wrap' as const}}>
             {([
               ['Include Lease Comps', includeLeaseComps, setIncludeLeaseComps],
