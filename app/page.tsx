@@ -2449,7 +2449,7 @@ function PhotoSlot({photoKey,defaultSrc,height=280,override,isEditing,canEdit=fa
 }
 
 // ── OPV REPORT ────────────────────────────────────────────────────────────────
-function OPVReport({subject,comps,leaseComps,avails,analytics,aiText,setPage}: {subject:SubjectForm|null,comps:Comp[],leaseComps:LeaseComp[],avails:Avail[],analytics:AnalyticsData|null,aiText:string,setPage:(p:string)=>void}) {
+function OPVReport({subject,comps,leaseComps,avails,analytics,aiText,setPage,frozenHTML,setFrozenHTML}: {subject:SubjectForm|null,comps:Comp[],leaseComps:LeaseComp[],avails:Avail[],analytics:AnalyticsData|null,aiText:string,setPage:(p:string)=>void,frozenHTML:string|null,setFrozenHTML:(h:string|null)=>void}) {
   const today = new Date().toLocaleDateString('en-US',{month:'long',year:'numeric'}).toUpperCase()
   const [downloading, setDownloading] = useState(false)
   const [includeLeaseComps, setIncludeLeaseComps] = useState(leaseComps.length>0)
@@ -2461,7 +2461,6 @@ function OPVReport({subject,comps,leaseComps,avails,analytics,aiText,setPage}: {
   })
   const [editingKey, setEditingKey] = useState<string|null>(null)
   const [editMode, setEditMode] = useState(false)
-  const [frozenHTML, setFrozenHTML] = useState<string|null>(null)
   const reportRef = useRef<HTMLDivElement>(null)
   const editFrameRef = useRef<HTMLIFrameElement>(null)
 
@@ -3296,6 +3295,7 @@ export default function App() {
   const [saving,setSaving]=useState(false)
   const [savedOPVs,setSavedOPVs]=useState<{id:string,address:string,current_step:string,updated_at:string,saved_by:string}[]>([])
   const [showSavedPanel,setShowSavedPanel]=useState(false)
+  const [editedReportHTML,setEditedReportHTML]=useState<string|null>(null)
   const [folders,setFolders]=useState<Folder[]>(()=>{
     if (typeof window==='undefined') return []
     try { return JSON.parse(localStorage.getItem('opv_folders')||'[]') } catch { return [] }
@@ -3345,7 +3345,7 @@ export default function App() {
       const res = await fetch('/api/opv-history',{
         method:'POST',
         headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({savedBy:user.name, address:subject.address, subject, comps, leaseComps, avails, analytics, aiText, currentStep:page, existingId:savedOPVId, assignmentData, folders})
+        body:JSON.stringify({savedBy:user.name, address:subject.address, subject, comps, leaseComps, avails, analytics, aiText, currentStep:page, existingId:savedOPVId, assignmentData, folders, editedReportHTML})
       })
       const data = await res.json()
       if(data.error) throw new Error(data.error)
@@ -3380,6 +3380,7 @@ export default function App() {
       if(data.aiText) setAiText(data.aiText)
       if(data.assignmentData) setAssignmentData(data.assignmentData)
       if(data.folders?.length) updateFolders(data.folders)
+      if(data.editedReportHTML) setEditedReportHTML(data.editedReportHTML)
       setSavedOPVId(id)
       setLastSaved(new Date(data.updatedAt||data.createdAt))
       setShowSavedPanel(false)
@@ -3409,6 +3410,7 @@ export default function App() {
     setPhotoUrls({})
     setVerificationStatus({})
     setFolders([])
+    setEditedReportHTML(null)
     setSavedOPVId(null)
     setLastSaved(null)
     try{localStorage.removeItem('opv_saved_id')}catch{}
@@ -3584,7 +3586,7 @@ export default function App() {
             {page==='folders'&&<FolderManager folders={folders} setFolders={updateFolders} setPage={handleSetPage} comps={comps} setComps={setComps} avails={avails} setAvails={setAvails}/>}
             {page==='analytics'&&<Analytics comps={scoredComps.length>0?scoredComps:comps} avails={avails} analytics={analytics} setAnalytics={setAnalytics} setPage={handleSetPage}/>}
             {page==='broker-review'&&<BrokerReview subject={subject} comps={scoredComps.length>0?scoredComps:comps} analytics={analytics} setAnalytics={setAnalytics} aiText={aiText} setAiText={setAiText} setPage={handleSetPage} setSubject={setSubject}/>}
-            {page==='opv-report'&&<OPVReport subject={subject} comps={scoredComps.length>0?scoredComps:comps} leaseComps={leaseComps} avails={avails} analytics={analytics} aiText={aiText} setPage={handleSetPage}/>}
+            {page==='opv-report'&&<OPVReport subject={subject} comps={scoredComps.length>0?scoredComps:comps} leaseComps={leaseComps} avails={avails} analytics={analytics} aiText={aiText} setPage={handleSetPage} frozenHTML={editedReportHTML} setFrozenHTML={setEditedReportHTML}/>}
           </div>
           {/* ── Sticky Step Nav Bar ── */}
           {(()=>{
