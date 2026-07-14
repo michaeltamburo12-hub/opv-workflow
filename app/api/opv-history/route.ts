@@ -83,16 +83,37 @@ export async function POST(req: NextRequest) {
     edited_report_html: editedReportHTML || null,
   }
 
+  // Helper: strip edited_report_html and retry if the column doesn't exist yet
+  const saveWithFallback = async (p: typeof payload, id?: string) => {
+    if (id) {
+      let { error } = await supabaseAdmin.from(TABLE).update(p).eq('id', id)
+      if (error?.message?.includes('edited_report_html')) {
+        const { edited_report_html: _h, ...rest } = p
+        const r2 = await supabaseAdmin.from(TABLE).update(rest).eq('id', id)
+        error = r2.error
+      }
+      return { id, error }
+    } else {
+      let { data, error } = await supabaseAdmin.from(TABLE).insert(p).select().single()
+      if (error?.message?.includes('edited_report_html')) {
+        const { edited_report_html: _h, ...rest } = p
+        const r2 = await supabaseAdmin.from(TABLE).insert(rest).select().single()
+        data = r2.data; error = r2.error
+      }
+      return { id: data?.id, error }
+    }
+  }
+
   // If updating an existing save, upsert it
   if (existingId) {
-    const { error } = await supabaseAdmin.from(TABLE).update(payload).eq('id', existingId)
+    const { error } = await saveWithFallback(payload, existingId)
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
     return NextResponse.json({ id: existingId })
   }
 
-  const { data, error } = await supabaseAdmin.from(TABLE).insert(payload).select().single()
+  const { id: newId, error } = await saveWithFallback(payload)
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  return NextResponse.json({ id: data.id })
+  return NextResponse.json({ id: newId })
 }
 
 // DELETE — remove a saved OPV

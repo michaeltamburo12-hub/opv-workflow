@@ -3457,7 +3457,15 @@ export default function App() {
   const [saving,setSaving]=useState(false)
   const [savedOPVs,setSavedOPVs]=useState<{id:string,address:string,current_step:string,updated_at:string,saved_by:string}[]>([])
   const [showSavedPanel,setShowSavedPanel]=useState(false)
-  const [editedReportHTML,setEditedReportHTML]=useState<string|null>(null)
+  const [editedReportHTML,setEditedReportHTML]=useState<string|null>(()=>{
+    // On page load, restore the edited HTML for whatever OPV was last open
+    if (typeof window==='undefined') return null
+    try {
+      const id = localStorage.getItem('opv_saved_id')
+      if (!id) return null
+      return localStorage.getItem(`opv_edited_html_${id}`) || null
+    } catch { return null }
+  })
 
   // Save editedReportHTML to localStorage whenever it's set — never delete on state clear
   useEffect(()=>{
