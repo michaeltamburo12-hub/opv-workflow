@@ -65,7 +65,7 @@ export async function GET() {
 // POST — save a new OPV
 export async function POST(req: NextRequest) {
   await ensureTable()
-  const { savedBy, address, subject, comps, leaseComps, avails, analytics, aiText, currentStep, existingId, folders, assignmentData } = await req.json()
+  const { savedBy, address, subject, comps, leaseComps, avails, analytics, aiText, currentStep, existingId, folders, assignmentData, editedReportHTML } = await req.json()
 
   const payload = {
     saved_by: savedBy || 'Unknown',
@@ -80,6 +80,7 @@ export async function POST(req: NextRequest) {
     ai_text: aiText || '',
     folders_json: JSON.stringify(folders || []),
     assignment_json: JSON.stringify(assignmentData || {}),
+    edited_report_html: editedReportHTML || null,
   }
 
   // If updating an existing save, upsert it
@@ -122,5 +123,6 @@ export async function PATCH(req: NextRequest) {
     savedBy: data.saved_by,
     createdAt: data.created_at,
     currentStep: data.current_step || '',
+    editedReportHTML: data.edited_report_html || null,
   })
 }

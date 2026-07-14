@@ -3514,7 +3514,7 @@ export default function App() {
       const res = await fetch('/api/opv-history',{
         method:'POST',
         headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({savedBy:user.name, address:subject.address, subject, comps, leaseComps, avails, analytics, aiText, currentStep:page, existingId:savedOPVId, assignmentData, folders})
+        body:JSON.stringify({savedBy:user.name, address:subject.address, subject, comps, leaseComps, avails, analytics, aiText, currentStep:page, existingId:savedOPVId, assignmentData, folders, editedReportHTML})
       })
       const data = await res.json()
       if(data.error) throw new Error(data.error)
@@ -3549,11 +3549,10 @@ export default function App() {
       if(data.aiText) setAiText(data.aiText)
       if(data.assignmentData) setAssignmentData(data.assignmentData)
       if(data.folders?.length) updateFolders(data.folders)
-      // Restore edited report HTML from localStorage
-      try {
-        const localHTML = localStorage.getItem(`opv_edited_html_${id}`)
-        setEditedReportHTML(localHTML || null)
-      } catch { setEditedReportHTML(null) }
+      // Restore edited report HTML — prefer DB (works across devices), fall back to localStorage
+      const dbHTML = data.editedReportHTML || null
+      const localHTML = (() => { try { return localStorage.getItem(`opv_edited_html_${id}`) } catch { return null } })()
+      setEditedReportHTML(dbHTML || localHTML)
       setSavedOPVId(id)
       setLastSaved(new Date(data.updatedAt||data.createdAt))
       setShowSavedPanel(false)
