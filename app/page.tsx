@@ -2389,9 +2389,9 @@ function BrokerReview({subject,comps,analytics,setAnalytics,aiText,setAiText,set
 }
 
 // ── PHOTO SLOT (stable component, defined outside OPVReport so React doesn't remount on state changes) ──
-function PhotoSlot({photoKey,defaultSrc,height=280,override,isEditing,onToggleEdit,onSetPhoto,onClearPhoto,onFileUpload}: {
+function PhotoSlot({photoKey,defaultSrc,height=280,override,isEditing,canEdit=false,onToggleEdit,onSetPhoto,onClearPhoto,onFileUpload}: {
   photoKey:string, defaultSrc:string, height?:number,
-  override:string|undefined, isEditing:boolean,
+  override:string|undefined, isEditing:boolean, canEdit?:boolean,
   onToggleEdit:()=>void, onSetPhoto:(key:string,url:string)=>void,
   onClearPhoto:(key:string)=>void, onFileUpload:(key:string,file:File)=>void,
 }) {
@@ -2426,9 +2426,9 @@ function PhotoSlot({photoKey,defaultSrc,height=280,override,isEditing,onToggleEd
             onError={()=>setImgError(true)}
             onLoad={()=>setImgError(false)}/>
         )}
-        <button onClick={onToggleEdit} style={{position:'absolute' as const,top:8,right:8,background:'rgba(0,0,0,0.6)',color:'#fff',border:'none',borderRadius:5,padding:'5px 11px',fontSize:11,cursor:'pointer',fontWeight:600,zIndex:2}}>
+        {canEdit&&<button onClick={onToggleEdit} style={{position:'absolute' as const,top:8,right:8,background:'rgba(0,0,0,0.6)',color:'#fff',border:'none',borderRadius:5,padding:'5px 11px',fontSize:11,cursor:'pointer',fontWeight:600,zIndex:2}}>
           ✏️ {isEditing?'Cancel':'Edit Photo'}
-        </button>
+        </button>}
       </div>
       {isEditing&&(
         <div style={{background:'#f7f7f5',border:'1px solid #ddd',borderTop:'none',borderRadius:'0 0 6px 6px',padding:'12px 14px',display:'flex',flexDirection:'column' as const,gap:8}}>
@@ -2477,14 +2477,22 @@ function OPVReport({subject,comps,leaseComps,avails,analytics,aiText,setPage}: {
         doc.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><style>
           html,body{margin:0;padding:60px 72px;font-family:Arial,sans-serif;font-size:13px;
             line-height:1.7;color:#1a1a1a;background:#fff;box-sizing:border-box;}
-          *{box-sizing:border-box;}
+          *{box-sizing:border-box;pointer-events:auto!important;user-select:text!important;}
           table{border-collapse:collapse;width:100%;}
           td,th{padding:6px 10px;border:1px solid #ccc;font-size:11px;vertical-align:middle;}
           img{max-width:100%;height:auto;}
-        </style></head><body>${html}</body></html>`)
+          [contenteditable=false]{contenteditable:true!important;}
+        </style></head><body>${html}</body>
+        <script>
+          // Enable editing as soon as the document is parsed
+          document.designMode='on';
+          // Strip any contenteditable=false attributes that block editing
+          document.querySelectorAll('[contenteditable]').forEach(function(el){
+            el.removeAttribute('contenteditable');
+          });
+        </script>
+        </html>`)
         doc.close()
-        // Make the whole document editable
-        setTimeout(() => { iframe.contentDocument!.designMode = 'on' }, 50)
       }
       setEditMode(true)
     } else {
@@ -2599,6 +2607,7 @@ function OPVReport({subject,comps,leaseComps,avails,analytics,aiText,setPage}: {
       photoKey={photoKey} defaultSrc={defaultSrc} height={height}
       override={photoOverrides[photoKey]}
       isEditing={editingKey===photoKey}
+      canEdit={editMode}
       onToggleEdit={()=>setEditingKey(editingKey===photoKey?null:photoKey)}
       onSetPhoto={setCustomPhoto}
       onClearPhoto={clearPhoto}
@@ -2885,12 +2894,41 @@ img{max-width:100%;height:auto;}
       {/* Edit mode banner */}
       {editMode&&<div className="no-print" style={{background:'rgba(16,185,129,0.1)',border:'1px solid rgba(16,185,129,0.3)',borderRadius:8,padding:'10px 16px',marginBottom:12,display:'flex',alignItems:'center',gap:10,fontSize:13,color:D.green}}>
         <span style={{fontSize:18}}>✏️</span>
-        <span><strong>Edit Mode is on</strong> — click any text in the report below and type to change it. Click <strong>Done Editing</strong> when finished.</span>
+        <span><strong>Edit Mode is on</strong> — click any text in the report to edit it. Use the photo panel below to swap photos. Click <strong>Done Editing</strong> when finished.</span>
+      </div>}
+
+      {/* Photo editing panel — React-driven, only visible in edit mode */}
+      {editMode&&<div className="no-print" style={{background:D.surface2,border:`1px solid ${D.border}`,borderRadius:10,padding:16,marginBottom:16}}>
+        <div style={{fontSize:11,fontWeight:700,letterSpacing:'.08em',textTransform:'uppercase' as const,color:D.textSec,marginBottom:12}}>📸 Edit Photos</div>
+        <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(200px,1fr))',gap:12}}>
+          <div>
+            <div style={{fontSize:11,color:D.textMuted,marginBottom:4,fontWeight:600}}>Subject Property</div>
+            {Photo('subject_cover',`/api/street-view?address=${encodeURIComponent(subject.address+(subject.city?', '+subject.city:'')+', NY')}`,140)}
+          </div>
+          {comps.map((c,i)=>(
+            <div key={c.id}>
+              <div style={{fontSize:11,color:D.textMuted,marginBottom:4,fontWeight:600}}>Comp {i+1}: {c.address?.split(' ').slice(0,3).join(' ')}</div>
+              {Photo(`comp_${c.id}`,`/api/street-view?address=${encodeURIComponent(c.address+(c.city?', '+c.city:'')+', NY')}`,140)}
+            </div>
+          ))}
+          {includeLeaseComps&&leaseComps.map((c,i)=>(
+            <div key={c.id}>
+              <div style={{fontSize:11,color:D.textMuted,marginBottom:4,fontWeight:600}}>Lease {i+1}: {c.address?.split(' ').slice(0,3).join(' ')}</div>
+              {Photo(`lease_${c.id}`,`/api/street-view?address=${encodeURIComponent(c.address+(c.city?', '+c.city:'')+', NY')}`,140)}
+            </div>
+          ))}
+          {includeAvails&&avails.map((a,i)=>(
+            <div key={a.id}>
+              <div style={{fontSize:11,color:D.textMuted,marginBottom:4,fontWeight:600}}>Avail {i+1}: {a.address?.split(' ').slice(0,3).join(' ')}</div>
+              {Photo(`avail_${a.id}`,`/api/street-view?address=${encodeURIComponent(a.address+(a.city?', '+a.city:'')+', NY')}`,140)}
+            </div>
+          ))}
+        </div>
       </div>}
 
       {/* Full OPV Document */}
 
-      {/* Edit iframe — always mounted so content persists, shown only in edit mode */}
+      {/* Edit iframe — text editing, shown only in edit mode */}
       <iframe
         ref={editFrameRef}
         title="OPV Editor"
