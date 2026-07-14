@@ -730,7 +730,7 @@ function FileImport() {
   const [importing, setImporting] = useState(false)
   const [importProgress, setImportProgress] = useState('')
   const [importError, setImportError] = useState('')
-  const [result, setResult] = useState<{inserted:number,failed:number,total:number,firstError?:string}|null>(null)
+  const [result, setResult] = useState<{inserted:number,failed:number,skipped:number,total:number,skippedAddresses?:string[],firstError?:string}|null>(null)
   const [availableTables, setAvailableTables] = useState<string[]>([])
   const fileRef = useRef<HTMLInputElement>(null)
 
@@ -793,7 +793,7 @@ function FileImport() {
         Object.entries(row).forEach(([k,v]) => { if (numFields.includes(k)) mapped[k] = v ? parseFloat(v.replace(/[$,]/g,''))||null : null; else mapped[k] = v || null })
         return mapped
       })
-      const CHUNK = 200; let totalInserted = 0, totalFailed = 0, lastError = ''
+      const CHUNK = 200; let totalInserted = 0, totalFailed = 0, totalSkipped = 0, lastError = ''; const allSkippedAddresses: string[] = []
       const chunks = Math.ceil(rowsToInsert.length / CHUNK)
       for (let i = 0; i < chunks; i++) {
         const chunk = rowsToInsert.slice(i * CHUNK, (i + 1) * CHUNK)
@@ -804,10 +804,11 @@ function FileImport() {
         if (!res.ok) { const text = await res.text(); throw new Error(`Server error: ${res.status} — ${text.slice(0,200)}`) }
         const data = await res.json()
         if (data.error) throw new Error(data.error)
-        totalInserted += data.inserted || 0; totalFailed += data.failed || 0
+        totalInserted += data.inserted || 0; totalFailed += data.failed || 0; totalSkipped += data.skipped || 0
+        if (data.skippedAddresses?.length) allSkippedAddresses.push(...data.skippedAddresses)
         if (data.firstError && !lastError) lastError = data.firstError
       }
-      setResult({inserted: totalInserted, failed: totalFailed, total: rowsToInsert.length, firstError: lastError})
+      setResult({inserted: totalInserted, failed: totalFailed, skipped: totalSkipped, skippedAddresses: allSkippedAddresses.slice(0,20), total: rowsToInsert.length, firstError: lastError})
       fetchTables() // Refresh table list in case a new table was created
     } catch(e) { setImportError((e as Error).message) }
     setImporting(false); setImportProgress('')
@@ -921,11 +922,22 @@ function FileImport() {
               <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:28,fontWeight:700,color:D.green}}>{result.inserted.toLocaleString()}</div>
               <div style={{fontSize:11,color:D.textSec}}>Rows imported</div>
             </div>
+            {(result.skipped||0)>0&&<div style={{textAlign:'center' as const}}>
+              <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:28,fontWeight:700,color:D.gold}}>{result.skipped.toLocaleString()}</div>
+              <div style={{fontSize:11,color:D.textSec}}>Duplicates skipped</div>
+            </div>}
             {result.failed>0&&<div style={{textAlign:'center' as const}}>
               <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:28,fontWeight:700,color:D.red}}>{result.failed.toLocaleString()}</div>
               <div style={{fontSize:11,color:D.textSec}}>Failed</div>
             </div>}
           </div>
+          {(result.skippedAddresses?.length||0)>0&&(
+            <div style={{margin:'0 auto 16px',maxWidth:520,padding:'10px 14px',borderRadius:8,background:`rgba(217,119,6,0.08)`,border:`1px solid rgba(217,119,6,0.25)`,textAlign:'left' as const}}>
+              <div style={{fontSize:11,fontWeight:700,color:D.gold,marginBottom:6}}>Skipped — already in database:</div>
+              {result.skippedAddresses!.map((a,i)=><div key={i} style={{fontSize:11,color:D.textSec,padding:'2px 0'}}>{a}</div>)}
+              {(result.skipped||0)>(result.skippedAddresses?.length||0)&&<div style={{fontSize:10,color:D.textMuted,marginTop:4}}>…and {(result.skipped||0)-(result.skippedAddresses!.length)} more</div>}
+            </div>
+          )}
           {result?.firstError&&<div style={{margin:'0 auto 16px',maxWidth:480,padding:'10px 14px',borderRadius:8,background:'rgba(239,68,68,0.1)',border:'1px solid rgba(239,68,68,0.2)',fontSize:11,color:D.red,lineHeight:1.6,textAlign:'left' as const}}><strong>Insert error:</strong> {result.firstError}</div>}
           <p style={{fontSize:12,color:D.textSec,marginBottom:20}}>{result?.failed===0?'Data is now live in your Supabase database.':'Check the error above — fix it and try again.'}</p>
           <Btn onClick={()=>{setParsed(null);setResult(null);if(fileRef.current)fileRef.current.value=''}} style={{padding:'10px 24px'}}>Import Another File</Btn>

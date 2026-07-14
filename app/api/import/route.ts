@@ -45,16 +45,49 @@ export async function POST(req: NextRequest) {
       if (!tableCheck) return NextResponse.json({ error: `Table "${tableName}" was not created. The exec_sql function may lack permissions. Please create the table manually in Supabase SQL Editor first, then import using "Existing Table".` }, { status: 500 })
     }
 
-    let inserted = 0, failed = 0
+    let inserted = 0, failed = 0, skipped = 0
+    const skippedAddresses: string[] = []
     let firstError = ''
     const BATCH = 50
-    for (let i = 0; i < rows.length; i += BATCH) {
-      const batch = rows.slice(i, i + BATCH)
+
+    // Duplicate detection: if table has an address column, filter out existing records
+    let rowsToProcess = rows
+    const hasAddressCol = rows.length > 0 && 'address' in rows[0]
+    if (hasAddressCol) {
+      const addresses = rows.map(r => (r.address as string)?.toLowerCase().trim()).filter(Boolean)
+      if (addresses.length) {
+        // Query in batches of 500 to avoid URL length limits
+        const existingSet = new Set<string>()
+        const ADDR_BATCH = 500
+        for (let i = 0; i < addresses.length; i += ADDR_BATCH) {
+          const batch = addresses.slice(i, i + ADDR_BATCH)
+          const { data: existing } = await supabaseAdmin
+            .from(tableName)
+            .select('address')
+            .in('address', batch)
+          ;(existing || []).forEach((r: { address: string }) => {
+            if (r.address) existingSet.add(r.address.toLowerCase().trim())
+          })
+        }
+        rowsToProcess = rows.filter(r => {
+          const addr = (r.address as string)?.toLowerCase().trim()
+          if (addr && existingSet.has(addr)) {
+            skippedAddresses.push(r.address as string)
+            skipped++
+            return false
+          }
+          return true
+        })
+      }
+    }
+
+    for (let i = 0; i < rowsToProcess.length; i += BATCH) {
+      const batch = rowsToProcess.slice(i, i + BATCH)
       const { data, error } = await supabaseAdmin.from(tableName).insert(batch).select()
       if (error) { failed += batch.length; if (!firstError) firstError = error.message }
       else inserted += data?.length || 0
     }
-    return NextResponse.json({ inserted, failed, total: rows.length, firstError })
+    return NextResponse.json({ inserted, failed, skipped, skippedAddresses: skippedAddresses.slice(0, 20), total: rows.length, firstError })
   }
 
   // ── PARSE uploaded file ─────────────────────────────────────────────────────
