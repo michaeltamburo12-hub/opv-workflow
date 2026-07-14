@@ -951,7 +951,11 @@ function DatabaseManager() {
   const [browseCount, setBrowseCount] = useState(0)
   const [browseOffset, setBrowseOffset] = useState(0)
   const [updatingStatus, setUpdatingStatus] = useState<Set<string>>(new Set())
+  const [browseStatusDropdown, setBrowseStatusDropdown] = useState<string|null>(null)
   const PAGE_SIZE = 20
+  const COMP_STATUSES_DB  = [{value:'Closed',color:D.textMuted,label:'Closed'},{value:'Back on Market',color:D.gold,label:'Back on Market'}]
+  const AVAIL_STATUSES_DB = [{value:'Available',color:D.green,label:'Available'},{value:'Under Contract',color:D.gold,label:'Under Contract'},{value:'Sold',color:D.red,label:'Sold'},{value:'Off Market',color:D.textMuted,label:'Off Market'}]
+  const dbStatusColor = (status:string,isComp:boolean) => (isComp?COMP_STATUSES_DB:AVAIL_STATUSES_DB).find(x=>x.value===status)?.color??D.textMuted
 
   const blankComp = {address:'',city:'',county:'Nassau',state:'NY',property_type:'Warehouse',building_sf:'',lot_size_ac:'',ceiling_height:'',loading_docks:'',drive_ins:'',power:'',heat:'',parking:'',sprinkler:'',sewer:'Municipal',zoning:'',real_estate_taxes:'',sale_price:'',price_per_sf:'',sale_date:'',sale_type:"Arm's Length",buyer:'',seller:'',listing_broker:'',market:'',submarket:'',zip_code:'',notes:''}
   const blankAvail = {address:'',city:'',county:'Nassau',state:'NY',property_type:'Warehouse',building_sf:'',lot_size_ac:'',ceiling_height:'',loading_docks:'',drive_ins:'',power:'',heat:'',parking:'',sprinkler:'',sewer:'Municipal',zoning:'',real_estate_taxes:'',asking_price:'',price_per_sf:'',pricing_guidance:'',availability_type:'For Sale',status:'Available',listing_broker:'',market:'',submarket:'',zip_code:'',loopnet_url:'',notes:''}
@@ -1390,18 +1394,40 @@ function DatabaseManager() {
                   {!!row.county&&<Tag color={row.county==='Nassau'?D.blue:'#0891B2'}>{String(row.county)}</Tag>}
                 </div>
               </div>
-              <div style={{display:'flex',alignItems:'center',gap:6,flexShrink:0}}>
-                {(tab==='comps'||tab==='avails')&&(
-                  <select value={String(row.status||(tab==='comps'?'Closed':'Available'))} disabled={updatingStatus.has(String(row.id))} onChange={async e=>{
-                    const newStatus=e.target.value; const id=String(row.id)
+              <div style={{display:'flex',alignItems:'center',gap:8,flexShrink:0}}>
+                {(tab==='comps'||tab==='avails')&&(()=>{
+                  const id=String(row.id); const isComp=tab==='comps'
+                  const curStatus=row.status||(isComp?'Closed':'Available')
+                  const curColor=dbStatusColor(String(curStatus),isComp)
+                  const isUpdating=updatingStatus.has(id)
+                  const opts=isComp?COMP_STATUSES_DB:AVAIL_STATUSES_DB
+                  const updateStatus=async(newStatus:string)=>{
                     setUpdatingStatus(prev=>{const n=new Set(prev);n.add(id);return n})
-                    await fetch(`/api/status?table=${tab==='comps'?'comps':'avails'}&id=${id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({status:newStatus})})
+                    await fetch(`/api/status?table=${isComp?'comps':'avails'}&id=${id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({status:newStatus})})
                     setBrowseData(prev=>prev.map(r=>r.id===id?{...r,status:newStatus}:r))
                     setUpdatingStatus(prev=>{const n=new Set(prev);n.delete(id);return n})
-                  }} style={{fontSize:10,padding:'4px 6px',borderRadius:5,border:`1px solid ${D.border}`,background:D.surface2,color:D.text,cursor:'pointer',opacity:updatingStatus.has(String(row.id))?0.5:1}}>
-                    {tab==='comps'?<><option value="Closed">Closed</option><option value="Back on Market">Back on Market</option></>:<><option value="Available">Available</option><option value="Under Contract">Under Contract</option><option value="Sold">Sold</option><option value="Off Market">Off Market</option></>}
-                  </select>
-                )}
+                  }
+                  return (
+                    <div key={id} style={{position:'relative'}}>
+                      <button onClick={()=>setBrowseStatusDropdown(browseStatusDropdown===id?null:id)} disabled={isUpdating} style={{display:'flex',alignItems:'center',gap:6,padding:'5px 10px 5px 8px',borderRadius:8,border:`1px solid ${curColor}44`,background:`${curColor}12`,color:curColor,fontSize:11,fontWeight:700,cursor:'pointer',fontFamily:"'Inter',sans-serif",opacity:isUpdating?0.5:1,transition:'all .15s',whiteSpace:'nowrap' as const}}>
+                        <div style={{width:6,height:6,borderRadius:'50%',background:curColor,flexShrink:0,boxShadow:`0 0 5px ${curColor}88`}}/>
+                        {isUpdating?'Saving…':String(curStatus)}
+                        {!isUpdating&&<span style={{fontSize:9,opacity:.6,marginLeft:2}}>▾</span>}
+                      </button>
+                      {browseStatusDropdown===id&&(
+                        <div style={{position:'absolute',top:'calc(100% + 6px)',right:0,background:D.surface,border:`1px solid ${D.border}`,borderRadius:10,padding:5,zIndex:200,minWidth:180,boxShadow:'0 16px 48px rgba(0,0,0,.75)'}}>
+                          {opts.map(opt=>(
+                            <div key={opt.value} onClick={()=>{setBrowseStatusDropdown(null);updateStatus(opt.value)}} style={{display:'flex',alignItems:'center',gap:9,padding:'8px 11px',borderRadius:7,cursor:'pointer',fontSize:12,fontWeight:String(curStatus)===opt.value?700:400,color:String(curStatus)===opt.value?opt.color:D.text,background:String(curStatus)===opt.value?`${opt.color}14`:'transparent'}}>
+                              <div style={{width:7,height:7,borderRadius:'50%',background:opt.color,flexShrink:0,boxShadow:String(curStatus)===opt.value?`0 0 6px ${opt.color}88`:'none'}}/>
+                              {opt.label}
+                              {String(curStatus)===opt.value&&<span style={{marginLeft:'auto',fontSize:10,opacity:.7}}>✓</span>}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )
+                })()}
                 <Btn variant="danger" size="sm" onClick={()=>deleteRow(String(row.id))} style={{fontSize:10,padding:'5px 10px'}}>Delete</Btn>
               </div>
             </div>
