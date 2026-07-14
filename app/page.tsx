@@ -3297,13 +3297,10 @@ export default function App() {
   const [showSavedPanel,setShowSavedPanel]=useState(false)
   const [editedReportHTML,setEditedReportHTML]=useState<string|null>(null)
 
-  // Mirror editedReportHTML to localStorage so it survives across sessions reliably
+  // Save editedReportHTML to localStorage whenever it's set — never delete on state clear
   useEffect(()=>{
-    if (!savedOPVId) return
-    try {
-      if (editedReportHTML) localStorage.setItem(`opv_edited_html_${savedOPVId}`, editedReportHTML)
-      else localStorage.removeItem(`opv_edited_html_${savedOPVId}`)
-    } catch {}
+    if (!savedOPVId || !editedReportHTML) return
+    try { localStorage.setItem(`opv_edited_html_${savedOPVId}`, editedReportHTML) } catch {}
   }, [editedReportHTML, savedOPVId])
 
   const [folders,setFolders]=useState<Folder[]>(()=>{
@@ -3425,10 +3422,7 @@ export default function App() {
     setVerificationStatus({})
     setFolders([])
     setEditedReportHTML(null)
-    setSavedOPVId(prev=>{
-      if(prev) { try{localStorage.removeItem(`opv_edited_html_${prev}`)}catch{} }
-      return null
-    })
+    setSavedOPVId(null)
     setLastSaved(null)
     try{localStorage.removeItem('opv_saved_id')}catch{}
     setPage('assignment')
