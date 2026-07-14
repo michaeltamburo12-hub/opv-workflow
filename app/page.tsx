@@ -1796,11 +1796,20 @@ function AvailSearch({subject,avails,setAvails,setPage,folders,setFolders}: {sub
   const [statusFilter,setStatusFilter]=useState('Available')
   const [showAdd,setShowAdd]=useState(false)
   const [folderDropdown, setFolderDropdown] = useState<string|null>(null)
+  const [statusDropdown, setStatusDropdown] = useState<string|null>(null)
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set())
   const toggleExpand = (id:string) => setExpandedRows(prev=>{const n=new Set(prev);n.has(id)?n.delete(id):n.add(id);return n})
   const [statusChanging,setStatusChanging]=useState<Set<string>>(new Set())
   const [sellModal,setSellModal]=useState<{id:string,salePrice:string,saleDate:string,buyer:string,seller:string}|null>(null)
   const [statusColReady,setStatusColReady]=useState(false)
+
+  const AVAIL_STATUSES = [
+    {value:'Available',   color:D.green,     label:'Available'},
+    {value:'Under Contract', color:D.gold,   label:'Under Contract'},
+    {value:'Sold',        color:D.red,       label:'Sold → Move to Comps'},
+    {value:'Off Market',  color:D.textMuted, label:'Off Market'},
+  ]
+  const availStatusColor = (s:string) => AVAIL_STATUSES.find(x=>x.value===s)?.color ?? D.textMuted
 
   // Run migration on mount so status column exists before first search
   useEffect(()=>{
@@ -2026,17 +2035,36 @@ function AvailSearch({subject,avails,setAvails,setPage,folders,setFolders}: {sub
                                 </div>
                               )}
                             </div>
-                            <div style={{marginLeft:'auto',display:'flex',alignItems:'center',gap:6}}>
-                              <span style={{fontSize:10,color:D.textMuted,fontWeight:600,letterSpacing:'.06em'}}>STATUS</span>
-                              <select value={r.status!=null?String(r.status):'Available'} disabled={statusChanging.has(r.id)} onChange={e=>{
-                                if(e.target.value==='Sold') setSellModal({id:r.id,salePrice:'',saleDate:'',buyer:'',seller:''})
-                                else updateAvailStatus(r.id,e.target.value)
-                              }} style={{fontSize:11,padding:'4px 8px',borderRadius:6,border:`1px solid ${D.border}`,background:D.surface2,color:D.text,cursor:'pointer',fontFamily:"'Inter',sans-serif",opacity:statusChanging.has(r.id)?0.5:1}}>
-                                <option value="Available">Available</option>
-                                <option value="Under Contract">Under Contract</option>
-                                <option value="Sold">Sold → Comp</option>
-                                <option value="Off Market">Off Market</option>
-                              </select>
+                            <div style={{marginLeft:'auto',position:'relative'}}>
+                              {(() => {
+                                const curStatus = r.status!=null?String(r.status):'Available'
+                                const curColor = availStatusColor(curStatus)
+                                const isChanging = statusChanging.has(r.id)
+                                return (
+                                  <>
+                                  <button onClick={()=>setStatusDropdown(statusDropdown===r.id?null:r.id)} disabled={isChanging} style={{display:'flex',alignItems:'center',gap:7,padding:'6px 12px 6px 10px',borderRadius:8,border:`1px solid ${curColor}44`,background:`${curColor}12`,color:curColor,fontSize:11,fontWeight:700,cursor:'pointer',fontFamily:"'Inter',sans-serif",letterSpacing:'.02em',opacity:isChanging?0.5:1,transition:'all .15s',whiteSpace:'nowrap' as const}}>
+                                    <div style={{width:6,height:6,borderRadius:'50%',background:curColor,flexShrink:0,boxShadow:`0 0 5px ${curColor}88`}}/>
+                                    {isChanging?'Saving…':curStatus}
+                                    {!isChanging&&<span style={{fontSize:9,opacity:.6,marginLeft:2}}>▾</span>}
+                                  </button>
+                                  {statusDropdown===r.id&&(
+                                    <div style={{position:'absolute',top:'calc(100% + 6px)',right:0,background:D.surface,border:`1px solid ${D.border}`,borderRadius:10,padding:5,zIndex:200,minWidth:200,boxShadow:'0 16px 48px rgba(0,0,0,.75)',backdropFilter:'blur(8px)'}}>
+                                      {AVAIL_STATUSES.map(opt=>(
+                                        <div key={opt.value} onClick={()=>{
+                                          setStatusDropdown(null)
+                                          if(opt.value==='Sold') setSellModal({id:r.id,salePrice:'',saleDate:'',buyer:'',seller:''})
+                                          else updateAvailStatus(r.id,opt.value)
+                                        }} style={{display:'flex',alignItems:'center',gap:9,padding:'9px 11px',borderRadius:7,cursor:'pointer',fontSize:12,fontWeight:curStatus===opt.value?700:400,color:curStatus===opt.value?opt.color:D.text,background:curStatus===opt.value?`${opt.color}14`:'transparent',transition:'background .1s'}}>
+                                          <div style={{width:7,height:7,borderRadius:'50%',background:opt.color,flexShrink:0,boxShadow:curStatus===opt.value?`0 0 6px ${opt.color}88`:'none'}}/>
+                                          {opt.label}
+                                          {curStatus===opt.value&&<span style={{marginLeft:'auto',fontSize:10,opacity:.7}}>✓</span>}
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
+                                  </>
+                                )
+                              })()}
                             </div>
                           </div>
                         </div>
