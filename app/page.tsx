@@ -2464,33 +2464,38 @@ function OPVReport({subject,comps,leaseComps,avails,analytics,aiText,setPage}: {
   const [editMode, setEditMode] = useState(false)
   const [frozenHTML, setFrozenHTML] = useState<string|null>(null)
   const reportRef = useRef<HTMLDivElement>(null)
-
-  // Toggle edit mode
-  // Key fix: set innerHTML imperatively so React never overwrites the user's typing
-  const editableRef = useRef<HTMLDivElement>(null)
+  const editFrameRef = useRef<HTMLIFrameElement>(null)
 
   const toggleEditMode = () => {
     if (!editMode) {
-      // Capture current rendered HTML, then switch to edit view
+      // Capture the current report HTML and load it into the edit iframe
       const html = reportRef.current?.innerHTML || ''
-      setFrozenHTML(html)
+      const iframe = editFrameRef.current
+      if (iframe) {
+        const doc = iframe.contentDocument!
+        doc.open()
+        doc.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><style>
+          html,body{margin:0;padding:60px 72px;font-family:Arial,sans-serif;font-size:13px;
+            line-height:1.7;color:#1a1a1a;background:#fff;box-sizing:border-box;}
+          *{box-sizing:border-box;}
+          table{border-collapse:collapse;width:100%;}
+          td,th{padding:6px 10px;border:1px solid #ccc;font-size:11px;vertical-align:middle;}
+          img{max-width:100%;height:auto;}
+        </style></head><body>${html}</body></html>`)
+        doc.close()
+        // Make the whole document editable
+        setTimeout(() => { iframe.contentDocument!.designMode = 'on' }, 50)
+      }
       setEditMode(true)
     } else {
-      // Save whatever the user typed, then switch back to React view
-      if (editableRef.current) setFrozenHTML(editableRef.current.innerHTML)
+      // Pull the edited HTML back out of the iframe
+      const iframe = editFrameRef.current
+      if (iframe?.contentDocument?.body) {
+        setFrozenHTML(iframe.contentDocument.body.innerHTML)
+      }
       setEditMode(false)
     }
   }
-
-  // Imperatively inject HTML into the editable div — only once when entering edit mode
-  // Using dangerouslySetInnerHTML on a contentEditable causes React to reset content on every re-render
-  useEffect(() => {
-    if (editMode && editableRef.current && frozenHTML !== null) {
-      editableRef.current.innerHTML = frozenHTML
-      editableRef.current.focus()
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [editMode]) // intentionally only runs when editMode flips, not on frozenHTML changes
 
   // ── INLINE TEXT EDITING ──
   const [textEdits, setTextEdits] = useState<Record<string,string>>(() => {
@@ -2677,10 +2682,13 @@ function OPVReport({subject,comps,leaseComps,avails,analytics,aiText,setPage}: {
   }
 
   const cloneReport = () => {
-    // In edit mode use the editable div, otherwise the normal report ref
-    const reportEl = editMode ? editableRef.current : reportRef.current
-    if (!reportEl) return null
-    const clone = reportEl.cloneNode(true) as HTMLElement
+    let clone: HTMLElement | null = null
+    if (editMode && editFrameRef.current?.contentDocument?.body) {
+      clone = editFrameRef.current.contentDocument.body.cloneNode(true) as HTMLElement
+    } else if (reportRef.current) {
+      clone = reportRef.current.cloneNode(true) as HTMLElement
+    }
+    if (!clone) return null
     clone.querySelectorAll('.no-print, button, input, textarea').forEach(el => el.remove())
     return clone
   }
@@ -2881,19 +2889,25 @@ img{max-width:100%;height:auto;}
       </div>}
 
       {/* Full OPV Document */}
-      {editMode ? (
-        /* Edit mode: bare contentEditable — innerHTML set imperatively in useEffect, never by React */
-        <div ref={editableRef} className="print-area"
-          contentEditable={true} suppressContentEditableWarning={true}
-          style={{...doc,borderRadius:10,padding:'60px 72px',maxWidth:960,margin:'0 auto',boxShadow:'0 4px 32px rgba(0,0,0,.25)',outline:'2px solid rgba(16,185,129,0.4)',cursor:'text',minHeight:400}}
-        />
-      ) : frozenHTML ? (
-        /* Read mode with saved edits: show frozen HTML, ref used for downloads */
+
+      {/* Edit iframe — always mounted so content persists, shown only in edit mode */}
+      <iframe
+        ref={editFrameRef}
+        title="OPV Editor"
+        style={{
+          display: editMode ? 'block' : 'none',
+          width: '100%', minHeight: 1400, border: '2px solid rgba(16,185,129,0.5)',
+          borderRadius: 10, background: '#fff',
+        }}
+      />
+
+      {!editMode && frozenHTML ? (
+        /* Read mode with saved edits */
         <div ref={reportRef} className="print-area"
           dangerouslySetInnerHTML={{__html: frozenHTML}}
           style={{...doc,borderRadius:10,padding:'60px 72px',maxWidth:960,margin:'0 auto',boxShadow:'0 4px 32px rgba(0,0,0,.25)'}}
         />
-      ) : (
+      ) : !editMode ? (
       /* Normal React-rendered report */
       <div ref={reportRef} className="print-area"
         style={{...doc,borderRadius:10,padding:'60px 72px',maxWidth:960,margin:'0 auto',boxShadow:'0 4px 32px rgba(0,0,0,.25)'}}>
@@ -3222,7 +3236,7 @@ img{max-width:100%;height:auto;}
           <strong>DISCLAIMER:</strong> This Opinion of Value has been prepared by Premier Commercial Real Estate for informational purposes only and does not constitute a certified appraisal. It is based upon data available at the time of preparation and may not reflect subsequent market changes. This report should not be relied upon as a substitute for a formal appraisal by a licensed appraiser.
         </div>
       </div>
-      )}
+      ) : null}
     </div>
   )
 }
