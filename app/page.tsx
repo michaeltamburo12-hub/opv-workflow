@@ -902,6 +902,7 @@ function FileImport() {
         <p style={{color:D.textSec}}>Reading file...</p>
       </Card>}
       {parsed&&!result&&(
+        <>
         <div style={{display:'grid',gridTemplateColumns:'340px 1fr',gap:20,alignItems:'start'}}>
           <div>
             <Card style={{marginBottom:14,border:`1px solid rgba(59,130,246,0.3)`}}>
@@ -996,6 +997,7 @@ function FileImport() {
             )}
           </Card>
         )}
+        </>
       )}
       {result&&(
         <Card style={{textAlign:'center' as const,padding:'48px 32px'}}>
