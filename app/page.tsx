@@ -787,10 +787,21 @@ function FileImport() {
     if (!table) { alert('Select or name a table first'); return }
     setImporting(true); setResult(null); setImportError(''); setImportProgress('')
     try {
+      // Client-side column remap — catches bad names before they hit the server
+      const CLIENT_REMAP: Record<string,Record<string,string>> = {
+        industrial_sale_comps: { sale_price_text:'sale_price', for_sale_price:'sale_price', list_price:'sale_price', asking_price:'sale_price' },
+        market_availabilities: { sale_price:'asking_price', sale_price_text:'asking_price', for_sale_price:'asking_price', list_price:'asking_price' },
+        pcre_sale_transactions: { sale_price:'sale_price_text' },
+      }
+      const clientRemap = CLIENT_REMAP[table] || {}
       const numFields = parsed.columnTypes.filter(c=>c.type==='number').map(c=>c.name)
       const rowsToInsert = parsed.allRows.map(row => {
         const mapped: Record<string,unknown> = {}
-        Object.entries(row).forEach(([k,v]) => { if (numFields.includes(k)) mapped[k] = v ? parseFloat(v.replace(/[$,]/g,''))||null : null; else mapped[k] = v || null })
+        Object.entries(row).forEach(([k,v]) => {
+          const key = clientRemap[k] || k
+          if (numFields.includes(k)) mapped[key] = v ? parseFloat(String(v).replace(/[$,]/g,''))||null : null
+          else mapped[key] = v || null
+        })
         return mapped
       })
       const CHUNK = 200; let totalInserted = 0, totalFailed = 0, totalSkipped = 0, lastError = ''; const allSkippedAddresses: string[] = []
