@@ -45,34 +45,59 @@ export async function POST(req: NextRequest) {
       if (!tableCheck) return NextResponse.json({ error: `Table "${tableName}" was not created. The exec_sql function may lack permissions. Please create the table manually in Supabase SQL Editor first, then import using "Existing Table".` }, { status: 500 })
     }
 
-    // ── Table-aware column remapping ──────────────────────────────────────────
-    // Maps parsed column names to the correct column for each target table.
-    // null = drop the column entirely.
+    // ── Table-aware column remapping + whitelisting ───────────────────────────
+    // Step 1: remap parsed column names to canonical table column names
+    const CROSS_TABLE_REMAP: Record<string, string> = {
+      sale_price_text: 'sale_price',   // never insert sale_price_text into comps
+      for_sale_price:  'sale_price',
+      list_price:      'asking_price',
+      for_sale:        'asking_price',
+      lease_rate:      'lease_price',
+      lease_psf:       'lease_price',
+    }
     const TABLE_COLUMN_REMAP: Record<string, Record<string, string | null>> = {
       market_availabilities: {
-        sale_price:   'asking_price',   // PDF parser outputs sale_price; avails need asking_price
-        sale_date:    null,             // not relevant for availabilities
-        buyer:        null,
-        seller:       null,
-        sale_type:    null,
+        sale_price: 'asking_price',   // sale comps price → asking price for avails
+        sale_date:  null,
+        buyer:      null,
+        seller:     null,
+        sale_type:  null,
       },
       pcre_sale_transactions: {
-        sale_price:   'sale_price_text', // PCRE table stores price as formatted text
+        sale_price: 'sale_price_text', // numeric price → formatted text for PCRE
       },
     }
-    const TABLE_DEFAULTS: Record<string, Record<string, unknown>> = {
-      market_availabilities: { status: 'Available', availability_type: 'For Sale', state: 'NY' },
-      industrial_sale_comps: { status: 'Closed', state: 'NY', sale_type: "Arm's Length" },
+    // Step 2: column whitelists — only these columns are allowed per table
+    const TABLE_COLUMNS: Record<string, Set<string>> = {
+      industrial_sale_comps: new Set(['address','city','county','state','zip_code','property_type','building_sf','lot_size_ac','ceiling_height','loading_docks','drive_ins','power','heat','parking','sprinkler','sewer','zoning','real_estate_taxes','sale_price','price_per_sf','sale_date','sale_type','buyer','seller','listing_broker','market','submarket','loopnet_url','notes','status']),
+      market_availabilities: new Set(['address','city','county','state','zip_code','property_type','building_sf','lot_size_ac','ceiling_height','loading_docks','drive_ins','power','heat','parking','sprinkler','sewer','zoning','real_estate_taxes','asking_price','price_per_sf','pricing_guidance','availability_type','status','listing_broker','market','submarket','loopnet_url','notes']),
+      pcre_sale_transactions: new Set(['address','city','county','property_type','building_sf','sale_price_text','sale_date','buyer','seller','notes']),
+      pcre_lease_transactions: new Set(['address','city','county','tenant','landlord','building_sf','lease_price','lease_date','lease_term','notes']),
     }
+    // Step 3: defaults applied to every row
+    const TABLE_DEFAULTS: Record<string, Record<string, unknown>> = {
+      industrial_sale_comps: { status: 'Closed', state: 'NY', sale_type: "Arm's Length" },
+      market_availabilities: { status: 'Available', availability_type: 'For Sale', state: 'NY' },
+    }
+
     const remap = TABLE_COLUMN_REMAP[tableName] || {}
+    const allowedCols = TABLE_COLUMNS[tableName] || null  // null = unknown table, allow all
     const defaults = TABLE_DEFAULTS[tableName] || {}
+
     const remappedRows: Record<string, unknown>[] = rows.map(row => {
       const out: Record<string, unknown> = { ...defaults }
       for (const [k, v] of Object.entries(row)) {
-        const mapped = Object.prototype.hasOwnProperty.call(remap, k) ? remap[k] : k
-        if (mapped !== null) out[mapped as string] = v
+        // Apply cross-table remap first, then table-specific remap
+        const crossMapped = CROSS_TABLE_REMAP[k] || k
+        const tableMapped = Object.prototype.hasOwnProperty.call(remap, crossMapped)
+          ? remap[crossMapped]
+          : crossMapped
+        if (tableMapped === null) continue               // explicitly dropped
+        const finalKey = tableMapped as string
+        if (allowedCols && !allowedCols.has(finalKey)) continue  // not in whitelist
+        if (v !== null && v !== undefined && v !== '') out[finalKey] = v
       }
-      // For pcre_sale_transactions, preserve sale_price_text as a formatted string
+      // For pcre_sale_transactions: format numeric price back to text
       if (tableName === 'pcre_sale_transactions' && typeof out.sale_price_text === 'number') {
         out.sale_price_text = `$${Number(out.sale_price_text).toLocaleString()}`
       }
