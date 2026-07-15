@@ -45,14 +45,48 @@ export async function POST(req: NextRequest) {
       if (!tableCheck) return NextResponse.json({ error: `Table "${tableName}" was not created. The exec_sql function may lack permissions. Please create the table manually in Supabase SQL Editor first, then import using "Existing Table".` }, { status: 500 })
     }
 
+    // ── Table-aware column remapping ──────────────────────────────────────────
+    // Maps parsed column names to the correct column for each target table.
+    // null = drop the column entirely.
+    const TABLE_COLUMN_REMAP: Record<string, Record<string, string | null>> = {
+      market_availabilities: {
+        sale_price:   'asking_price',   // PDF parser outputs sale_price; avails need asking_price
+        sale_date:    null,             // not relevant for availabilities
+        buyer:        null,
+        seller:       null,
+        sale_type:    null,
+      },
+      pcre_sale_transactions: {
+        sale_price:   'sale_price_text', // PCRE table stores price as formatted text
+      },
+    }
+    const TABLE_DEFAULTS: Record<string, Record<string, unknown>> = {
+      market_availabilities: { status: 'Available', availability_type: 'For Sale', state: 'NY' },
+      industrial_sale_comps: { status: 'Closed', state: 'NY', sale_type: "Arm's Length" },
+    }
+    const remap = TABLE_COLUMN_REMAP[tableName] || {}
+    const defaults = TABLE_DEFAULTS[tableName] || {}
+    const remappedRows: Record<string, unknown>[] = rows.map(row => {
+      const out: Record<string, unknown> = { ...defaults }
+      for (const [k, v] of Object.entries(row)) {
+        const mapped = Object.prototype.hasOwnProperty.call(remap, k) ? remap[k] : k
+        if (mapped !== null) out[mapped as string] = v
+      }
+      // For pcre_sale_transactions, preserve sale_price_text as a formatted string
+      if (tableName === 'pcre_sale_transactions' && typeof out.sale_price_text === 'number') {
+        out.sale_price_text = `$${Number(out.sale_price_text).toLocaleString()}`
+      }
+      return out
+    })
+
     let inserted = 0, failed = 0, skipped = 0
     const skippedAddresses: string[] = []
     let firstError = ''
     const BATCH = 50
 
     // Duplicate detection: if table has an address column, filter out existing records
-    let rowsToProcess = rows
-    const hasAddressCol = rows.length > 0 && 'address' in rows[0]
+    let rowsToProcess = remappedRows
+    const hasAddressCol = remappedRows.length > 0 && 'address' in remappedRows[0]
     if (hasAddressCol) {
       const addresses = rows.map(r => (r.address as string)?.toLowerCase().trim()).filter(Boolean)
       if (addresses.length) {
