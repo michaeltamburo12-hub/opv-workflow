@@ -46,6 +46,8 @@ const css = `
   @keyframes spin{to{transform:rotate(360deg)}}
   .anim-in{animation:fadeIn .2s ease forwards}
   .spin{animation:spin .7s linear infinite}
+  button:not(:disabled):hover{opacity:.92}
+  button:not(:disabled):active{transform:scale(.98)}
   @media print{
     body{background:#fff!important;color:#111!important}
     .no-print{display:none!important}
@@ -243,78 +245,99 @@ function Dashboard({user,subject,comps,avails,leaseComps,analytics,savedOPVs,set
   ]
 
   return (
-    <div className="anim-in" style={{maxWidth:900}}>
-      <div style={{marginBottom:32}}>
-        <h1 style={{fontSize:28,fontWeight:600,color:D.text,marginBottom:6}}>
-          {hour<12?'Good morning':hour<17?'Good afternoon':'Good evening'}, {user.name.split(' ')[0]}
+    <div className="anim-in" style={{maxWidth:920}}>
+      {/* Greeting */}
+      <div style={{marginBottom:36,paddingBottom:28,borderBottom:`1px solid ${D.border}`}}>
+        <div style={{fontSize:10,fontWeight:700,letterSpacing:'.18em',color:D.textMuted,textTransform:'uppercase' as const,marginBottom:10}}>Premier Commercial Real Estate · Long Island</div>
+        <h1 style={{fontFamily:"'Cormorant Garamond',serif",fontSize:44,fontWeight:600,letterSpacing:'-.02em',lineHeight:1.05,color:D.text}}>
+          {hour<12?'Good morning':hour<17?'Good afternoon':'Good evening'},{' '}
+          <span style={{color:D.gold}}>{user.name.split(' ')[0]}</span>
         </h1>
-        <p style={{fontSize:14,color:D.textSec}}>Premier Commercial Real Estate · Long Island Industrial OPV Platform</p>
       </div>
 
       {/* Quick actions */}
-      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:16,marginBottom:32}}>
-        <div onClick={onNewOPV} style={{background:D.blue,borderRadius:10,padding:24,cursor:'pointer',transition:'all .2s',border:`1px solid ${D.blue}`}}
-          onMouseEnter={e=>(e.currentTarget as HTMLDivElement).style.background=D.blueHover}
-          onMouseLeave={e=>(e.currentTarget as HTMLDivElement).style.background=D.blue}>
-          <div style={{fontSize:28,marginBottom:12}}>📋</div>
-          <div style={{fontSize:16,fontWeight:700,color:'#fff',marginBottom:4}}>Start New OPV</div>
-          <div style={{fontSize:12,color:'rgba(255,255,255,0.7)'}}>Begin a new Opinion of Value assignment</div>
+      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:16,marginBottom:28}}>
+        <div onClick={onNewOPV} style={{background:`linear-gradient(135deg,${D.blue} 0%,#1D4ED8 100%)`,borderRadius:14,padding:'26px 28px',cursor:'pointer',transition:'transform .2s,box-shadow .2s',border:'1px solid rgba(59,130,246,0.45)',boxShadow:'0 4px 20px rgba(59,130,246,0.2)'}}
+          onMouseEnter={e=>{(e.currentTarget as HTMLDivElement).style.transform='translateY(-2px)';(e.currentTarget as HTMLDivElement).style.boxShadow='0 10px 36px rgba(59,130,246,0.35)'}}
+          onMouseLeave={e=>{(e.currentTarget as HTMLDivElement).style.transform='translateY(0)';(e.currentTarget as HTMLDivElement).style.boxShadow='0 4px 20px rgba(59,130,246,0.2)'}}>
+          <div style={{fontSize:28,marginBottom:14,lineHeight:1}}>📋</div>
+          <div style={{fontSize:17,fontWeight:700,color:'#fff',marginBottom:6,letterSpacing:'-.01em'}}>Start New OPV</div>
+          <div style={{fontSize:12,color:'rgba(255,255,255,0.6)',lineHeight:1.6}}>Begin a new Opinion of Value assignment</div>
+          <div style={{marginTop:18,fontSize:10,color:'rgba(255,255,255,0.7)',fontWeight:700,letterSpacing:'.12em'}}>GET STARTED →</div>
         </div>
-        <div onClick={()=>setPage('database')} style={{background:D.surface2,borderRadius:10,padding:24,cursor:'pointer',transition:'all .2s',border:`1px solid ${D.border}`}}
-          onMouseEnter={e=>(e.currentTarget as HTMLDivElement).style.borderColor=D.borderHover}
-          onMouseLeave={e=>(e.currentTarget as HTMLDivElement).style.borderColor=D.border}>
-          <div style={{fontSize:28,marginBottom:12}}>🗄️</div>
-          <div style={{fontSize:16,fontWeight:700,color:D.text,marginBottom:4}}>Database Manager</div>
-          <div style={{fontSize:12,color:D.textSec}}>Add, browse, and manage comp data</div>
+        <div onClick={()=>setPage('database')} style={{background:D.surface,borderRadius:14,padding:'26px 28px',cursor:'pointer',transition:'transform .2s,box-shadow .2s,border-color .15s',border:`1px solid ${D.border}`}}
+          onMouseEnter={e=>{(e.currentTarget as HTMLDivElement).style.borderColor=D.borderHover;(e.currentTarget as HTMLDivElement).style.transform='translateY(-2px)';(e.currentTarget as HTMLDivElement).style.boxShadow='0 10px 32px rgba(0,0,0,0.35)'}}
+          onMouseLeave={e=>{(e.currentTarget as HTMLDivElement).style.borderColor=D.border;(e.currentTarget as HTMLDivElement).style.transform='translateY(0)';(e.currentTarget as HTMLDivElement).style.boxShadow='none'}}>
+          <div style={{fontSize:28,marginBottom:14,lineHeight:1}}>🗄️</div>
+          <div style={{fontSize:17,fontWeight:700,color:D.text,marginBottom:6,letterSpacing:'-.01em'}}>Database Manager</div>
+          <div style={{fontSize:12,color:D.textSec,lineHeight:1.6}}>Add, browse, and manage comp data</div>
+          <div style={{marginTop:18,fontSize:10,color:D.blue,fontWeight:700,letterSpacing:'.12em'}}>OPEN MANAGER →</div>
         </div>
       </div>
 
       {/* Active OPV status */}
       {hasActiveOPV&&(
-        <div style={{background:D.surface,border:`1px solid ${D.border}`,borderRadius:10,padding:20,marginBottom:24}}>
-          <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:16}}>
-            <div style={{fontSize:13,fontWeight:700,color:D.text}}>Current OPV In Progress</div>
-            <div style={{fontSize:11,color:D.green,background:'rgba(16,185,129,0.12)',padding:'3px 10px',borderRadius:20,border:`1px solid rgba(16,185,129,0.3)`}}>Active</div>
+        <div style={{background:D.surface,border:`1px solid ${D.border}`,borderLeft:`4px solid ${D.gold}`,borderRadius:14,padding:'22px 26px',marginBottom:20,boxShadow:'0 4px 24px rgba(0,0,0,0.25)'}}>
+          <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:14}}>
+            <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:20,fontWeight:600,color:D.text}}>OPV In Progress</div>
+            <Tag color={D.green}>● Active</Tag>
           </div>
-          {subject&&<div style={{fontSize:13,color:D.textSec,marginBottom:12}}>📍 {subject.address}{subject.city?`, ${subject.city}`:''} · {subject.size?`${parseInt(subject.size).toLocaleString()} SF`:'—'}</div>}
-          <div style={{display:'flex',gap:8,flexWrap:'wrap' as const,marginBottom:16}}>
+          {subject&&<div style={{fontSize:14,fontWeight:600,color:D.text,marginBottom:14,letterSpacing:'-.01em'}}>
+            📍 {subject.address}{subject.city?`, ${subject.city}`:''}
+            {subject.size&&<span style={{color:D.textSec,fontWeight:400,fontSize:12}}> · {parseInt(subject.size).toLocaleString()} SF</span>}
+          </div>}
+          <div style={{display:'flex',gap:8,flexWrap:'wrap' as const,marginBottom:18}}>
             {[
               {label:`${comps.length} Sale Comps`,done:comps.length>0},
               {label:`${avails.length} Availabilities`,done:avails.length>0},
               {label:`${leaseComps.length} Lease Comps`,done:leaseComps.length>0},
-              {label:analytics?'Analytics Complete':'Analytics Pending',done:!!analytics},
+              {label:analytics?'Analytics Done':'Analytics Pending',done:!!analytics},
             ].map(item=>(
-              <span key={item.label} style={{fontSize:11,padding:'3px 10px',borderRadius:20,border:`1px solid ${item.done?`rgba(16,185,129,0.4)`:D.border}`,color:item.done?D.green:D.textMuted,background:item.done?'rgba(16,185,129,0.08)':'transparent'}}>{item.done?'✓ ':''}{item.label}</span>
+              <span key={item.label} style={{fontSize:11,padding:'4px 12px',borderRadius:999,border:`1px solid ${item.done?`rgba(16,185,129,0.4)`:D.border}`,color:item.done?D.green:D.textMuted,background:item.done?'rgba(16,185,129,0.08)':'transparent',fontWeight:item.done?600:400}}>{item.done?'✓ ':''}{item.label}</span>
             ))}
           </div>
           <div style={{display:'flex',gap:8}}>
-            <button onClick={()=>setPage('subject')} style={{background:D.blue,border:'none',color:'#fff',fontFamily:"'Inter',sans-serif",fontSize:12,fontWeight:600,padding:'9px 18px',borderRadius:6,cursor:'pointer'}}>Continue OPV →</button>
-            <button onClick={()=>setPage('opv-report')} style={{background:'transparent',border:`1px solid ${D.border}`,color:D.textSec,fontFamily:"'Inter',sans-serif",fontSize:12,padding:'9px 18px',borderRadius:6,cursor:'pointer'}}>Generate Package</button>
+            <button onClick={()=>setPage('subject')} style={{background:`linear-gradient(135deg,${D.blue},#2563EB)`,border:'1px solid rgba(59,130,246,0.4)',color:'#fff',fontFamily:"'Inter',sans-serif",fontSize:12,fontWeight:700,padding:'9px 20px',borderRadius:8,cursor:'pointer',boxShadow:'0 2px 12px rgba(59,130,246,0.25)',letterSpacing:'-.01em'}}>Continue OPV →</button>
+            <button onClick={()=>setPage('opv-report')} style={{background:'transparent',border:`1px solid ${D.border}`,color:D.textSec,fontFamily:"'Inter',sans-serif",fontSize:12,padding:'9px 18px',borderRadius:8,cursor:'pointer'}}>Generate Package</button>
           </div>
         </div>
       )}
 
       {/* Saved OPVs */}
-      <div style={{background:D.surface,border:`1px solid ${D.border}`,borderRadius:10,padding:20}}>
-        <div style={{fontSize:13,fontWeight:700,color:D.text,marginBottom:16}}>Recent OPVs</div>
-        {savedOPVs.length===0
-          ? <div style={{textAlign:'center' as const,padding:'32px 0',color:D.textMuted,fontSize:13}}>No saved OPVs yet. Start a new assignment above.</div>
-          : savedOPVs.slice(0,5).map(s=>{
-              const stepLabels: Record<string,string> = {assignment:'Assignment',subject:'Subject',['comp-search']:'Sale Comps',['avail-search']:'Availabilities',['broker-review']:'Broker Review',['opv-report']:'Report',analytics:'Analytics'}
-              const updatedAt = new Date(s.updated_at||'')
-              const diffMs = Date.now()-updatedAt.getTime()
-              const timeAgo = diffMs<3600000?`${Math.floor(diffMs/60000)}m ago`:diffMs<86400000?`${Math.floor(diffMs/3600000)}h ago`:`${Math.floor(diffMs/86400000)}d ago`
-              return (
-                <div key={s.id} style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'12px 0',borderBottom:`1px solid ${D.border}`}}>
-                  <div>
-                    <div style={{fontSize:13,fontWeight:500,color:D.text,marginBottom:2}}>{s.address||'Untitled OPV'}</div>
-                    <div style={{fontSize:11,color:D.textMuted}}>{timeAgo} · Stopped at: {stepLabels[s.current_step]||s.current_step}</div>
+      <div style={{background:D.surface,border:`1px solid ${D.border}`,borderRadius:14,overflow:'hidden',boxShadow:'0 4px 20px rgba(0,0,0,0.2)'}}>
+        <div style={{padding:'18px 24px',borderBottom:`1px solid ${D.border}`,display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+          <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:20,fontWeight:600,color:D.text}}>Recent OPVs</div>
+          {savedOPVs.length>0&&<div style={{fontSize:11,color:D.textMuted,fontWeight:500}}>{savedOPVs.length} saved</div>}
+        </div>
+        <div>
+          {savedOPVs.length===0
+            ? <div style={{textAlign:'center' as const,padding:'40px 20px',color:D.textMuted,fontSize:13}}>
+                <div style={{fontSize:36,opacity:.12,marginBottom:12}}>📁</div>
+                No saved OPVs yet. Start an assignment to begin.
+              </div>
+            : savedOPVs.slice(0,6).map(s=>{
+                const stepLabels: Record<string,string> = {assignment:'Assignment',subject:'Subject',['comp-search']:'Sale Comps',['avail-search']:'Availabilities',['broker-review']:'Broker Review',['opv-report']:'Report',analytics:'Analytics'}
+                const updatedAt = new Date(s.updated_at||'')
+                const diffMs = Date.now()-updatedAt.getTime()
+                const timeAgo = diffMs<3600000?`${Math.floor(diffMs/60000)}m ago`:diffMs<86400000?`${Math.floor(diffMs/3600000)}h ago`:`${Math.floor(diffMs/86400000)}d ago`
+                return (
+                  <div key={s.id} style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'13px 24px',borderBottom:`1px solid ${D.border}`,transition:'background .12s'}}
+                    onMouseEnter={e=>(e.currentTarget as HTMLDivElement).style.background=D.surface2}
+                    onMouseLeave={e=>(e.currentTarget as HTMLDivElement).style.background='transparent'}>
+                    <div style={{flex:1,minWidth:0}}>
+                      <div style={{fontSize:13,fontWeight:600,color:D.text,marginBottom:3,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' as const}}>{s.address||'Untitled OPV'}</div>
+                      <div style={{fontSize:11,color:D.textMuted,display:'flex',gap:8,alignItems:'center'}}>
+                        <span>{timeAgo}</span>
+                        <span style={{opacity:.3}}>·</span>
+                        <span style={{color:D.blue,fontWeight:500}}>{stepLabels[s.current_step]||s.current_step}</span>
+                      </div>
+                    </div>
+                    <button onClick={()=>restoreOPV(s.id)} style={{background:`rgba(59,130,246,0.1)`,border:`1px solid rgba(59,130,246,0.2)`,color:D.blue,fontFamily:"'Inter',sans-serif",fontSize:11,fontWeight:700,padding:'6px 14px',borderRadius:7,cursor:'pointer',flexShrink:0,marginLeft:16,letterSpacing:'-.01em'}}>Resume →</button>
                   </div>
-                  <button onClick={()=>restoreOPV(s.id)} style={{background:D.surface2,border:`1px solid ${D.border}`,color:D.textSec,fontFamily:"'Inter',sans-serif",fontSize:11,padding:'6px 14px',borderRadius:6,cursor:'pointer'}}>Resume</button>
-                </div>
-              )
-            })
-        }
+                )
+              })
+          }
+        </div>
       </div>
     </div>
   )
@@ -334,9 +357,12 @@ function Assignment({assignmentData,setAssignmentData,user,setPage,setSubject,su
   return (
     <div className="anim-in" style={{maxWidth:680,margin:'0 auto'}}>
       <div style={{textAlign:'center' as const,marginBottom:36}}>
-        <div style={{fontSize:11,fontWeight:700,letterSpacing:'.2em',textTransform:'uppercase' as const,color:D.textMuted,marginBottom:12}}>STEP 1 OF 9</div>
-        <h1 style={{fontFamily:"'Cormorant Garamond',serif",fontSize:40,fontWeight:600,color:D.text,marginBottom:8}}>Assignment</h1>
-        <p style={{fontSize:15,color:D.textSec}}>Who is this OPV for?</p>
+        <div style={{display:'inline-flex',alignItems:'center',gap:8,background:D.surface,border:`1px solid ${D.border}`,borderRadius:999,padding:'5px 14px',marginBottom:16}}>
+          <div style={{width:18,height:18,borderRadius:'50%',background:`linear-gradient(135deg,${D.blue},#2563EB)`,display:'flex',alignItems:'center',justifyContent:'center',fontSize:9,fontWeight:700,color:'#fff',flexShrink:0}}>1</div>
+          <span style={{fontSize:10,fontWeight:700,letterSpacing:'.14em',textTransform:'uppercase' as const,color:D.textMuted}}>Step 1 of 9</span>
+        </div>
+        <h1 style={{fontFamily:"'Cormorant Garamond',serif",fontSize:44,fontWeight:600,color:D.text,marginBottom:8,letterSpacing:'-.02em'}}>Assignment</h1>
+        <p style={{fontSize:15,color:D.textSec,lineHeight:1.5}}>Who is this OPV for?</p>
       </div>
       <Card>
         <Field label="Client Name"><Input placeholder="e.g. John Smith / ABC Corporation" value={form.clientName} onChange={e=>set('clientName',e.target.value)}/></Field>
@@ -355,7 +381,7 @@ function Assignment({assignmentData,setAssignmentData,user,setPage,setSubject,su
           <Field label="Prepared By"><Input placeholder="Broker name" value={form.preparedBy} onChange={e=>set('preparedBy',e.target.value)}/></Field>
         </div>
         <Field label="Assignment Notes" full><textarea value={form.notes} onChange={e=>set('notes',e.target.value)} placeholder="Any special instructions, client preferences, or context..." style={{...inputStyle as React.CSSProperties,minHeight:80,resize:'vertical' as const,lineHeight:1.6}}/></Field>
-        <button onClick={begin} style={{width:'100%',padding:'14px 24px',marginTop:8,background:D.blue,border:'none',borderRadius:10,color:'#FFFFFF',fontSize:15,fontWeight:700,cursor:'pointer',fontFamily:"'Inter',sans-serif",boxShadow:`0 4px 24px rgba(59,130,246,0.3)`,transition:'all .2s'}}>
+        <button onClick={begin} style={{width:'100%',padding:'15px 24px',marginTop:8,background:`linear-gradient(135deg,${D.blue} 0%,#1D4ED8 100%)`,border:'1px solid rgba(59,130,246,0.45)',borderRadius:10,color:'#FFFFFF',fontSize:15,fontWeight:700,cursor:'pointer',fontFamily:"'Inter',sans-serif",boxShadow:`0 4px 28px rgba(59,130,246,0.35),0 1px 0 rgba(255,255,255,0.1) inset`,transition:'all .2s',letterSpacing:'-.01em'}}>
           Begin OPV →
         </button>
       </Card>
@@ -2527,10 +2553,10 @@ function Analytics({comps,avails,analytics,setAnalytics,setPage}: {comps:Comp[],
     setRan(true)
   }
   const Stat=({l,v,c,note}: {l:string,v:string,c?:string,note?:string})=>(
-    <div style={{background:D.surface2,borderRadius:6,padding:'12px 14px',marginBottom:8}}>
-      <div style={{fontSize:11,color:D.textSec,marginBottom:3}}>{l}</div>
-      <div style={{fontSize:20,fontWeight:700,color:c||D.text,fontFamily:"'JetBrains Mono',monospace"}}>{v}</div>
-      {note&&<div style={{fontSize:11,color:D.textMuted,marginTop:2}}>{note}</div>}
+    <div style={{background:D.surface2,borderRadius:10,padding:'14px 16px',marginBottom:8,borderLeft:`3px solid ${c||D.border}`}}>
+      <div style={{fontSize:10,fontWeight:700,color:D.textMuted,letterSpacing:'.1em',textTransform:'uppercase' as const,marginBottom:6}}>{l}</div>
+      <div style={{fontSize:22,fontWeight:700,color:c||D.text,fontFamily:"'JetBrains Mono',monospace",letterSpacing:'-.02em',lineHeight:1}}>{v}</div>
+      {note&&<div style={{fontSize:10,color:D.textMuted,marginTop:5,lineHeight:1.4}}>{note}</div>}
     </div>
   )
   return (
@@ -2557,9 +2583,10 @@ function Analytics({comps,avails,analytics,setAnalytics,setPage}: {comps:Comp[],
             <Stat l="Conservative Value" v={`$${analytics.low.toFixed(2)}/SF`} c={D.red} note="Low scenario"/>
             <Stat l="Market Value" v={`$${analytics.market.toFixed(2)}/SF`} note="Most probable value"/>
             <Stat l="Optimistic Value" v={`$${analytics.high.toFixed(2)}/SF`} c={D.green} note="High scenario"/>
-            <div style={{background:`rgba(217,119,6,0.1)`,border:`1px solid rgba(217,119,6,0.25)`,borderRadius:8,padding:'14px 16px',marginTop:12}}>
-              <div style={{fontSize:11,color:D.gold,fontWeight:700,textTransform:'uppercase' as const,letterSpacing:'.08em',marginBottom:6}}>Suggested Listing Price</div>
-              <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:26,fontWeight:700,color:D.gold}}>${analytics.suggested}/SF</div>
+            <div style={{background:`rgba(217,119,6,0.08)`,border:`1px solid rgba(217,119,6,0.25)`,borderRadius:12,padding:'16px 18px',marginTop:12,borderLeft:`3px solid ${D.gold}`}}>
+              <div style={{fontSize:10,color:D.gold,fontWeight:700,textTransform:'uppercase' as const,letterSpacing:'.12em',marginBottom:8}}>Suggested Listing Price</div>
+              <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:30,fontWeight:700,color:D.gold,letterSpacing:'-.02em'}}>${analytics.suggested}/SF</div>
+              <div style={{fontSize:10,color:D.textMuted,marginTop:6}}>Based on market average + 5% premium</div>
             </div>
           </Card>
           <Card>
