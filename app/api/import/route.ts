@@ -45,62 +45,144 @@ export async function POST(req: NextRequest) {
       if (!tableCheck) return NextResponse.json({ error: `Table "${tableName}" was not created. The exec_sql function may lack permissions. Please create the table manually in Supabase SQL Editor first, then import using "Existing Table".` }, { status: 500 })
     }
 
-    // ── Table-aware column remapping + whitelisting ───────────────────────────
-    // Step 1: remap parsed column names to canonical table column names
-    const CROSS_TABLE_REMAP: Record<string, string> = {
-      sale_price_text: 'sale_price',   // never insert sale_price_text into comps
-      for_sale_price:  'sale_price',
-      list_price:      'asking_price',
-      for_sale:        'asking_price',
-      lease_rate:      'lease_price',
-      lease_psf:       'lease_price',
+    // ── Table-aware column remapping — ALL data preserved, nothing dropped ────
+    //
+    // Priority order for a given incoming column name:
+    //   1. Table-specific remap (e.g. sale_price → asking_price for avails)
+    //   2. Universal synonym map (covers every variation from CoStar, LoopNet, PCRE PDFs)
+    //   3. If the column exists as-is in the target table → use it
+    //   4. If it still doesn't match → append value to notes so NO data is lost
+
+    // Universal synonym map — covers every common variation across all sources
+    const SYNONYMS: Record<string, string> = {
+      // Address
+      street_address:'address', property_address:'address', full_address:'address',
+      building_address:'address', prop_address:'address',
+      // City / location
+      municipality:'city', town:'city',
+      // Building size
+      building_size:'building_sf', building_size_sf:'building_sf', bldg_sf:'building_sf',
+      total_sf:'building_sf', gla_sf:'building_sf', rentable_sf:'building_sf',
+      rentable_building_area:'building_sf', gross_building_area:'building_sf',
+      // Lot
+      lot_size_ac:'lot_size_ac', land_area:'lot_size_ac', lot_acres:'lot_size_ac',
+      land_area_ac:'lot_size_ac', site_area:'lot_size_ac',
+      // Ceiling
+      ceiling_height:'ceiling_height', clear_height:'ceiling_height',
+      clear_ceiling_height:'ceiling_height', ceiling_ht:'ceiling_height',
+      clr_ht:'ceiling_height', ceil_ht:'ceiling_height',
+      // Docks / doors
+      loading_docks:'loading_docks', dock_doors:'loading_docks', docks:'loading_docks',
+      number_of_loading_docks:'loading_docks',
+      drive_in_doors:'drive_ins', grade_level_doors:'drive_ins', drive_ins:'drive_ins',
+      // Systems
+      electric_service:'power', electrical_service:'power', electrical:'power', electric:'power',
+      sprinkler_system:'sprinkler', fire_sprinklers:'sprinkler',
+      sewer_connection:'sewer',
+      // Taxes / zoning
+      real_estate_taxes:'real_estate_taxes', re_taxes:'real_estate_taxes',
+      annual_taxes:'real_estate_taxes', tax_amount:'real_estate_taxes',
+      // Sale price (comps)
+      sale_price_text:'sale_price', for_sale_price:'sale_price',
+      transaction_price:'sale_price', sold_price:'sale_price', closed_price:'sale_price',
+      // Asking price (avails)
+      list_price:'asking_price', listed_price:'asking_price', for_sale:'asking_price',
+      listing_price:'asking_price', offered_at:'asking_price',
+      // Price per sf
+      price_sf:'price_per_sf', price_per_sf:'price_per_sf', psf:'price_per_sf',
+      'price/sf':'price_per_sf', ppsf:'price_per_sf',
+      // Dates
+      transaction_date:'sale_date', close_of_escrow:'sale_date', closed_date:'sale_date',
+      closing_date:'sale_date', sold_date:'sale_date', sale_close_date:'sale_date',
+      // Parties
+      grantor:'seller', vendor:'seller', transferor:'seller',
+      grantee:'buyer', purchaser:'buyer', transferee:'buyer',
+      // Broker / market
+      listing_agent:'listing_broker', broker:'listing_broker', agent:'listing_broker',
+      sub_market:'submarket', submarket_area:'submarket',
+      zip:'zip_code', postal_code:'zip_code',
+      // Lease
+      lease_rate:'lease_price', lease_psf:'lease_price', rent:'lease_price',
+      annual_rent:'lease_price', base_rent:'lease_price',
+      lease_start:'lease_date', commencement_date:'lease_date',
+      lessee:'tenant', renter:'tenant',
+      lessor:'landlord', owner:'landlord',
+      term:'lease_term', lease_length:'lease_term',
+      // PCRE text price
+      sale_amount:'sale_price_text',
     }
-    const TABLE_COLUMN_REMAP: Record<string, Record<string, string | null>> = {
+
+    // Table-specific overrides (applied after synonyms)
+    const TABLE_REMAP: Record<string, Record<string, string>> = {
       market_availabilities: {
-        sale_price: 'asking_price',   // sale comps price → asking price for avails
-        sale_date:  null,
-        buyer:      null,
-        seller:     null,
-        sale_type:  null,
+        sale_price: 'asking_price',   // if sale_price slips through, it's asking_price for avails
+        sale_date:  'notes',          // avails don't have sale dates — preserve in notes
       },
       pcre_sale_transactions: {
-        sale_price: 'sale_price_text', // numeric price → formatted text for PCRE
+        sale_price: 'sale_price_text', // PCRE stores formatted text, not numeric
       },
     }
-    // Step 2: column whitelists — only these columns are allowed per table
+
+    // Canonical columns for each known table
     const TABLE_COLUMNS: Record<string, Set<string>> = {
       industrial_sale_comps: new Set(['address','city','county','state','zip_code','property_type','building_sf','lot_size_ac','ceiling_height','loading_docks','drive_ins','power','heat','parking','sprinkler','sewer','zoning','real_estate_taxes','sale_price','price_per_sf','sale_date','sale_type','buyer','seller','listing_broker','market','submarket','loopnet_url','notes','status']),
       market_availabilities: new Set(['address','city','county','state','zip_code','property_type','building_sf','lot_size_ac','ceiling_height','loading_docks','drive_ins','power','heat','parking','sprinkler','sewer','zoning','real_estate_taxes','asking_price','price_per_sf','pricing_guidance','availability_type','status','listing_broker','market','submarket','loopnet_url','notes']),
       pcre_sale_transactions: new Set(['address','city','county','property_type','building_sf','sale_price_text','sale_date','buyer','seller','notes']),
       pcre_lease_transactions: new Set(['address','city','county','tenant','landlord','building_sf','lease_price','lease_date','lease_term','notes']),
     }
-    // Step 3: defaults applied to every row
+
     const TABLE_DEFAULTS: Record<string, Record<string, unknown>> = {
       industrial_sale_comps: { status: 'Closed', state: 'NY', sale_type: "Arm's Length" },
       market_availabilities: { status: 'Available', availability_type: 'For Sale', state: 'NY' },
     }
 
-    const remap = TABLE_COLUMN_REMAP[tableName] || {}
-    const allowedCols = TABLE_COLUMNS[tableName] || null  // null = unknown table, allow all
-    const defaults = TABLE_DEFAULTS[tableName] || {}
+    const tableRemap  = TABLE_REMAP[tableName]  || {}
+    const allowedCols = TABLE_COLUMNS[tableName] || null   // null = custom table, allow all
+    const defaults    = TABLE_DEFAULTS[tableName] || {}
 
     const remappedRows: Record<string, unknown>[] = rows.map(row => {
       const out: Record<string, unknown> = { ...defaults }
-      for (const [k, v] of Object.entries(row)) {
-        // Apply cross-table remap first, then table-specific remap
-        const crossMapped = CROSS_TABLE_REMAP[k] || k
-        const tableMapped = Object.prototype.hasOwnProperty.call(remap, crossMapped)
-          ? remap[crossMapped]
-          : crossMapped
-        if (tableMapped === null) continue               // explicitly dropped
-        const finalKey = tableMapped as string
-        if (allowedCols && !allowedCols.has(finalKey)) continue  // not in whitelist
-        if (v !== null && v !== undefined && v !== '') out[finalKey] = v
+      const overflow: string[] = []   // unmapped values appended to notes
+
+      for (const [rawKey, v] of Object.entries(row)) {
+        if (v === null || v === undefined || v === '') continue
+        const val = v
+
+        // Step 1: synonym → canonical name
+        const synKey = SYNONYMS[rawKey] || rawKey
+
+        // Step 2: table-specific override
+        const finalKey = tableRemap[synKey] || synKey
+
+        // Step 3: if this table has a whitelist, check it
+        if (allowedCols) {
+          if (allowedCols.has(finalKey)) {
+            // Special: 'notes' target means append to notes string, not overwrite
+            if (finalKey === 'notes') {
+              overflow.push(`${rawKey}: ${val}`)
+            } else {
+              out[finalKey] = val
+            }
+          } else {
+            // Column not in table — preserve value in notes rather than dropping it
+            overflow.push(`${rawKey}: ${val}`)
+          }
+        } else {
+          out[finalKey] = val
+        }
       }
-      // For pcre_sale_transactions: format numeric price back to text
+
+      // Merge overflow into notes
+      if (overflow.length) {
+        const existing = out.notes ? String(out.notes) + ' | ' : ''
+        out.notes = existing + overflow.join(' | ')
+      }
+
+      // For pcre_sale_transactions: keep price as formatted text not numeric
       if (tableName === 'pcre_sale_transactions' && typeof out.sale_price_text === 'number') {
         out.sale_price_text = `$${Number(out.sale_price_text).toLocaleString()}`
       }
+
       return out
     })
 
