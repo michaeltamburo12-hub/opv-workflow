@@ -926,8 +926,10 @@ function FileImport() {
       )}
       {result&&(
         <Card style={{textAlign:'center' as const,padding:'48px 32px'}}>
-          <div style={{fontSize:40,marginBottom:16}}>{result.failed===0?'✅':'⚠️'}</div>
-          <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:24,fontWeight:600,marginBottom:12,color:D.text}}>Import Complete</div>
+          <div style={{fontSize:40,marginBottom:16}}>{result.failed>0?'⚠️':result.inserted===0&&(result.skipped||0)>0?'⏭️':'✅'}</div>
+          <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:24,fontWeight:600,marginBottom:12,color:D.text}}>
+            {result.inserted===0&&(result.skipped||0)>0&&result.failed===0?'All Duplicates — Nothing Imported':'Import Complete'}
+          </div>
           <div style={{display:'flex',gap:24,justifyContent:'center',marginBottom:20}}>
             <div style={{textAlign:'center' as const}}>
               <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:28,fontWeight:700,color:D.green}}>{result.inserted.toLocaleString()}</div>
@@ -950,7 +952,9 @@ function FileImport() {
             </div>
           )}
           {result?.firstError&&<div style={{margin:'0 auto 16px',maxWidth:480,padding:'10px 14px',borderRadius:8,background:'rgba(239,68,68,0.1)',border:'1px solid rgba(239,68,68,0.2)',fontSize:11,color:D.red,lineHeight:1.6,textAlign:'left' as const}}><strong>Insert error:</strong> {result.firstError}</div>}
-          <p style={{fontSize:12,color:D.textSec,marginBottom:20}}>{result?.failed===0?'Data is now live in your Supabase database.':'Check the error above — fix it and try again.'}</p>
+          <p style={{fontSize:12,color:D.textSec,marginBottom:20}}>
+            {result.failed>0?'Check the error above — fix it and try again.':result.inserted===0&&(result.skipped||0)>0?'Every property in this file already exists in the database. No new records were added.':'Data is now live in your Supabase database.'}
+          </p>
           <Btn onClick={()=>{setParsed(null);setResult(null);if(fileRef.current)fileRef.current.value=''}} style={{padding:'10px 24px'}}>Import Another File</Btn>
         </Card>
       )}
