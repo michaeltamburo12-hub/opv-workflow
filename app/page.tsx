@@ -8,14 +8,14 @@ const supabase = createClient(
 )
 
 const D = {
-  bg:'#0A0E1A',
-  surface:'#111827',
-  surface2:'#1A2236',
-  border:'#1E293B',
-  borderHover:'#334155',
+  bg:'#080C18',
+  surface:'#0F1623',
+  surface2:'#16202E',
+  border:'#1C2A3A',
+  borderHover:'#2D4057',
   text:'#F1F5F9',
-  textSec:'#94A3B8',
-  textMuted:'#475569',
+  textSec:'#8DA2B5',
+  textMuted:'#4A6177',
   blue:'#3B82F6',
   blueHover:'#2563EB',
   gold:'#D97706',
@@ -31,19 +31,20 @@ const PROP_TYPES = ['Warehouse','Manufacturing','Flex','Distribution','Industria
 const css = `
   @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500&family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
   *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-  body{font-family:'Inter',sans-serif;background:#0A0E1A;color:#F1F5F9;-webkit-font-smoothing:antialiased}
-  input,select,textarea{font-family:'Inter',sans-serif;background:#0A0E1A;color:#F1F5F9}
-  input:focus,select:focus,textarea:focus{outline:none;border-color:#3B82F6!important;box-shadow:0 0 0 3px rgba(59,130,246,0.15)}
-  input::placeholder,textarea::placeholder{color:#475569}
-  select option{background:#111827;color:#F1F5F9}
-  ::-webkit-scrollbar{width:4px;height:4px}
-  ::-webkit-scrollbar-track{background:#0A0E1A}
-  ::-webkit-scrollbar-thumb{background:#334155;border-radius:4px}
-  ::-webkit-scrollbar-thumb:hover{background:#475569}
+  body{font-family:'Inter',sans-serif;background:#080C18;color:#F1F5F9;-webkit-font-smoothing:antialiased;letter-spacing:-.01em}
+  input,select,textarea{font-family:'Inter',sans-serif;background:#080C18;color:#F1F5F9}
+  input:hover:not(:focus),select:hover:not(:focus),textarea:hover:not(:focus){border-color:#2D4057!important}
+  input:focus,select:focus,textarea:focus{outline:none;border-color:#3B82F6!important;box-shadow:0 0 0 3px rgba(59,130,246,0.12)}
+  input::placeholder,textarea::placeholder{color:#384F64}
+  select option{background:#0F1623;color:#F1F5F9}
+  ::-webkit-scrollbar{width:5px;height:5px}
+  ::-webkit-scrollbar-track{background:transparent}
+  ::-webkit-scrollbar-thumb{background:#1C2A3A;border-radius:4px}
+  ::-webkit-scrollbar-thumb:hover{background:#2D4057}
   @keyframes fadeUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
   @keyframes fadeIn{from{opacity:0}to{opacity:1}}
   @keyframes spin{to{transform:rotate(360deg)}}
-  .anim-in{animation:fadeIn .25s ease forwards}
+  .anim-in{animation:fadeIn .2s ease forwards}
   .spin{animation:spin .7s linear infinite}
   @media print{
     body{background:#fff!important;color:#111!important}
@@ -58,14 +59,14 @@ const fmtDate = (d: string) => {
 }
 
 const Field = ({label, children, full, note}: {label:string,children:React.ReactNode,full?:boolean,note?:string}) => (
-  <div style={{display:'flex',flexDirection:'column',gap:5,marginBottom:14,gridColumn:full?'1/-1':''}}>
-    <label style={{fontSize:10,fontWeight:600,letterSpacing:'.1em',textTransform:'uppercase',color:D.textSec}}>{label}</label>
+  <div style={{display:'flex',flexDirection:'column',gap:6,marginBottom:16,gridColumn:full?'1/-1':''}}>
+    <label style={{fontSize:10,fontWeight:700,letterSpacing:'.12em',textTransform:'uppercase',color:D.textSec}}>{label}</label>
     {children}
     {note&&<span style={{fontSize:10,color:D.textMuted,marginTop:2}}>{note}</span>}
   </div>
 )
 
-const inputStyle = {background:'#0A0E1A',border:`1px solid ${D.border}`,borderRadius:7,color:D.text,fontSize:13,padding:'10px 13px',width:'100%',transition:'all .18s'}
+const inputStyle = {background:'#080C18',border:`1px solid ${D.border}`,borderRadius:8,color:D.text,fontSize:13,padding:'10px 14px',width:'100%',transition:'border-color .15s,box-shadow .15s'}
 const Input = ({style={}, ...props}: React.InputHTMLAttributes<HTMLInputElement> & {style?: React.CSSProperties}) => (
   <input {...props} style={{...inputStyle,...style}}/>
 )
@@ -97,36 +98,39 @@ const ComboSel = ({options, value, onChange, placeholder, style={}}: {options:st
 
 interface BtnProps { children: React.ReactNode; onClick?: () => void; style?: React.CSSProperties; variant?: 'primary'|'ghost'|'danger'|'success'|'blue'; disabled?: boolean; size?: 'sm'|'md' }
 const Btn = ({children,onClick,style={},variant='primary',disabled,size='md'}: BtnProps) => {
-  const base: React.CSSProperties = {fontFamily:"'Inter',sans-serif",fontWeight:600,border:'1px solid transparent',borderRadius:7,cursor:disabled?'not-allowed':'pointer',transition:'all .18s',opacity:disabled?.4:1,fontSize:size==='sm'?11:13,padding:size==='sm'?'6px 13px':'10px 20px',display:'inline-flex',alignItems:'center',justifyContent:'center',gap:6,whiteSpace:'nowrap' as const}
+  const base: React.CSSProperties = {fontFamily:"'Inter',sans-serif",fontWeight:600,letterSpacing:'-.01em',border:'1px solid transparent',borderRadius:8,cursor:disabled?'not-allowed':'pointer',transition:'all .15s',opacity:disabled?.4:1,fontSize:size==='sm'?11:13,padding:size==='sm'?'6px 13px':'10px 22px',display:'inline-flex',alignItems:'center',justifyContent:'center',gap:6,whiteSpace:'nowrap' as const}
   const vars: Record<string, React.CSSProperties> = {
-    primary:{background:D.blue,color:'#FFFFFF',boxShadow:`0 2px 16px rgba(59,130,246,0.25)`},
+    primary:{background:`linear-gradient(135deg,${D.blue} 0%,#2563EB 100%)`,color:'#FFFFFF',boxShadow:`0 1px 0 rgba(255,255,255,0.1) inset,0 3px 16px rgba(59,130,246,0.3)`,borderColor:'rgba(59,130,246,0.4)'},
     ghost:{background:`rgba(255,255,255,0.04)`,color:D.textSec,borderColor:D.border},
-    danger:{background:`rgba(239,68,68,0.12)`,color:D.red,borderColor:`rgba(239,68,68,0.25)`},
-    success:{background:`rgba(16,185,129,0.12)`,color:D.green,borderColor:`rgba(16,185,129,0.25)`},
-    blue:{background:`rgba(59,130,246,0.12)`,color:D.blue,borderColor:`rgba(59,130,246,0.25)`},
+    danger:{background:`rgba(239,68,68,0.1)`,color:D.red,borderColor:`rgba(239,68,68,0.2)`},
+    success:{background:`rgba(16,185,129,0.1)`,color:D.green,borderColor:`rgba(16,185,129,0.2)`},
+    blue:{background:`rgba(59,130,246,0.1)`,color:D.blue,borderColor:`rgba(59,130,246,0.2)`},
   }
   return <button onClick={onClick} disabled={disabled} style={{...base,...vars[variant],...style}}>{children}</button>
 }
 
 const Card = ({children,style={},accent}: {children:React.ReactNode,style?: React.CSSProperties,accent?:string}) => (
-  <div style={{background:D.surface,border:`1px solid ${D.border}`,borderRadius:12,padding:'22px 24px',boxShadow:'0 1px 4px rgba(0,0,0,0.3)',...(accent?{borderTop:`3px solid ${accent}`}:{}),...style}}>
+  <div style={{background:D.surface,border:`1px solid ${D.border}`,borderRadius:14,padding:'24px 26px',boxShadow:'0 4px 24px rgba(0,0,0,0.4),0 1px 3px rgba(0,0,0,0.2)',...(accent?{borderTop:`3px solid ${accent}`}:{}),...style}}>
     {children}
   </div>
 )
 
 const SectionTitle = ({children,sub,gradient}: {children:React.ReactNode,sub?:string,gradient?:string}) => (
-  <div style={{marginBottom:24}}>
-    <h2 style={{fontFamily:"'Cormorant Garamond',serif",fontSize:28,fontWeight:600,letterSpacing:'-.02em',lineHeight:1.15,marginBottom:sub?6:0,...(gradient?{background:gradient,WebkitBackgroundClip:'text',WebkitTextFillColor:'transparent',backgroundClip:'text'}:{color:D.text})}}>{children}</h2>
-    {sub&&<p style={{fontSize:13,color:D.textSec,fontWeight:400,lineHeight:1.5,maxWidth:600}}>{sub}</p>}
+  <div style={{marginBottom:28}}>
+    <div style={{display:'flex',alignItems:'center',gap:12,marginBottom:sub?8:0}}>
+      <div style={{width:3,height:26,borderRadius:2,background:`linear-gradient(180deg,${D.gold} 0%,${D.gold}66 100%)`,flexShrink:0}}/>
+      <h2 style={{fontFamily:"'Cormorant Garamond',serif",fontSize:30,fontWeight:600,letterSpacing:'-.02em',lineHeight:1.1,...(gradient?{background:gradient,WebkitBackgroundClip:'text',WebkitTextFillColor:'transparent',backgroundClip:'text'}:{color:D.text})}}>{children}</h2>
+    </div>
+    {sub&&<p style={{fontSize:13,color:D.textSec,fontWeight:400,lineHeight:1.6,maxWidth:580,marginLeft:15}}>{sub}</p>}
   </div>
 )
 
 const Tag = ({children,color=D.gold}: {children:React.ReactNode,color?:string}) => (
-  <span style={{fontSize:10,fontWeight:600,padding:'3px 9px',borderRadius:5,background:`${color}1A`,color,letterSpacing:'.04em',border:`1px solid ${color}33`,display:'inline-flex',alignItems:'center',gap:4,whiteSpace:'nowrap' as const}}>{children}</span>
+  <span style={{fontSize:10,fontWeight:700,padding:'3px 10px',borderRadius:6,background:`${color}18`,color,letterSpacing:'.05em',border:`1px solid ${color}30`,display:'inline-flex',alignItems:'center',gap:4,whiteSpace:'nowrap' as const}}>{children}</span>
 )
 
 const SL = ({children,style={}}: {children:React.ReactNode,style?:React.CSSProperties}) => (
-  <p style={{fontSize:10,fontWeight:600,letterSpacing:'.12em',textTransform:'uppercase' as const,color:D.textSec,marginBottom:10,...style}}>{children}</p>
+  <p style={{fontSize:10,fontWeight:700,letterSpacing:'.14em',textTransform:'uppercase' as const,color:D.textMuted,marginBottom:12,...style}}>{children}</p>
 )
 
 // Street View photo component — lazy loads on demand
@@ -199,21 +203,22 @@ const WORKFLOW_STEPS = [
 function ProgressStepper({current, completedSteps}: {current:string, completedSteps:Record<string,boolean>}) {
   const idx = WORKFLOW_STEPS.findIndex(s=>s.id===current)
   return (
-    <div style={{display:'flex',alignItems:'center',gap:0,marginBottom:24,overflowX:'auto',paddingBottom:4,background:D.surface,borderRadius:10,padding:'12px 16px',border:`1px solid ${D.border}`}}>
+    <div style={{display:'flex',alignItems:'center',gap:0,marginBottom:28,overflowX:'auto',background:D.surface,borderRadius:12,padding:'14px 18px',border:`1px solid ${D.border}`,boxShadow:'0 2px 16px rgba(0,0,0,0.35)'}}>
       {WORKFLOW_STEPS.map((s,i)=>(
         <div key={s.id} style={{display:'flex',alignItems:'center',flexShrink:0}}>
-          <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:5}}>
-            <div style={{width:28,height:28,borderRadius:'50%',display:'flex',alignItems:'center',justifyContent:'center',fontSize:11,fontWeight:700,
-              background:i===idx?D.blue:completedSteps[s.id]?`rgba(16,185,129,0.2)`:'transparent',
+          <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:6}}>
+            <div style={{width:30,height:30,borderRadius:'50%',display:'flex',alignItems:'center',justifyContent:'center',fontSize:11,fontWeight:700,
+              background:i===idx?`linear-gradient(135deg,${D.blue},#2563EB)`:completedSteps[s.id]?`rgba(16,185,129,0.15)`:`rgba(255,255,255,0.03)`,
               color:i===idx?'#FFFFFF':completedSteps[s.id]?D.green:D.textMuted,
-              border:`2px solid ${i===idx?D.blue:completedSteps[s.id]?D.green:D.border}`,
-              boxShadow:i===idx?`0 0 12px rgba(59,130,246,0.4)`:'none'
+              border:`2px solid ${i===idx?'transparent':completedSteps[s.id]?`rgba(16,185,129,0.5)`:D.border}`,
+              boxShadow:i===idx?`0 0 16px rgba(59,130,246,0.5),0 2px 8px rgba(0,0,0,0.3)`:'none',
+              transition:'all .2s'
             }}>
               {completedSteps[s.id]&&i!==idx?'✓':i+1}
             </div>
-            <span style={{fontSize:9,color:i===idx?D.blue:completedSteps[s.id]?D.green:D.textMuted,fontWeight:i===idx?700:400,whiteSpace:'nowrap' as const,letterSpacing:'.04em',textTransform:'uppercase' as const,maxWidth:64,textAlign:'center' as const,lineHeight:1.2}}>{s.label}</span>
+            <span style={{fontSize:9,color:i===idx?D.blue:completedSteps[s.id]?D.green:D.textMuted,fontWeight:i===idx?700:500,whiteSpace:'nowrap' as const,letterSpacing:'.05em',textTransform:'uppercase' as const,maxWidth:66,textAlign:'center' as const,lineHeight:1.25}}>{s.label}</span>
           </div>
-          {i<WORKFLOW_STEPS.length-1&&<div style={{width:20,height:'1.5px',background:completedSteps[s.id]?`rgba(16,185,129,0.4)`:`rgba(255,255,255,0.07)`,margin:'0 4px',marginBottom:18,flexShrink:0}}/>}
+          {i<WORKFLOW_STEPS.length-1&&<div style={{width:22,height:'1.5px',background:completedSteps[s.id]?`rgba(16,185,129,0.35)`:`rgba(255,255,255,0.06)`,margin:'0 3px',marginBottom:20,flexShrink:0,borderRadius:1}}/>}
         </div>
       ))}
     </div>
@@ -3729,50 +3734,53 @@ export default function App() {
       <style>{css}</style>
       <div style={{display:'flex',minHeight:'100vh',background:D.bg}}>
         {/* ── SIDEBAR ── */}
-        <div className="no-print" style={{width:240,flexShrink:0,background:D.surface,borderRight:`1px solid ${D.border}`,display:'flex',flexDirection:'column',minHeight:'100vh',position:'sticky',top:0,height:'100vh',overflowY:'auto'}}>
+        <div className="no-print" style={{width:256,flexShrink:0,background:D.surface,borderRight:`1px solid ${D.border}`,display:'flex',flexDirection:'column',minHeight:'100vh',position:'sticky',top:0,height:'100vh',overflowY:'auto'}}>
           {/* Brand */}
-          <div style={{padding:'20px 18px 16px',borderBottom:`1px solid ${D.border}`}}>
-            <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:22,fontWeight:600,color:D.text,marginBottom:3}}>Premier OPV</div>
-            <div style={{fontSize:9,color:D.textMuted,letterSpacing:'.14em',textTransform:'uppercase' as const}}>Long Island Industrial</div>
+          <div style={{padding:'22px 20px 18px',borderBottom:`1px solid ${D.border}`,background:`linear-gradient(180deg,rgba(59,130,246,0.05) 0%,transparent 100%)`}}>
+            <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:3}}>
+              <div style={{width:30,height:30,borderRadius:8,background:`linear-gradient(135deg,${D.gold},#B45309)`,display:'flex',alignItems:'center',justifyContent:'center',fontSize:15,flexShrink:0,boxShadow:`0 2px 8px rgba(217,119,6,0.3)`}}>🏢</div>
+              <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:22,fontWeight:600,color:D.text,letterSpacing:'-.01em'}}>Premier OPV</div>
+            </div>
+            <div style={{fontSize:9,color:D.textMuted,letterSpacing:'.16em',textTransform:'uppercase' as const,marginLeft:40}}>Long Island Industrial</div>
           </div>
           {/* User */}
-          <div style={{padding:'12px 18px',borderBottom:`1px solid ${D.border}`,display:'flex',alignItems:'center',gap:10}}>
-            <div style={{width:32,height:32,borderRadius:'50%',background:D.blue,display:'flex',alignItems:'center',justifyContent:'center',fontSize:12,fontWeight:700,color:'#FFFFFF',flexShrink:0}}>{user.init}</div>
-            <div><div style={{fontSize:12,fontWeight:600,color:D.text}}>{user.name}</div><div style={{fontSize:10,color:D.textMuted}}>{user.role}</div></div>
+          <div style={{padding:'14px 20px',borderBottom:`1px solid ${D.border}`,display:'flex',alignItems:'center',gap:10}}>
+            <div style={{width:34,height:34,borderRadius:'50%',background:`linear-gradient(135deg,${D.blue},#2563EB)`,display:'flex',alignItems:'center',justifyContent:'center',fontSize:12,fontWeight:700,color:'#FFFFFF',flexShrink:0,boxShadow:`0 2px 10px rgba(59,130,246,0.3)`}}>{user.init}</div>
+            <div><div style={{fontSize:12,fontWeight:600,color:D.text,letterSpacing:'-.01em'}}>{user.name}</div><div style={{fontSize:10,color:D.textMuted,marginTop:1}}>{user.role}</div></div>
           </div>
           {/* Nav */}
-          <div style={{flex:1,padding:'12px 10px',overflowY:'auto'}}>
+          <div style={{flex:1,padding:'14px 12px',overflowY:'auto'}}>
             {/* Workflow section */}
-            <div style={{fontSize:9,fontWeight:700,letterSpacing:'.14em',textTransform:'uppercase' as const,color:D.textMuted,padding:'8px 10px 5px'}}>Workflow</div>
+            <div style={{fontSize:9,fontWeight:700,letterSpacing:'.16em',textTransform:'uppercase' as const,color:D.textMuted,padding:'6px 10px 8px'}}>Workflow</div>
             {sidebarWorkflow.map(s=>{
               const isActive=page===s.id
               const isDone=completedSteps[s.id]
               return (
-                <div key={s.id} onClick={()=>setPage(s.id)} style={{display:'flex',alignItems:'center',gap:10,padding:'8px 10px',borderRadius:8,cursor:'pointer',marginBottom:2,border:`1px solid ${isActive?`${D.blue}55`:'transparent'}`,background:isActive?`rgba(59,130,246,0.12)`:'transparent',transition:'all .15s'}}>
+                <div key={s.id} onClick={()=>setPage(s.id)} style={{display:'flex',alignItems:'center',gap:10,padding:'8px 10px',borderRadius:9,cursor:'pointer',marginBottom:2,border:`1px solid ${isActive?`${D.blue}44`:'transparent'}`,background:isActive?`rgba(59,130,246,0.1)`:'transparent',transition:'all .15s'}}>
                   <div style={{width:22,height:22,borderRadius:'50%',display:'flex',alignItems:'center',justifyContent:'center',fontSize:10,fontWeight:700,flexShrink:0,
-                    background:isActive?D.blue:isDone?`rgba(16,185,129,0.2)`:'transparent',
+                    background:isActive?`linear-gradient(135deg,${D.blue},#2563EB)`:isDone?`rgba(16,185,129,0.15)`:'transparent',
                     color:isActive?'#FFFFFF':isDone?D.green:D.textMuted,
-                    border:`2px solid ${isActive?D.blue:isDone?D.green:D.border}`
+                    border:`2px solid ${isActive?'transparent':isDone?`rgba(16,185,129,0.5)`:D.border}`
                   }}>
                     {isDone&&!isActive?'✓':s.index+1}
                   </div>
                   <div style={{display:'flex',alignItems:'center',gap:6,flex:1,minWidth:0}}>
-                    <span style={{fontSize:13}}>{s.icon}</span>
+                    <span style={{fontSize:12}}>{s.icon}</span>
                     <span style={{fontSize:11,fontWeight:isActive?600:400,color:isActive?D.text:isDone?D.textSec:D.textMuted,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' as const}}>{s.label}</span>
                   </div>
-                  {s.id==='comp-search'&&comps.length>0&&<span style={{fontSize:9,background:`rgba(59,130,246,0.2)`,color:D.blue,padding:'2px 5px',borderRadius:4,fontWeight:700,flexShrink:0}}>{comps.length}</span>}
-                  {s.id==='avail-search'&&avails.length>0&&<span style={{fontSize:9,background:`rgba(59,130,246,0.2)`,color:D.blue,padding:'2px 5px',borderRadius:4,fontWeight:700,flexShrink:0}}>{avails.length}</span>}
-                  {s.id==='lease-comps'&&leaseComps.length>0&&<span style={{fontSize:9,background:`rgba(59,130,246,0.2)`,color:D.blue,padding:'2px 5px',borderRadius:4,fontWeight:700,flexShrink:0}}>{leaseComps.length}</span>}
+                  {s.id==='comp-search'&&comps.length>0&&<span style={{fontSize:9,background:`rgba(59,130,246,0.18)`,color:D.blue,padding:'2px 6px',borderRadius:4,fontWeight:700,flexShrink:0}}>{comps.length}</span>}
+                  {s.id==='avail-search'&&avails.length>0&&<span style={{fontSize:9,background:`rgba(59,130,246,0.18)`,color:D.blue,padding:'2px 6px',borderRadius:4,fontWeight:700,flexShrink:0}}>{avails.length}</span>}
+                  {s.id==='lease-comps'&&leaseComps.length>0&&<span style={{fontSize:9,background:`rgba(59,130,246,0.18)`,color:D.blue,padding:'2px 6px',borderRadius:4,fontWeight:700,flexShrink:0}}>{leaseComps.length}</span>}
                 </div>
               )
             })}
             {/* Tools section */}
-            <div style={{fontSize:9,fontWeight:700,letterSpacing:'.14em',textTransform:'uppercase' as const,color:D.textMuted,padding:'14px 10px 5px'}}>Tools</div>
+            <div style={{fontSize:9,fontWeight:700,letterSpacing:'.16em',textTransform:'uppercase' as const,color:D.textMuted,padding:'16px 10px 8px'}}>Tools</div>
             {[{id:'database',icon:'🗄️',label:'Database Manager'}].map(item=>{
               const isActive=page===item.id
               return (
-                <div key={item.id} onClick={()=>setPage(item.id)} style={{display:'flex',alignItems:'center',gap:10,padding:'8px 10px',borderRadius:8,cursor:'pointer',marginBottom:2,border:`1px solid ${isActive?`${D.purple}55`:'transparent'}`,background:isActive?`rgba(139,92,246,0.12)`:'transparent',transition:'all .15s'}}>
-                  <span style={{fontSize:13}}>{item.icon}</span>
+                <div key={item.id} onClick={()=>setPage(item.id)} style={{display:'flex',alignItems:'center',gap:10,padding:'8px 10px',borderRadius:9,cursor:'pointer',marginBottom:2,border:`1px solid ${isActive?`${D.purple}44`:'transparent'}`,background:isActive?`rgba(139,92,246,0.1)`:'transparent',transition:'all .15s'}}>
+                  <span style={{fontSize:12}}>{item.icon}</span>
                   <span style={{fontSize:11,fontWeight:isActive?600:400,color:isActive?D.text:D.textMuted}}>{item.label}</span>
                 </div>
               )
@@ -3780,18 +3788,18 @@ export default function App() {
             <div style={{margin:'12px 10px',height:'1px',background:D.border}}/>
           </div>
           {/* Bottom actions */}
-          <div style={{padding:'12px',borderTop:`1px solid ${D.border}`,display:'flex',flexDirection:'column',gap:6}}>
-            <button onClick={()=>saveReport(false)} disabled={saving} style={{background:D.blue,border:'none',color:'#FFFFFF',fontFamily:"'Inter',sans-serif",fontSize:11,fontWeight:700,padding:'10px 12px',borderRadius:7,cursor:saving?'not-allowed':'pointer',width:'100%',opacity:saving?.7:1,display:'flex',alignItems:'center',justifyContent:'center',gap:6}}>
+          <div style={{padding:'14px',borderTop:`1px solid ${D.border}`,display:'flex',flexDirection:'column',gap:6}}>
+            <button onClick={()=>saveReport(false)} disabled={saving} style={{background:`linear-gradient(135deg,${D.blue} 0%,#2563EB 100%)`,border:'1px solid rgba(59,130,246,0.4)',color:'#FFFFFF',fontFamily:"'Inter',sans-serif",fontSize:11,fontWeight:700,padding:'10px 12px',borderRadius:8,cursor:saving?'not-allowed':'pointer',width:'100%',opacity:saving?.7:1,display:'flex',alignItems:'center',justifyContent:'center',gap:6,boxShadow:'0 2px 12px rgba(59,130,246,0.25)',letterSpacing:'-.01em'}}>
               {saving?<><span className="spin" style={{display:'inline-block',width:10,height:10,border:'1.5px solid rgba(255,255,255,0.3)',borderTopColor:'#fff',borderRadius:'50%'}}/>Saving...</>:'💾 Save Progress'}
             </button>
             {lastSaved&&<div style={{fontSize:9,color:D.textMuted,textAlign:'center' as const,lineHeight:1.4}}>
               ✓ Auto-saved {lastSaved.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'})}
               {savedOPVId&&<span> · #{savedOPVId.slice(0,6)}</span>}
             </div>}
-            <button onClick={()=>{setShowSavedPanel(true);loadSavedOPVs()}} style={{background:`rgba(255,255,255,0.04)`,border:`1px solid ${D.border}`,color:D.textSec,fontFamily:"'Inter',sans-serif",fontSize:11,fontWeight:500,padding:'8px 12px',borderRadius:7,cursor:'pointer',width:'100%'}}>
+            <button onClick={()=>{setShowSavedPanel(true);loadSavedOPVs()}} style={{background:`rgba(255,255,255,0.04)`,border:`1px solid ${D.border}`,color:D.textSec,fontFamily:"'Inter',sans-serif",fontSize:11,fontWeight:500,padding:'8px 12px',borderRadius:8,cursor:'pointer',width:'100%'}}>
               📂 Load Saved OPV
             </button>
-            <button onClick={startNewOPV} style={{background:'transparent',border:`1px solid ${D.border}`,color:D.textMuted,fontFamily:"'Inter',sans-serif",fontSize:10,fontWeight:500,padding:'7px 12px',borderRadius:7,cursor:'pointer',width:'100%'}}>
+            <button onClick={startNewOPV} style={{background:'transparent',border:`1px solid ${D.border}`,color:D.textMuted,fontFamily:"'Inter',sans-serif",fontSize:10,fontWeight:500,padding:'7px 12px',borderRadius:8,cursor:'pointer',width:'100%'}}>
               ＋ New OPV
             </button>
             <div onClick={async()=>{ await fetch('/api/auth',{method:'DELETE'}); window.location.href='/login' }} style={{fontSize:11,color:D.textMuted,cursor:'pointer',display:'flex',alignItems:'center',gap:7,padding:'4px',marginTop:2}}>
@@ -3863,8 +3871,8 @@ export default function App() {
         {/* ── MAIN CONTENT ── */}
         <div style={{flex:1,minHeight:'100vh',overflowY:'auto',background:D.bg}}>
           {/* Header */}
-          <div className="no-print" style={{height:56,padding:'0 32px',borderBottom:`1px solid ${D.border}`,display:'flex',alignItems:'center',justifyContent:'space-between',background:D.surface,position:'sticky',top:0,zIndex:50}}>
-            <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:20,fontWeight:600,color:D.text}}>{PAGE_TITLES[page]||page}</div>
+          <div className="no-print" style={{height:58,padding:'0 32px',borderBottom:`1px solid ${D.border}`,display:'flex',alignItems:'center',justifyContent:'space-between',background:D.surface,position:'sticky',top:0,zIndex:50,boxShadow:'0 1px 0 rgba(255,255,255,0.03)'}}>
+            <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:22,fontWeight:600,color:D.text,letterSpacing:'-.02em'}}>{PAGE_TITLES[page]||page}</div>
             <div style={{display:'flex',alignItems:'center',gap:10}}>
               {lastSaved&&<span style={{fontSize:10,color:D.textMuted}}>Saved {lastSaved.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'})}</span>}
               <button onClick={()=>saveReport(false)} disabled={saving||!subject} style={{fontFamily:"'Inter',sans-serif",fontSize:11,fontWeight:600,padding:'6px 14px',borderRadius:7,cursor:saving||!subject?'not-allowed':'pointer',background:`rgba(59,130,246,0.12)`,color:D.blue,border:`1px solid rgba(59,130,246,0.25)`,opacity:!subject?.5:1}}>
@@ -3874,7 +3882,7 @@ export default function App() {
             </div>
           </div>
           {/* Page content */}
-          <div style={{padding:'28px 32px'}}>
+          <div style={{padding:'32px 36px'}}>
             {isWorkflowPage&&page!=='dashboard'&&(
               <ProgressStepper current={page} completedSteps={completedSteps}/>
             )}
@@ -3897,7 +3905,7 @@ export default function App() {
             const prev = WORKFLOW_STEPS[wfIdx-1]
             const next = WORKFLOW_STEPS[wfIdx+1]
             return (
-              <div className="no-print" style={{position:'sticky',bottom:0,zIndex:50,background:`rgba(10,14,26,0.92)`,backdropFilter:'blur(12px)',borderTop:`1px solid ${D.border}`,padding:'12px 32px',display:'flex',alignItems:'center',justifyContent:'space-between',gap:12}}>
+              <div className="no-print" style={{position:'sticky',bottom:0,zIndex:50,background:`rgba(8,12,24,0.94)`,backdropFilter:'blur(16px)',borderTop:`1px solid ${D.border}`,padding:'12px 36px',display:'flex',alignItems:'center',justifyContent:'space-between',gap:12}}>
                 <button
                   onClick={()=>setPage(prev.id)}
                   style={{display:'flex',alignItems:'center',gap:8,background:'transparent',border:`1px solid ${D.border}`,color:D.textSec,fontFamily:"'Inter',sans-serif",fontSize:12,fontWeight:500,padding:'8px 18px',borderRadius:8,cursor:'pointer',transition:'all .15s'}}
