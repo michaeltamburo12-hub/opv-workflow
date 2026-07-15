@@ -974,6 +974,7 @@ function DatabaseManager() {
   const [browseOffset, setBrowseOffset] = useState(0)
   const [updatingStatus, setUpdatingStatus] = useState<Set<string>>(new Set())
   const [browseStatusDropdown, setBrowseStatusDropdown] = useState<string|null>(null)
+  const [browseSearch, setBrowseSearch] = useState('')
   const PAGE_SIZE = 20
   const COMP_STATUSES_DB  = [{value:'Closed',color:D.textMuted,label:'Closed'},{value:'Back on Market',color:D.gold,label:'Back on Market'}]
   const AVAIL_STATUSES_DB = [{value:'Available',color:D.green,label:'Available'},{value:'Under Contract',color:D.gold,label:'Under Contract'},{value:'Sold',color:D.red,label:'Sold'},{value:'Off Market',color:D.textMuted,label:'Off Market'}]
@@ -1144,10 +1145,12 @@ function DatabaseManager() {
     setImporting(false); setImportResult({ok,fail,skipped,skippedAddresses})
     if (ok>0) { setImportText(''); setImportPreview([]) }
   }
-  const loadBrowse = async (offset=0) => {
+  const loadBrowse = async (offset=0, search='') => {
     setBrowseLoading(true)
     const table = tableForTab(tab)
-    const {data, count, error} = await supabase.from(table).select('*',{count:'exact'}).order('created_at',{ascending:false}).range(offset,offset+PAGE_SIZE-1)
+    let q = supabase.from(table).select('*',{count:'exact'}).order('created_at',{ascending:false}).range(offset,offset+PAGE_SIZE-1)
+    if (search.trim()) q = q.ilike('address', `%${search.trim()}%`)
+    const {data, count, error} = await q
     if (!error) { setBrowseData((data||[]) as BrowseRow[]); setBrowseCount(count||0); setBrowseOffset(offset) }
     setBrowseLoading(false)
   }
@@ -1161,10 +1164,10 @@ function DatabaseManager() {
   const G2 = {display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}
   const G3 = {display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:12}
   const tabBtn = (id: 'comps'|'avails'|'pcre-sales'|'pcre-leases', label: string) => (
-    <div onClick={()=>{setTab(id);setSubTab('add');setBrowseData([]);setImportPreview([]);setImportResult(null);if(id==='pcre-sales'||id==='pcre-leases')setupPcreTables()}} style={{padding:'8px 20px',borderRadius:7,cursor:'pointer',fontSize:12,fontWeight:700,background:tab===id?D.blue:'transparent',color:tab===id?'#FFFFFF':D.textSec,border:`1px solid ${tab===id?'transparent':D.border}`,transition:'all .2s'}}>{label}</div>
+    <div onClick={()=>{setTab(id);setSubTab('add');setBrowseData([]);setBrowseSearch('');setImportPreview([]);setImportResult(null);if(id==='pcre-sales'||id==='pcre-leases')setupPcreTables()}} style={{padding:'8px 20px',borderRadius:7,cursor:'pointer',fontSize:12,fontWeight:700,background:tab===id?D.blue:'transparent',color:tab===id?'#FFFFFF':D.textSec,border:`1px solid ${tab===id?'transparent':D.border}`,transition:'all .2s'}}>{label}</div>
   )
   const subTabBtn = (id: 'add'|'import'|'file'|'browse', label: string, icon: string) => (
-    <div onClick={()=>{ setSubTab(id); if(id==='browse') loadBrowse(0) }} style={{padding:'7px 16px',borderRadius:7,cursor:'pointer',fontSize:11,fontWeight:600,display:'flex',alignItems:'center',gap:6,background:subTab===id?`rgba(59,130,246,0.15)`:'transparent',color:subTab===id?D.blue:D.textSec,border:`1px solid ${subTab===id?`${D.blue}55`:D.border}`,transition:'all .2s'}}><span>{icon}</span>{label}</div>
+    <div onClick={()=>{ setSubTab(id); if(id==='browse') loadBrowse(0,'') }} style={{padding:'7px 16px',borderRadius:7,cursor:'pointer',fontSize:11,fontWeight:600,display:'flex',alignItems:'center',gap:6,background:subTab===id?`rgba(59,130,246,0.15)`:'transparent',color:subTab===id?D.blue:D.textSec,border:`1px solid ${subTab===id?`${D.blue}55`:D.border}`,transition:'all .2s'}}><span>{icon}</span>{label}</div>
   )
   return (
     <>
@@ -1425,10 +1428,20 @@ function DatabaseManager() {
         </div>
       )}
       {subTab==='browse' && (
+        <div onClick={()=>setBrowseStatusDropdown(null)}>
         <Card>
-          <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:16}}>
-            <SL style={{marginBottom:0}}>{browseCount.toLocaleString()} total records in {tableForTab(tab)}</SL>
-            <Btn variant="ghost" size="sm" onClick={()=>loadBrowse(browseOffset)}>↻ Refresh</Btn>
+          <div style={{display:'flex',alignItems:'center',gap:12,marginBottom:16,flexWrap:'wrap' as const}}>
+            <SL style={{marginBottom:0,flexShrink:0}}>{browseCount.toLocaleString()} records</SL>
+            <input
+              value={browseSearch}
+              onChange={e=>setBrowseSearch(e.target.value)}
+              onKeyDown={e=>{ if(e.key==='Enter') loadBrowse(0, browseSearch) }}
+              placeholder="Search by address..."
+              style={{...inputStyle as React.CSSProperties, flex:1, minWidth:180, padding:'6px 12px', fontSize:12}}
+            />
+            <Btn variant="ghost" size="sm" onClick={()=>loadBrowse(0, browseSearch)}>🔍 Search</Btn>
+            {browseSearch&&<Btn variant="ghost" size="sm" onClick={()=>{setBrowseSearch('');loadBrowse(0,'')}}>✕ Clear</Btn>}
+            <Btn variant="ghost" size="sm" onClick={()=>loadBrowse(browseOffset, browseSearch)}>↻ Refresh</Btn>
           </div>
           {browseLoading&&<div style={{textAlign:'center' as const,padding:40}}><div className="spin" style={{width:28,height:28,border:`2px solid ${D.border}`,borderTopColor:D.blue,borderRadius:'50%',margin:'0 auto 12px'}}/><p style={{color:D.textSec,fontSize:12}}>Loading...</p></div>}
           {!browseLoading&&browseData.length===0&&<p style={{color:D.textSec,fontSize:12,textAlign:'center' as const,padding:32}}>No records found.</p>}
@@ -1468,13 +1481,13 @@ function DatabaseManager() {
                   }
                   return (
                     <div key={id} style={{position:'relative'}}>
-                      <button onClick={()=>setBrowseStatusDropdown(browseStatusDropdown===id?null:id)} disabled={isUpdating} style={{display:'flex',alignItems:'center',gap:6,padding:'5px 10px 5px 8px',borderRadius:8,border:`1px solid ${curColor}44`,background:`${curColor}12`,color:curColor,fontSize:11,fontWeight:700,cursor:'pointer',fontFamily:"'Inter',sans-serif",opacity:isUpdating?0.5:1,transition:'all .15s',whiteSpace:'nowrap' as const}}>
+                      <button onClick={e=>{e.stopPropagation();setBrowseStatusDropdown(browseStatusDropdown===id?null:id)}} disabled={isUpdating} style={{display:'flex',alignItems:'center',gap:6,padding:'5px 10px 5px 8px',borderRadius:8,border:`1px solid ${curColor}44`,background:`${curColor}12`,color:curColor,fontSize:11,fontWeight:700,cursor:'pointer',fontFamily:"'Inter',sans-serif",opacity:isUpdating?0.5:1,transition:'all .15s',whiteSpace:'nowrap' as const}}>
                         <div style={{width:6,height:6,borderRadius:'50%',background:curColor,flexShrink:0,boxShadow:`0 0 5px ${curColor}88`}}/>
                         {isUpdating?'Saving…':String(curStatus)}
                         {!isUpdating&&<span style={{fontSize:9,opacity:.6,marginLeft:2}}>▾</span>}
                       </button>
                       {browseStatusDropdown===id&&(
-                        <div style={{position:'absolute',top:'calc(100% + 6px)',right:0,background:D.surface,border:`1px solid ${D.border}`,borderRadius:10,padding:5,zIndex:200,minWidth:180,boxShadow:'0 16px 48px rgba(0,0,0,.75)'}}>
+                        <div onClick={e=>e.stopPropagation()} style={{position:'absolute',top:'calc(100% + 6px)',right:0,background:D.surface,border:`1px solid ${D.border}`,borderRadius:10,padding:5,zIndex:200,minWidth:180,boxShadow:'0 16px 48px rgba(0,0,0,.75)'}}>
                           {opts.map(opt=>(
                             <div key={opt.value} onClick={()=>{setBrowseStatusDropdown(null);updateStatus(opt.value)}} style={{display:'flex',alignItems:'center',gap:9,padding:'8px 11px',borderRadius:7,cursor:'pointer',fontSize:12,fontWeight:String(curStatus)===opt.value?700:400,color:String(curStatus)===opt.value?opt.color:D.text,background:String(curStatus)===opt.value?`${opt.color}14`:'transparent'}}>
                               <div style={{width:7,height:7,borderRadius:'50%',background:opt.color,flexShrink:0,boxShadow:String(curStatus)===opt.value?`0 0 6px ${opt.color}88`:'none'}}/>
@@ -1493,12 +1506,13 @@ function DatabaseManager() {
           ))}
           {!browseLoading&&browseCount>PAGE_SIZE&&(
             <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginTop:16}}>
-              <Btn variant="ghost" size="sm" disabled={browseOffset===0} onClick={()=>loadBrowse(Math.max(0,browseOffset-PAGE_SIZE))}>← Prev</Btn>
+              <Btn variant="ghost" size="sm" disabled={browseOffset===0} onClick={()=>loadBrowse(Math.max(0,browseOffset-PAGE_SIZE), browseSearch)}>← Prev</Btn>
               <span style={{fontSize:11,color:D.textSec}}>Showing {browseOffset+1}–{Math.min(browseOffset+PAGE_SIZE,browseCount)} of {browseCount.toLocaleString()}</span>
-              <Btn variant="ghost" size="sm" disabled={browseOffset+PAGE_SIZE>=browseCount} onClick={()=>loadBrowse(browseOffset+PAGE_SIZE)}>Next →</Btn>
+              <Btn variant="ghost" size="sm" disabled={browseOffset+PAGE_SIZE>=browseCount} onClick={()=>loadBrowse(browseOffset+PAGE_SIZE, browseSearch)}>Next →</Btn>
             </div>
           )}
         </Card>
+        </div>
       )}
     </div>
   </>

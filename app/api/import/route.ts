@@ -291,11 +291,12 @@ export async function POST(req: NextRequest) {
             building_sf: sfs[i]||'', lease_price: finalPrices[i]||'', lease_date: dates[i]||''
           }))
         } else {
-          headers = ['address','city','property_type','building_sf','sale_price_text','sale_date']
+          const cleanPrice = (s: string) => s.replace(/[$,]/g, '').trim()
+          headers = ['address','city','property_type','building_sf','sale_price','sale_date']
           rows = Array.from({length:n},(_,i) => ({
             address: addrs[i]||'', city: cities[i]||'',
             property_type: types[i]||'Industrial', building_sf: sfs[i]||'',
-            sale_price_text: finalPrices[i]||'', sale_date: dates[i]||''
+            sale_price: cleanPrice(finalPrices[i]||''), sale_date: dates[i]||''
           }))
         }
       }
@@ -319,7 +320,7 @@ export async function POST(req: NextRequest) {
       sprinkler_system:'sprinkler', fire_sprinklers:'sprinkler',
       lot_size_ac_:'lot_size_ac', land_area:'lot_size_ac', lot_acres:'lot_size_ac',
       list_price:'asking_price', for_sale_price:'asking_price',
-      transaction_date:'sale_date', close_of_escrow:'sale_date', sale_price:'sale_price_text', asking_price_:'asking_price',
+      transaction_date:'sale_date', close_of_escrow:'sale_date', asking_price_:'asking_price',
       grantor:'seller', grantee:'buyer',
       re_taxes:'real_estate_taxes', annual_taxes:'real_estate_taxes',
     }
