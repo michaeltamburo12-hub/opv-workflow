@@ -748,6 +748,8 @@ function FolderManager({folders, setFolders, setPage, comps, setComps, avails, s
 
 
 // ── FILE IMPORT ───────────────────────────────────────────────────────────────
+const DB_ALL_FIELDS = new Set(['address','city','county','state','zip_code','property_type','building_sf','lot_size_ac','ceiling_height','loading_docks','drive_ins','power','heat','parking','sprinkler','sewer','zoning','real_estate_taxes','sale_price','asking_price','price_per_sf','sale_date','sale_type','buyer','seller','listing_broker','market','submarket','notes','status','pricing_guidance','availability_type','loopnet_url','lease_price','lease_date','lease_term','tenant','landlord','sale_price_text'])
+const DB_FIELD_OPTIONS=[{value:'__skip__',label:'— Skip this column —'},{value:'address',label:'Address'},{value:'city',label:'City'},{value:'county',label:'County'},{value:'state',label:'State'},{value:'zip_code',label:'Zip Code'},{value:'property_type',label:'Property Type'},{value:'building_sf',label:'Building SF'},{value:'lot_size_ac',label:'Lot Size (acres)'},{value:'ceiling_height',label:'Ceiling Height'},{value:'loading_docks',label:'Loading Docks'},{value:'drive_ins',label:'Drive-In Doors'},{value:'power',label:'Power'},{value:'heat',label:'Heat'},{value:'parking',label:'Parking'},{value:'sprinkler',label:'Sprinkler'},{value:'sewer',label:'Sewer'},{value:'zoning',label:'Zoning'},{value:'real_estate_taxes',label:'RE Taxes ($/yr)'},{value:'sale_price',label:'Sale Price ($)'},{value:'asking_price',label:'Asking Price ($)'},{value:'price_per_sf',label:'Price Per SF'},{value:'sale_date',label:'Sale Date'},{value:'sale_type',label:'Sale Type'},{value:'buyer',label:'Buyer'},{value:'seller',label:'Seller'},{value:'listing_broker',label:'Listing Broker'},{value:'market',label:'Market'},{value:'submarket',label:'Submarket'},{value:'notes',label:'Notes'},{value:'status',label:'Status'},{value:'pricing_guidance',label:'Pricing Guidance'},{value:'availability_type',label:'Availability Type'},{value:'loopnet_url',label:'LoopNet URL'}]
 type ParsedFile = {headers:string[], columnTypes:{name:string,type:string}[], totalRows:number, preview:Record<string,string>[], allRows:Record<string,string>[], existingTables:string[], fileName:string}
 
 function FileImport() {
@@ -764,6 +766,7 @@ function FileImport() {
   const [result, setResult] = useState<{inserted:number,failed:number,skipped:number,total:number,skippedAddresses?:string[],firstError?:string}|null>(null)
   const [availableTables, setAvailableTables] = useState<string[]>([])
   const fileRef = useRef<HTMLInputElement>(null)
+  const [colMapping, setColMapping] = useState<Record<string,string>>({})
 
   // Fetch table list on mount and after successful imports
   const fetchTables = useCallback(async () => {
@@ -780,13 +783,17 @@ function FileImport() {
   useEffect(() => { fetchTables() }, [fetchTables])
 
   const processFile = async (file: File) => {
-    setParsing(true); setParsed(null); setResult(null); setCreateSQL(''); setNewTableName(''); setIsNewTable(false)
+    setParsing(true); setParsed(null); setResult(null); setCreateSQL(''); setNewTableName(''); setIsNewTable(false); setColMapping({})
     const form = new FormData(); form.append('file', file)
     try {
       const res = await fetch('/api/import', {method:'POST', body:form})
       const data = await res.json()
       if (data.error) { alert('Parse error: ' + data.error); setParsing(false); return }
       setParsed(data)
+      // Auto-compute column mapping: recognized fields map to themselves, unknowns flagged for user review
+      const initMap: Record<string,string> = {}
+      ;(data.columnTypes as {name:string,type:string}[]).forEach(c => { initMap[c.name] = DB_ALL_FIELDS.has(c.name) ? c.name : '__skip__' })
+      setColMapping(initMap)
       // Merge any newly discovered tables
       if (data.existingTables?.length) {
         setAvailableTables(prev => {
@@ -829,7 +836,11 @@ function FileImport() {
       const rowsToInsert = parsed.allRows.map(row => {
         const mapped: Record<string,unknown> = {}
         Object.entries(row).forEach(([k,v]) => {
-          const key = clientRemap[k] || k
+          // Apply user column mapping first (if set), then table-specific client remap
+          const userDest = colMapping[k]
+          if (userDest === '__skip__') return // user explicitly skipped this column
+          const afterUser = (userDest && userDest !== '__skip__') ? userDest : k
+          const key = clientRemap[afterUser] || afterUser
           if (numFields.includes(k)) mapped[key] = v ? parseFloat(String(v).replace(/[$,]/g,''))||null : null
           else mapped[key] = v || null
         })
@@ -954,6 +965,37 @@ function FileImport() {
             </div>
           </Card>
         </div>
+        {/* Column mapping — only shown when some columns weren't auto-recognized */}
+        {parsed&&Object.values(colMapping).some(v=>v==='__skip__')&&(
+          <Card style={{marginTop:16,border:`1px solid rgba(217,119,6,0.35)`}}>
+            <div style={{display:'flex',alignItems:'center',gap:12,marginBottom:16}}>
+              <div style={{width:34,height:34,borderRadius:9,background:`rgba(217,119,6,0.12)`,border:`1px solid rgba(217,119,6,0.3)`,display:'flex',alignItems:'center',justifyContent:'center',fontSize:16,flexShrink:0}}>⚠️</div>
+              <div>
+                <div style={{fontSize:13,fontWeight:700,color:D.gold}}>Column Mapping Required</div>
+                <div style={{fontSize:11,color:D.textSec,marginTop:2}}>{Object.values(colMapping).filter(v=>v==='__skip__').length} column{Object.values(colMapping).filter(v=>v==='__skip__').length!==1?'s weren\'t':' wasn\'t'} recognized — select what each one contains before importing.</div>
+              </div>
+            </div>
+            <div style={{display:'grid',gap:8}}>
+              {Object.entries(colMapping).filter(([,v])=>v==='__skip__').map(([col])=>(
+                <div key={col} style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12,alignItems:'center',padding:'10px 14px',borderRadius:8,background:D.surface2,border:`1px solid rgba(217,119,6,0.2)`}}>
+                  <div>
+                    <div style={{fontSize:9,color:D.textMuted,letterSpacing:'.1em',textTransform:'uppercase' as const,marginBottom:3}}>Column in your file</div>
+                    <div style={{fontSize:12,fontWeight:600,color:D.text,fontFamily:"'JetBrains Mono',monospace"}}>{col}</div>
+                  </div>
+                  <div>
+                    <div style={{fontSize:9,color:D.textMuted,letterSpacing:'.1em',textTransform:'uppercase' as const,marginBottom:3}}>Maps to database field</div>
+                    <Sel value={colMapping[col]} onChange={e=>setColMapping(m=>({...m,[col]:e.target.value}))}>
+                      {DB_FIELD_OPTIONS.map(o=><option key={o.value} value={o.value}>{o.label}</option>)}
+                    </Sel>
+                  </div>
+                </div>
+              ))}
+            </div>
+            {Object.values(colMapping).filter(v=>v!=='__skip__').length>0&&(
+              <div style={{marginTop:12,fontSize:11,color:D.textMuted}}>✅ {Object.values(colMapping).filter(v=>v!=='__skip__').length} other column{Object.values(colMapping).filter(v=>v!=='__skip__').length!==1?'s were':' was'} recognized automatically</div>
+            )}
+          </Card>
+        )}
       )}
       {result&&(
         <Card style={{textAlign:'center' as const,padding:'48px 32px'}}>
