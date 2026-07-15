@@ -82,7 +82,8 @@ export async function POST(req: NextRequest) {
       // Taxes / zoning
       real_estate_taxes:'real_estate_taxes', re_taxes:'real_estate_taxes',
       annual_taxes:'real_estate_taxes', tax_amount:'real_estate_taxes',
-      // Sale price (comps)
+      // Sale price (comps) — sale_price_text is remapped to sale_price for all tables
+      // except pcre_sale_transactions which overrides it back via TABLE_REMAP
       sale_price_text:'sale_price', for_sale_price:'sale_price',
       transaction_price:'sale_price', sold_price:'sale_price', closed_price:'sale_price',
       // Asking price (avails)
