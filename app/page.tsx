@@ -1717,7 +1717,7 @@ function CompSearch({subject,comps,setComps,setPage,folders,setFolders}: {subjec
   const [loading,setLoading]=useState(false)
   const [searched,setSearched]=useState(false)
   const [selected,setSelected]=useState<Set<string>>(new Set())
-  const [filters,setFilters]=useState({county:'',city:'',min_sf:'',max_sf:'',min_price:'',max_price:'',min_date:'',max_date:'',sewer:'',zoning:''})
+  const [filters,setFilters]=useState({county:'',city:'',min_sf:'',max_sf:'',min_price:'',max_price:''})
   const [folderDropdown, setFolderDropdown] = useState<string|null>(null)
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set())
   const toggleExpand = (id:string) => setExpandedRows(prev=>{const n=new Set(prev);n.has(id)?n.delete(id):n.add(id);return n})
@@ -1754,10 +1754,6 @@ function CompSearch({subject,comps,setComps,setPage,folders,setFolders}: {subjec
     if (filters.max_sf) q = q.lte('building_sf', Number(filters.max_sf))
     if (filters.min_price) q = q.gte('sale_price', Number(filters.min_price))
     if (filters.max_price) q = q.lte('sale_price', Number(filters.max_price))
-    if (filters.min_date) q = q.gte('sale_date', filters.min_date)
-    if (filters.max_date) q = q.lte('sale_date', filters.max_date)
-    if (filters.sewer) q = q.eq('sewer', filters.sewer)
-    if (filters.zoning) q = q.ilike('zoning', `%${filters.zoning}%`)
     q = q.order('sale_date', {ascending:false}).limit(200)
     const {data,error} = await q
     if (error) { alert('Search error: ' + error.message); setLoading(false); return }
@@ -1798,11 +1794,7 @@ function CompSearch({subject,comps,setComps,setPage,folders,setFolders}: {subjec
               <Field label="Max SF"><Input type="number" placeholder="Any" value={filters.max_sf} onChange={e=>sf('max_sf',e.target.value)}/></Field>
               <Field label="Min Price"><Input type="number" placeholder="0" value={filters.min_price} onChange={e=>sf('min_price',e.target.value)}/></Field>
               <Field label="Max Price"><Input type="number" placeholder="Any" value={filters.max_price} onChange={e=>sf('max_price',e.target.value)}/></Field>
-              <Field label="Date From"><Input type="date" value={filters.min_date} onChange={e=>sf('min_date',e.target.value)}/></Field>
-              <Field label="Date To"><Input type="date" value={filters.max_date} onChange={e=>sf('max_date',e.target.value)}/></Field>
             </div>
-            <Field label="Sewer"><Sel value={filters.sewer} onChange={e=>sf('sewer',e.target.value)}><option value="">Any</option><option value="City">City Sewer</option><option value="Septic">Septic</option></Sel></Field>
-            <Field label="Zoning"><Input placeholder="e.g. I, M1" value={filters.zoning} onChange={e=>sf('zoning',e.target.value)}/></Field>
             <Btn onClick={search} disabled={loading} style={{width:'100%',padding:11}}>{loading?'Searching...':'🔎 Search Comps'}</Btn>
           </Card>
           {comps.length>0&&<Card style={{marginTop:14}}>
