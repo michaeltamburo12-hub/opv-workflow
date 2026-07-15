@@ -192,26 +192,38 @@ export async function POST(req: NextRequest) {
     let firstError = ''
     const BATCH = 50
 
-    // Duplicate detection: if table has an address column, filter out existing records
+    // Duplicate detection — query with original-case addresses, compare lowercase
     let rowsToProcess = remappedRows
     const hasAddressCol = remappedRows.length > 0 && 'address' in remappedRows[0]
     if (hasAddressCol) {
-      const addresses = rows.map(r => (r.address as string)?.toLowerCase().trim()).filter(Boolean)
-      if (addresses.length) {
-        // Query in batches of 500 to avoid URL length limits
+      // Use original-case addresses for the DB query so .in() matches correctly
+      const originalAddresses = remappedRows.map(r => (r.address as string)?.trim()).filter(Boolean)
+      if (originalAddresses.length) {
         const existingSet = new Set<string>()
         const ADDR_BATCH = 500
-        for (let i = 0; i < addresses.length; i += ADDR_BATCH) {
-          const batch = addresses.slice(i, i + ADDR_BATCH)
-          const { data: existing } = await supabaseAdmin
+        for (let i = 0; i < originalAddresses.length; i += ADDR_BATCH) {
+          const batch = originalAddresses.slice(i, i + ADDR_BATCH)
+          // Query exact matches first
+          const { data: exactMatches } = await supabaseAdmin
             .from(tableName)
             .select('address')
             .in('address', batch)
-          ;(existing || []).forEach((r: { address: string }) => {
+          ;(exactMatches || []).forEach((r: { address: string }) => {
             if (r.address) existingSet.add(r.address.toLowerCase().trim())
           })
+          // Also query case-insensitive for each address using ilike in small batches
+          for (const addr of batch) {
+            const { data: ilikeMatches } = await supabaseAdmin
+              .from(tableName)
+              .select('address')
+              .ilike('address', addr.trim())
+              .limit(1)
+            ;(ilikeMatches || []).forEach((r: { address: string }) => {
+              if (r.address) existingSet.add(r.address.toLowerCase().trim())
+            })
+          }
         }
-        rowsToProcess = rows.filter(r => {
+        rowsToProcess = remappedRows.filter(r => {
           const addr = (r.address as string)?.toLowerCase().trim()
           if (addr && existingSet.has(addr)) {
             skippedAddresses.push(r.address as string)
