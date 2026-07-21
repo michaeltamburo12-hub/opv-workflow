@@ -1760,7 +1760,6 @@ function CompSearch({subject,comps,setComps,setPage,folders,setFolders}: {subjec
   const [results,setResults]=useState<Comp[]>([])
   const [loading,setLoading]=useState(false)
   const [searched,setSearched]=useState(false)
-  const [selected,setSelected]=useState<Set<string>>(new Set())
   const [filters,setFilters]=useState({county:'',city:'',min_sf:'',max_sf:'',min_price:'',max_price:''})
   const [folderDropdown, setFolderDropdown] = useState<string|null>(null)
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set())
@@ -1806,11 +1805,6 @@ function CompSearch({subject,comps,setComps,setPage,folders,setFolders}: {subjec
     setResults(scored); setSearched(true); setLoading(false)
   }
 
-  const toggleSelect = (id: string) => setSelected(prev=>{const n=new Set(prev);n.has(id)?n.delete(id):n.add(id);return n})
-  const addSelected = () => {
-    const toAdd = results.filter(r=>selected.has(r.id) && !comps.find(c=>c.id===r.id))
-    setComps([...comps, ...toAdd]); alert(`${toAdd.length} comp${toAdd.length!==1?'s':''} added to your OPV`); setSelected(new Set())
-  }
   const sf = (k:string,v:string) => setFilters(f=>({...f,[k]:v}))
   const scoreColor = (s:number) => s>=85?D.green:s>=70?D.gold:D.red
 
@@ -1841,11 +1835,9 @@ function CompSearch({subject,comps,setComps,setPage,folders,setFolders}: {subjec
             </div>
             <Btn onClick={search} disabled={loading} style={{width:'100%',padding:11}}>{loading?'Searching...':'🔎 Search Comps'}</Btn>
           </Card>
-          {comps.length>0&&<Card style={{marginTop:14}}>
-            <SL>Added to OPV</SL>
-            <div style={{fontSize:12,color:D.textSec,marginBottom:10}}>{comps.length} comp{comps.length!==1?'s':''} selected</div>
-            <Btn onClick={()=>setPage('avail-search')} style={{width:'100%',padding:10,fontSize:12}}>Next: Avail Search →</Btn>
-          </Card>}
+          <Card style={{marginTop:14}}>
+            <Btn onClick={()=>setPage('folders')} style={{width:'100%',padding:10,fontSize:12}}>Go to Folders →</Btn>
+          </Card>
         </div>
         <div>
           {loading&&<Card><div style={{textAlign:'center' as const,padding:'40px 20px'}}><div className="spin" style={{width:32,height:32,border:`2px solid ${D.border}`,borderTopColor:D.blue,borderRadius:'50%',margin:'0 auto 16px'}}/><p style={{fontSize:13,color:D.textSec}}>Searching Supabase database...</p></div></Card>}
@@ -1854,10 +1846,6 @@ function CompSearch({subject,comps,setComps,setPage,folders,setFolders}: {subjec
             <>
               <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:12}}>
                 <span style={{fontSize:13,color:D.textSec}}>{results.length} results {results.length===200?'(showing first 200)':''}</span>
-                <div style={{display:'flex',gap:8}}>
-                  {results.length>0&&<Btn variant="ghost" size="sm" onClick={()=>setSelected(new Set(results.map(r=>r.id)))}>Select All</Btn>}
-                  {selected.size>0&&<Btn size="sm" onClick={addSelected}>＋ Add {selected.size} to OPV</Btn>}
-                </div>
               </div>
               {results.length===0?<Card style={{textAlign:'center' as const,padding:'48px 20px'}}><p style={{color:D.textSec}}>No results. Try broadening your filters.</p></Card>:null}
               {results.length>0&&(
@@ -1872,10 +1860,9 @@ function CompSearch({subject,comps,setComps,setPage,folders,setFolders}: {subjec
                       </div>
                     )
                     return (
-                      <Card key={r.id} style={{padding:'16px 20px',border:selected.has(r.id)?`1px solid ${D.blue}`:`1px solid ${D.border}`,background:selected.has(r.id)?`rgba(59,130,246,0.05)`:D.surface}}>
+                      <Card key={r.id} style={{padding:'16px 20px',border:`1px solid ${D.border}`,background:D.surface}}>
                         <div style={{display:'flex',alignItems:'flex-start',gap:14}}>
                           <div style={{display:'flex',flexDirection:'column' as const,alignItems:'center',gap:8,flexShrink:0,paddingTop:2}}>
-                            <input type="checkbox" checked={selected.has(r.id)} onChange={()=>toggleSelect(r.id)} style={{width:15,height:15,cursor:'pointer',accentColor:D.blue}}/>
                             <div style={{width:28,height:28,borderRadius:'50%',background:`rgba(217,119,6,0.15)`,border:`1px solid ${D.gold}44`,display:'flex',alignItems:'center',justifyContent:'center',fontSize:10,fontWeight:700,color:D.gold}}>#{idx+1}</div>
                           </div>
                           <div style={{flex:1,minWidth:0}}>
@@ -1917,10 +1904,6 @@ function CompSearch({subject,comps,setComps,setPage,folders,setFolders}: {subjec
                               {sc('Seller', r.seller)}
                             </div>
                             <div style={{display:'flex',gap:8,alignItems:'center',paddingTop:10,borderTop:`1px solid ${D.border}`}}>
-                              {isAdded
-                                ? <Tag color={D.green}>✓ Added to OPV</Tag>
-                                : <button onClick={()=>setComps([...comps,r])} style={{background:`rgba(59,130,246,0.12)`,border:`1px solid rgba(59,130,246,0.25)`,borderRadius:6,color:D.blue,fontSize:12,fontWeight:700,padding:'6px 14px',cursor:'pointer',fontFamily:"'Inter',sans-serif"}}>＋ Add to OPV</button>
-                              }
                               <div style={{position:'relative'}}>
                                 <button onClick={()=>setFolderDropdown(folderDropdown===r.id?null:r.id)} style={{background:'transparent',border:`1px solid ${D.border}`,borderRadius:6,color:D.textSec,fontSize:12,fontWeight:600,padding:'6px 12px',cursor:'pointer',fontFamily:"'Inter',sans-serif",display:'flex',alignItems:'center',gap:5}}>
                                   📁 Add to Folder
@@ -1952,12 +1935,6 @@ function CompSearch({subject,comps,setComps,setPage,folders,setFolders}: {subjec
                       </Card>
                     )
                   })}
-                </div>
-              )}
-              {comps.length>0&&(
-                <div style={{marginTop:12,padding:'12px 16px',borderRadius:8,background:`rgba(59,130,246,0.08)`,border:`1px solid rgba(59,130,246,0.2)`,display:'flex',alignItems:'center',justifyContent:'space-between'}}>
-                  <span style={{fontSize:13,fontWeight:600,color:D.text}}>{comps.length} comp{comps.length!==1?'s':''} added to OPV</span>
-                  <Btn size="sm" onClick={()=>setPage('avail-search')}>Next: Avail Search →</Btn>
                 </div>
               )}
             </>
@@ -2044,11 +2021,6 @@ function AvailSearch({subject,avails,setAvails,setPage,folders,setFolders}: {sub
     setResults(data||[]); setSearched(true); setLoading(false)
   }
 
-  const toggleSelect = (id:string) => setSelected(prev=>{const n=new Set(prev);n.has(id)?n.delete(id):n.add(id);return n})
-  const addSelected = () => {
-    const toAdd = results.filter(r=>selected.has(r.id) && !avails.find(a=>a.id===r.id))
-    setAvails([...avails, ...toAdd]); alert(`${toAdd.length} listing${toAdd.length!==1?'s':''} added to your OPV`); setSelected(new Set())
-  }
   const sf = (k:string,v:string) => setFilters(f=>({...f,[k]:v}))
   const [newAvail,setNewAvail]=useState({address:'',city:'',county:'Nassau',building_sf:'',ceiling_height:'',loading_docks:'',drive_ins:'',asking_price:'',pricing_guidance:'',sewer:'Municipal',zoning:'',loopnet_url:''})
   const [availDupModal,setAvailDupModal]=useState<{matches:{id:string,address?:string,city?:string,asking_price?:number,building_sf?:number}[],onConfirm:()=>void}|null>(null)
@@ -2132,11 +2104,9 @@ function AvailSearch({subject,avails,setAvails,setPage,folders,setFolders}: {sub
             <p style={{fontSize:12,color:D.textSec,marginBottom:12,lineHeight:1.5}}>Add listings from LoopNet, CoStar, or your own research directly to your database.</p>
             <Btn onClick={()=>setShowAdd(v=>!v)} style={{width:'100%',padding:9,fontSize:12}}>＋ Add Listing to Database</Btn>
           </Card>
-          {avails.length>0&&<Card style={{marginTop:14}}>
-            <SL>Added to OPV</SL>
-            <div style={{fontSize:12,color:D.textSec,marginBottom:10}}>{avails.length} listing{avails.length!==1?'s':''} selected</div>
-            <Btn onClick={()=>setPage('lease-comps')} style={{width:'100%',padding:10,fontSize:12}}>Next: Lease Comps →</Btn>
-          </Card>}
+          <Card style={{marginTop:14}}>
+            <Btn onClick={()=>setPage('folders')} style={{width:'100%',padding:10,fontSize:12}}>Go to Folders →</Btn>
+          </Card>
         </div>
         <div>
           {showAdd&&(
@@ -2167,16 +2137,11 @@ function AvailSearch({subject,avails,setAvails,setPage,folders,setFolders}: {sub
             <>
               <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:12}}>
                 <span style={{fontSize:13,color:D.textSec}}>{results.length} listings found</span>
-                <div style={{display:'flex',gap:8}}>
-                  {results.length>0&&<Btn variant="ghost" size="sm" onClick={()=>setSelected(new Set(results.map(r=>r.id)))}>Select All</Btn>}
-                  {selected.size>0&&<Btn size="sm" onClick={addSelected}>＋ Add {selected.size} to OPV</Btn>}
-                </div>
               </div>
               {results.length===0?<Card style={{textAlign:'center' as const,padding:'48px 20px'}}><p style={{color:D.textSec}}>No availabilities found.</p></Card>:
               <div style={{display:'flex',flexDirection:'column' as const,gap:10}}>
                 {results.map((r,idx)=>{
                   const psf=r.price_per_sf||(r.asking_price&&r.building_sf?Number(r.asking_price)/Number(r.building_sf):0)
-                  const isAdded=avails.some(a=>a.id===r.id)
                   const sc=(label:string,val:unknown)=>(
                     <div key={label}>
                       <div style={{fontSize:10,fontWeight:600,color:D.textMuted,textTransform:'uppercase' as const,letterSpacing:'.06em',marginBottom:2}}>{label}</div>
@@ -2184,10 +2149,9 @@ function AvailSearch({subject,avails,setAvails,setPage,folders,setFolders}: {sub
                     </div>
                   )
                   return (
-                    <Card key={r.id} style={{padding:'16px 20px',border:selected.has(r.id)?`1px solid ${D.blue}`:`1px solid ${D.border}`,background:selected.has(r.id)?`rgba(59,130,246,0.05)`:D.surface}}>
+                    <Card key={r.id} style={{padding:'16px 20px',border:`1px solid ${D.border}`,background:D.surface}}>
                       <div style={{display:'flex',alignItems:'flex-start',gap:14}}>
                         <div style={{display:'flex',flexDirection:'column' as const,alignItems:'center',gap:8,flexShrink:0,paddingTop:2}}>
-                          <input type="checkbox" checked={selected.has(r.id)} onChange={()=>toggleSelect(r.id)} style={{width:15,height:15,cursor:'pointer',accentColor:D.blue}}/>
                           <div style={{width:28,height:28,borderRadius:'50%',background:`rgba(59,130,246,0.15)`,border:`1px solid ${D.blue}44`,display:'flex',alignItems:'center',justifyContent:'center',fontSize:10,fontWeight:700,color:D.blue}}>#{idx+1}</div>
                         </div>
                         <div style={{flex:1,minWidth:0}}>
@@ -2225,10 +2189,6 @@ function AvailSearch({subject,avails,setAvails,setPage,folders,setFolders}: {sub
                             {sc('Submarket', (r as Avail&{submarket?:string}).submarket)}
                           </div>
                           <div style={{display:'flex',gap:8,alignItems:'center',flexWrap:'wrap' as const,paddingTop:10,borderTop:`1px solid ${D.border}`}}>
-                            {isAdded
-                              ? <Tag color={D.green}>✓ Added to OPV</Tag>
-                              : <button onClick={()=>setAvails([...avails,r])} style={{background:`rgba(59,130,246,0.12)`,border:`1px solid rgba(59,130,246,0.25)`,borderRadius:6,color:D.blue,fontSize:12,fontWeight:700,padding:'6px 14px',cursor:'pointer',fontFamily:"'Inter',sans-serif"}}>＋ Add to OPV</button>
-                            }
                             {r.loopnet_url&&<a href={r.loopnet_url} target="_blank" rel="noopener noreferrer" style={{fontSize:12,color:D.blue,padding:'6px 10px',textDecoration:'none',border:`1px solid ${D.blue}33`,borderRadius:6,fontWeight:600}}>↗ LoopNet</a>}
                             <div style={{position:'relative'}}>
                               <button onClick={()=>setFolderDropdown(folderDropdown===r.id?null:r.id)} style={{background:'transparent',border:`1px solid ${D.border}`,borderRadius:6,color:D.textSec,fontSize:12,fontWeight:600,padding:'6px 12px',cursor:'pointer',fontFamily:"'Inter',sans-serif",display:'flex',alignItems:'center',gap:5}}>
@@ -2303,7 +2263,6 @@ function LeaseCompSearch({subject,leaseComps,setLeaseComps,setPage,folders,setFo
   const [results,setResults]=useState<LeaseComp[]>([])
   const [loading,setLoading]=useState(false)
   const [searched,setSearched]=useState(false)
-  const [selected,setSelected]=useState<Set<string>>(new Set())
   const [filters,setFilters]=useState({county:'',city:'',min_sf:'',max_sf:'',min_price:'',max_price:'',min_date:'',max_date:''})
   const [showManual,setShowManual]=useState(false)
   const [manual,setManual]=useState<Partial<LeaseComp>>({})
@@ -2326,11 +2285,6 @@ function LeaseCompSearch({subject,leaseComps,setLeaseComps,setPage,folders,setFo
     const {data,error} = await q
     if (error) { alert('Search error: ' + error.message); setLoading(false); return }
     setResults(data||[]); setSearched(true); setLoading(false)
-  }
-  const toggleSelect = (id:string) => setSelected(prev=>{const n=new Set(prev);n.has(id)?n.delete(id):n.add(id);return n})
-  const addSelected = () => {
-    const toAdd = results.filter(r=>selected.has(r.id) && !leaseComps.find(c=>c.id===r.id))
-    setLeaseComps([...leaseComps, ...toAdd]); alert(`${toAdd.length} lease comp${toAdd.length!==1?'s':''} added`); setSelected(new Set())
   }
   const sf = (k:string,v:string) => setFilters(f=>({...f,[k]:v}))
   const sm = (k:string,v:string) => setManual(m=>({...m,[k]:v}))
@@ -2411,14 +2365,9 @@ function LeaseCompSearch({subject,leaseComps,setLeaseComps,setPage,folders,setFo
             <>
               <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:12}}>
                 <span style={{fontSize:13,color:D.textSec}}>{results.length} results</span>
-                <div style={{display:'flex',gap:8}}>
-                  <Btn variant="ghost" size="sm" onClick={()=>setSelected(new Set(results.map(r=>r.id)))}>Select All</Btn>
-                  {selected.size>0&&<Btn size="sm" onClick={addSelected}>＋ Add {selected.size} to OPV</Btn>}
-                </div>
               </div>
               <div style={{display:'flex',flexDirection:'column' as const,gap:10}}>
                 {results.map((r,idx)=>{
-                  const isAdded=leaseComps.some(c=>c.id===r.id)
                   const sc=(label:string,val:unknown)=>(
                     <div key={label}>
                       <div style={{fontSize:10,fontWeight:600,color:D.textMuted,textTransform:'uppercase' as const,letterSpacing:'.06em',marginBottom:2}}>{label}</div>
@@ -2426,10 +2375,9 @@ function LeaseCompSearch({subject,leaseComps,setLeaseComps,setPage,folders,setFo
                     </div>
                   )
                   return (
-                    <Card key={r.id} style={{padding:'16px 20px',border:selected.has(r.id)?`1px solid ${D.blue}`:`1px solid ${D.border}`,background:selected.has(r.id)?`rgba(59,130,246,0.05)`:D.surface}}>
+                    <Card key={r.id} style={{padding:'16px 20px',border:`1px solid ${D.border}`,background:D.surface}}>
                       <div style={{display:'flex',alignItems:'flex-start',gap:14}}>
                         <div style={{display:'flex',flexDirection:'column' as const,alignItems:'center',gap:8,flexShrink:0,paddingTop:2}}>
-                          <input type="checkbox" checked={selected.has(r.id)} onChange={()=>toggleSelect(r.id)} style={{width:15,height:15,cursor:'pointer',accentColor:D.blue}}/>
                           <div style={{width:28,height:28,borderRadius:'50%',background:`rgba(16,185,129,0.15)`,border:`1px solid ${D.green}44`,display:'flex',alignItems:'center',justifyContent:'center',fontSize:10,fontWeight:700,color:D.green}}>#{idx+1}</div>
                         </div>
                         <div style={{flex:1,minWidth:0}}>
@@ -2466,10 +2414,6 @@ function LeaseCompSearch({subject,leaseComps,setLeaseComps,setPage,folders,setFo
                             {sc('Office %', r.office_pct?r.office_pct+'%':null)}
                           </div>
                           <div style={{display:'flex',gap:8,alignItems:'center',paddingTop:10,borderTop:`1px solid ${D.border}`}}>
-                            {isAdded
-                              ? <Tag color={D.green}>✓ Added to OPV</Tag>
-                              : <button onClick={()=>setLeaseComps([...leaseComps,r])} style={{background:`rgba(59,130,246,0.12)`,border:`1px solid rgba(59,130,246,0.25)`,borderRadius:6,color:D.blue,fontSize:12,fontWeight:700,padding:'6px 14px',cursor:'pointer',fontFamily:"'Inter',sans-serif"}}>＋ Add to OPV</button>
-                            }
                             <div style={{position:'relative'}}>
                               <button onClick={()=>setFolderDropdown(folderDropdown===r.id?null:r.id)} style={{background:'transparent',border:`1px solid ${D.border}`,borderRadius:6,color:D.textSec,fontSize:12,fontWeight:600,padding:'6px 12px',cursor:'pointer',fontFamily:"'Inter',sans-serif",display:'flex',alignItems:'center',gap:5}}>
                                 📁 Add to Folder
