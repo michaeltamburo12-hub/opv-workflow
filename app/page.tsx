@@ -2907,6 +2907,20 @@ function OPVReport({subject,comps,leaseComps,avails,analytics,aiText,setPage,fro
     try { localStorage.setItem('opv_photo_overrides', JSON.stringify(photoOverrides)) } catch {}
   }, [photoOverrides])
 
+  // When frozenHTML is displayed, directly patch img srcs from photoUrls/photoOverrides.
+  // Direct DOM mutation avoids re-rendering frozenHTML (which would lose text edits)
+  // and is picked up by cloneReport() when generating the PDF.
+  useEffect(() => {
+    if (!frozenHTML || !reportRef.current) return
+    reportRef.current.querySelectorAll<HTMLImageElement>('img[data-photo-key]').forEach(img => {
+      const key = img.getAttribute('data-photo-key') || ''
+      const photoUrlKey = key === 'subject_cover' ? 'subject' : key.replace(/^comp_|^avail_/, '')
+      const url = photoOverrides[key] || photoUrls[photoUrlKey]
+      if (url) img.src = url
+    })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [frozenHTML, photoUrls, photoOverrides])
+
   // Live PCRE transaction data from Supabase (last 3 years)
   type PcreRow = {address:string,city:string,property_type?:string,building_sf?:number|string,sale_price_text?:string,sale_date?:string,tenant?:string,landlord?:string,lease_price?:string,lease_date?:string}
   const [pcreSalesData, setPcreSalesData] = useState<string[][]>([])
@@ -2941,22 +2955,6 @@ function OPVReport({subject,comps,leaseComps,avails,analytics,aiText,setPage,fro
   const setCustomPhoto = (key: string, url: string) => {
     setPhotoOverrides(p=>({...p,[key]:url}))
     setEditingKey(null)
-    // If the report has frozen text edits, patch the photo src directly in the HTML
-    // so the text edits are preserved — no need to Reset
-    if (frozenHTML) {
-      try {
-        const parser = new DOMParser()
-        const doc = parser.parseFromString(`<html><body>${frozenHTML}</body></html>`, 'text/html')
-        const img = doc.querySelector(`[data-photo-key="${key}"]`) as HTMLImageElement | null
-        if (img) {
-          img.src = url
-          // Also clear the error placeholder if visible (remove sibling error div)
-          const placeholder = img.closest('[style*="position: relative"]')?.querySelector('[style*="column"]') as HTMLElement | null
-          if (placeholder) placeholder.style.display = 'none'
-          setFrozenHTML(doc.body.innerHTML)
-        }
-      } catch {}
-    }
   }
   const handleFileUpload = (key: string, file: File) => {
     const reader = new FileReader()
