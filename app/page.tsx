@@ -2996,30 +2996,26 @@ function OPVReport({subject,comps,leaseComps,avails,analytics,aiText,setPage,fro
     reader.readAsDataURL(file)
   }
   const clearPhoto = (key: string) => {
-    setPhotoOverrides(p=>{const n={...p};delete n[key];return n})
     setEditingKey(null)
-    // Revert the img src in frozenHTML back to the street-view default
-    setFrozenHTML(prev => {
-      if (!prev) return prev
-      try {
-        const parser = new DOMParser()
-        const doc = parser.parseFromString(`<!DOCTYPE html><html><body>${prev}</body></html>`,'text/html')
-        const img = doc.querySelector<HTMLImageElement>(`img[data-photo-key="${key}"]`)
-        if (!img) return prev
-        let defaultUrl = ''
-        if (key === 'subject_cover' && subject) {
-          defaultUrl = `/api/street-view?address=${encodeURIComponent(subject.address+(subject.city?', '+subject.city:'')+', NY')}`
-        } else if (key.startsWith('comp_')) {
-          const c = comps.find(c=>String(c.id)===key.replace('comp_',''))
-          if (c?.address) defaultUrl = `/api/street-view?address=${encodeURIComponent(c.address+(c.city?', '+c.city:'')+', NY')}`
-        } else if (key.startsWith('avail_')) {
-          const a = avails.find(a=>String(a.id)===key.replace('avail_',''))
-          if (a?.address) defaultUrl = `/api/street-view?address=${encodeURIComponent(a.address+(a.city?', '+a.city:'')+', NY')}`
-        }
-        if (defaultUrl) { img.setAttribute('src', defaultUrl); return doc.body.innerHTML }
-        return prev
-      } catch { return prev }
-    })
+    // Compute the street-view URL for this slot
+    let svUrl = ''
+    if (key === 'subject_cover' && subject) {
+      svUrl = `/api/street-view?address=${encodeURIComponent(subject.address+(subject.city?', '+subject.city:'')+', NY')}`
+    } else if (key.startsWith('comp_')) {
+      const c = comps.find(c=>String(c.id)===key.replace('comp_',''))
+      if (c?.address) svUrl = `/api/street-view?address=${encodeURIComponent(c.address+(c.city?', '+c.city:'')+', NY')}`
+    } else if (key.startsWith('avail_')) {
+      const a = avails.find(a=>String(a.id)===key.replace('avail_',''))
+      if (a?.address) svUrl = `/api/street-view?address=${encodeURIComponent(a.address+(a.city?', '+a.city:'')+', NY')}`
+    }
+    // Set override TO the street-view URL (not delete it).
+    // This way the DOM sync picks photoOverrides[key] = svUrl over any photoUrls value,
+    // which would otherwise keep re-applying the custom photo.
+    if (svUrl) {
+      setPhotoOverrides(p=>({...p,[key]:svUrl}))
+    } else {
+      setPhotoOverrides(p=>{const n={...p};delete n[key];return n})
+    }
   }
   // Shorthand to render a PhotoSlot with OPVReport state wired in
   // photoUrls (from the Edit Photos step) are keyed by: 'subject', comp.id, avail.id
