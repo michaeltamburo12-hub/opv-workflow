@@ -2801,7 +2801,7 @@ function PhotoSlot({photoKey,defaultSrc,height=280,override,isEditing,canEdit=fa
 }
 
 // ── OPV REPORT ────────────────────────────────────────────────────────────────
-function OPVReport({subject,comps,leaseComps,avails,analytics,aiText,setPage,frozenHTML,setFrozenHTML}: {subject:SubjectForm|null,comps:Comp[],leaseComps:LeaseComp[],avails:Avail[],analytics:AnalyticsData|null,aiText:string,setPage:(p:string)=>void,frozenHTML:string|null,setFrozenHTML:(h:string|null)=>void}) {
+function OPVReport({subject,comps,leaseComps,avails,analytics,aiText,setPage,frozenHTML,setFrozenHTML,photoUrls={}}: {subject:SubjectForm|null,comps:Comp[],leaseComps:LeaseComp[],avails:Avail[],analytics:AnalyticsData|null,aiText:string,setPage:(p:string)=>void,frozenHTML:string|null,setFrozenHTML:(h:string|null)=>void,photoUrls?:Record<string,string>}) {
   const today = new Date().toLocaleDateString('en-US',{month:'long',year:'numeric'}).toUpperCase()
   const [downloading, setDownloading] = useState(false)
   const [includeLeaseComps, setIncludeLeaseComps] = useState(leaseComps.length>0)
@@ -2952,18 +2952,25 @@ function OPVReport({subject,comps,leaseComps,avails,analytics,aiText,setPage,fro
     setEditingKey(null)
   }
   // Shorthand to render a PhotoSlot with OPVReport state wired in
-  const Photo = (photoKey: string, defaultSrc: string, height=280) => (
-    <PhotoSlot
-      photoKey={photoKey} defaultSrc={defaultSrc} height={height}
-      override={photoOverrides[photoKey]}
-      isEditing={editingKey===photoKey}
-      canEdit={editMode}
-      onToggleEdit={()=>setEditingKey(editingKey===photoKey?null:photoKey)}
-      onSetPhoto={setCustomPhoto}
-      onClearPhoto={clearPhoto}
-      onFileUpload={handleFileUpload}
-    />
-  )
+  // photoUrls (from the Edit Photos step) are keyed by: 'subject', comp.id, avail.id
+  // photoKey here is: 'subject_cover', `comp_${id}`, `avail_${id}`
+  // So we derive the photoUrls lookup key and use it as defaultSrc fallback
+  const Photo = (photoKey: string, defaultSrc: string, height=280) => {
+    const photoUrlKey = photoKey === 'subject_cover' ? 'subject' : photoKey.replace(/^comp_|^avail_/, '')
+    const resolvedSrc = photoUrls[photoUrlKey] || defaultSrc
+    return (
+      <PhotoSlot
+        photoKey={photoKey} defaultSrc={resolvedSrc} height={height}
+        override={photoOverrides[photoKey]}
+        isEditing={editingKey===photoKey}
+        canEdit={editMode}
+        onToggleEdit={()=>setEditingKey(editingKey===photoKey?null:photoKey)}
+        onSetPhoto={setCustomPhoto}
+        onClearPhoto={clearPhoto}
+        onFileUpload={handleFileUpload}
+      />
+    )
+  }
 
   // ── Shared export helpers ────────────────────────────────────────────────────
   const embedImages = async (root: HTMLElement) => {
@@ -3959,7 +3966,7 @@ export default function App() {
             {page==='folders'&&<FolderManager folders={folders} setFolders={updateFolders} setPage={handleSetPage} comps={comps} setComps={setComps} avails={avails} setAvails={setAvails}/>}
             {page==='analytics'&&<Analytics comps={scoredComps.length>0?scoredComps:comps} avails={avails} analytics={analytics} setAnalytics={setAnalytics} setPage={handleSetPage}/>}
             {page==='broker-review'&&<BrokerReview subject={subject} comps={scoredComps.length>0?scoredComps:comps} analytics={analytics} setAnalytics={setAnalytics} aiText={aiText} setAiText={setAiText} setPage={handleSetPage} setSubject={setSubject}/>}
-            {page==='opv-report'&&<OPVReport subject={subject} comps={scoredComps.length>0?scoredComps:comps} leaseComps={leaseComps} avails={avails} analytics={analytics} aiText={aiText} setPage={handleSetPage} frozenHTML={editedReportHTML} setFrozenHTML={setEditedReportHTML}/>}
+            {page==='opv-report'&&<OPVReport subject={subject} comps={scoredComps.length>0?scoredComps:comps} leaseComps={leaseComps} avails={avails} analytics={analytics} aiText={aiText} setPage={handleSetPage} frozenHTML={editedReportHTML} setFrozenHTML={setEditedReportHTML} photoUrls={photoUrls}/>}
           </div>
           {/* ── Sticky Step Nav Bar ── */}
           {(()=>{
