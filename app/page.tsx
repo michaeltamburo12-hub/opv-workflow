@@ -2934,6 +2934,27 @@ function OPVReport({subject,comps,leaseComps,avails,analytics,aiText,setPage,fro
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [photoOverrides])
 
+  // ── DOM SYNC SAFETY NET ─────────────────────────────────────────────────────
+  // Runs after EVERY render. After React applies dangerouslySetInnerHTML, this
+  // immediately patches img srcs from photoUrls/photoOverrides — no DOMParser,
+  // no string manipulation, no deps. Works for old AND new frozenHTML.
+  // No state changes here → no re-render → no infinite loop.
+  useEffect(() => {
+    if (!frozenHTML || !reportRef.current) return
+    const el = reportRef.current
+    el.querySelectorAll<HTMLImageElement>('img[data-photo-key]').forEach(img => {
+      const key = img.getAttribute('data-photo-key') || ''
+      const photoUrlKey = key === 'subject_cover' ? 'subject' : key.replace(/^comp_|^avail_/, '')
+      const url = photoOverrides[key] || photoUrls[photoUrlKey]
+      if (url && img.getAttribute('src') !== url) {
+        img.setAttribute('src', url)
+        img.style.display = 'block'
+        const ph = el.querySelector(`[data-photo-placeholder-for="${key}"]`)
+        if (ph) (ph as HTMLElement).style.display = 'none'
+      }
+    })
+  }) // intentionally no deps — runs after every render
+
   // Live PCRE transaction data from Supabase (last 3 years)
   type PcreRow = {address:string,city:string,property_type?:string,building_sf?:number|string,sale_price_text?:string,sale_date?:string,tenant?:string,landlord?:string,lease_price?:string,lease_date?:string}
   const [pcreSalesData, setPcreSalesData] = useState<string[][]>([])
@@ -3676,6 +3697,15 @@ export default function App() {
     if(typeof window==='undefined') return ''
     try{return localStorage.getItem('opv_aitext')||''}catch{return ''}
   })
+  // Refs so the photo-patch effect can access current subject/comps/avails
+  // inside the setEditedReportHTML functional updater without stale closures
+  const subjectRef = useRef(subject)
+  const compsRef = useRef(comps)
+  const availsRef = useRef(avails)
+  useEffect(()=>{ subjectRef.current = subject },[subject])
+  useEffect(()=>{ compsRef.current = comps },[comps])
+  useEffect(()=>{ availsRef.current = avails },[avails])
+
   const [photoUrls,setPhotoUrls]=useState<Record<string,string>>(()=>{
     if(typeof window==='undefined') return {}
     try{return JSON.parse(localStorage.getItem('opv_photos')||'{}')}catch{return {}}
@@ -3736,7 +3766,8 @@ export default function App() {
 
   // Patch photoUrls into editedReportHTML whenever photos change — runs in the PARENT so it
   // fires even when OPVReport is unmounted (user on Edit Photos page or any other step).
-  // Also fixes placeholder visibility so "No photo available" is replaced by the real image.
+  // Includes a migration pass that adds data-photo-key to old frozenHTML (saved before
+  // that attribute existed) by matching street-view URLs back to comp/avail IDs.
   useEffect(()=>{
     if (Object.keys(photoUrls).length === 0) return
     setEditedReportHTML(prev => {
@@ -3745,6 +3776,26 @@ export default function App() {
         const parser = new DOMParser()
         const doc = parser.parseFromString(`<!DOCTYPE html><html><body>${prev}</body></html>`,'text/html')
         let changed = false
+
+        // Migration: if frozenHTML has no data-photo-key attrs (old format),
+        // add them by matching /api/street-view?address= URLs to known comp/avail addresses
+        if (!doc.querySelector('img[data-photo-key]')) {
+          const subj = subjectRef.current
+          const cs = compsRef.current
+          const as_ = availsRef.current
+          const keyByEnc: Record<string,string> = {}
+          if (subj?.address) {
+            keyByEnc[encodeURIComponent(`${subj.address}${subj.city?', '+subj.city:''}, NY`)] = 'subject_cover'
+          }
+          cs.forEach(c => { if (c.address) keyByEnc[encodeURIComponent(`${c.address}${c.city?', '+c.city:''}, NY`)] = `comp_${c.id}` })
+          as_.forEach(a => { if (a.address) keyByEnc[encodeURIComponent(`${a.address}${a.city?', '+a.city:''}, NY`)] = `avail_${a.id}` })
+          doc.querySelectorAll<HTMLImageElement>('img').forEach(img => {
+            const m = (img.getAttribute('src')||'').match(/\/api\/street-view\?address=([^&]+)/)
+            if (m && keyByEnc[m[1]]) { img.setAttribute('data-photo-key', keyByEnc[m[1]]); changed = true }
+          })
+        }
+
+        // Patch pass: apply current photoUrls to all img[data-photo-key]
         doc.querySelectorAll<HTMLImageElement>('img[data-photo-key]').forEach(img => {
           const key = img.getAttribute('data-photo-key') || ''
           const photoUrlKey = key === 'subject_cover' ? 'subject' : key.replace(/^comp_|^avail_/,'')
@@ -3756,6 +3807,7 @@ export default function App() {
             if (placeholder) { placeholder.remove(); changed = true }
           }
         })
+
         return changed ? doc.body.innerHTML : prev
       } catch { return prev }
     })
