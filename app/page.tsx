@@ -3194,14 +3194,20 @@ function OPVReport({subject,comps,leaseComps,avails,analytics,aiText,setPage,fro
         <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:12}}>
           <SectionTitle>Generate Package</SectionTitle>
           <div style={{display:'flex',gap:10,alignItems:'center'}}>
-            {!editMode&&(
-              <Btn onClick={()=>{ if(reportRef.current) setFrozenHTML(reportRef.current.innerHTML) }}
-                style={{padding:'9px 18px',fontSize:12,background:'rgba(16,185,129,0.12)',color:D.green,border:`1px solid rgba(16,185,129,0.35)`}}>
-                ✓ Confirm Edits
-              </Btn>
-            )}
+            <Btn onClick={()=>{
+                // If in edit mode, pull from iframe; otherwise pull from the rendered report div
+                if (editMode && editFrameRef.current?.contentDocument?.body) {
+                  setFrozenHTML(editFrameRef.current.contentDocument.body.innerHTML)
+                  setEditMode(false)
+                } else if (reportRef.current) {
+                  setFrozenHTML(reportRef.current.innerHTML)
+                }
+              }}
+              style={{padding:'9px 18px',fontSize:12,background:'rgba(16,185,129,0.12)',color:D.green,border:`1px solid rgba(16,185,129,0.35)`,fontWeight:700}}>
+              ✓ Confirm Edits
+            </Btn>
             <Btn onClick={toggleEditMode} style={{padding:'9px 16px',fontSize:12,background:editMode?'rgba(16,185,129,0.15)':frozenHTML?'rgba(217,119,6,0.1)':'rgba(59,130,246,0.1)',color:editMode?D.green:frozenHTML?D.gold:D.blue,border:`1px solid ${editMode?'rgba(16,185,129,0.4)':frozenHTML?'rgba(217,119,6,0.3)':'rgba(59,130,246,0.3)'}`}}>
-              {editMode ? '✅ Done Editing' : frozenHTML ? '✏️ Edit Text (edited)' : '✏️ Edit Text'}
+              {editMode ? '✏️ Still Editing…' : frozenHTML ? '✏️ Edit Text (saved)' : '✏️ Edit Text'}
             </Btn>
             {frozenHTML&&!editMode&&<Btn variant="ghost" onClick={()=>setFrozenHTML(null)} style={{padding:'9px 12px',fontSize:11,color:D.textMuted}}>↩ Reset</Btn>}
             <Btn onClick={downloadPDF} disabled={downloading} style={{padding:'9px 20px',fontSize:12,background:`rgba(239,68,68,0.10)`,color:'#EF4444',border:`1px solid rgba(239,68,68,0.3)`}}>
