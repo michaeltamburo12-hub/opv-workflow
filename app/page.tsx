@@ -2772,7 +2772,7 @@ function PhotoSlot({photoKey,defaultSrc,height=280,override,isEditing,canEdit=fa
             <span style={{fontSize:10}}>Click Edit Photo to add one</span>
           </div>
         ) : (
-          <img src={src} alt=""
+          <img src={src} alt="" data-photo-key={photoKey}
             style={{width:'100%',height:'100%',objectFit:'cover' as const,display:'block',position:'absolute' as const,inset:0}}
             onError={()=>setImgError(true)}
             onLoad={()=>setImgError(false)}/>
@@ -2941,6 +2941,22 @@ function OPVReport({subject,comps,leaseComps,avails,analytics,aiText,setPage,fro
   const setCustomPhoto = (key: string, url: string) => {
     setPhotoOverrides(p=>({...p,[key]:url}))
     setEditingKey(null)
+    // If the report has frozen text edits, patch the photo src directly in the HTML
+    // so the text edits are preserved — no need to Reset
+    if (frozenHTML) {
+      try {
+        const parser = new DOMParser()
+        const doc = parser.parseFromString(`<html><body>${frozenHTML}</body></html>`, 'text/html')
+        const img = doc.querySelector(`[data-photo-key="${key}"]`) as HTMLImageElement | null
+        if (img) {
+          img.src = url
+          // Also clear the error placeholder if visible (remove sibling error div)
+          const placeholder = img.closest('[style*="position: relative"]')?.querySelector('[style*="column"]') as HTMLElement | null
+          if (placeholder) placeholder.style.display = 'none'
+          setFrozenHTML(doc.body.innerHTML)
+        }
+      } catch {}
+    }
   }
   const handleFileUpload = (key: string, file: File) => {
     const reader = new FileReader()
