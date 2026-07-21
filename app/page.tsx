@@ -2765,17 +2765,17 @@ function PhotoSlot({photoKey,defaultSrc,height=280,override,isEditing,canEdit=fa
   return (
     <div style={{width:'100%',alignSelf:'stretch' as const,marginBottom:20}}>
       <div style={{width:'100%',height,borderRadius:6,overflow:'hidden' as const,background:'#f0ede6',border:'1px solid #ddd',position:'relative' as const,display:'flex',alignItems:'center',justifyContent:'center'}}>
-        {imgError ? (
-          <div style={{display:'flex',flexDirection:'column' as const,alignItems:'center',gap:6,color:'#aaa',fontSize:12,textAlign:'center' as const}}>
+        {/* Always render img with data-photo-key so it's present in frozenHTML and can be patched later */}
+        <img src={src} alt="" data-photo-key={photoKey}
+          style={{width:'100%',height:'100%',objectFit:'cover' as const,display:imgError?'none':'block',position:'absolute' as const,inset:0}}
+          onError={()=>setImgError(true)}
+          onLoad={()=>setImgError(false)}/>
+        {imgError && (
+          <div data-photo-placeholder-for={photoKey} style={{display:'flex',flexDirection:'column' as const,alignItems:'center',gap:6,color:'#aaa',fontSize:12,textAlign:'center' as const}}>
             <span style={{fontSize:24}}>📍</span>
             <span>No photo available</span>
             <span style={{fontSize:10}}>Click Edit Photo to add one</span>
           </div>
-        ) : (
-          <img src={src} alt="" data-photo-key={photoKey}
-            style={{width:'100%',height:'100%',objectFit:'cover' as const,display:'block',position:'absolute' as const,inset:0}}
-            onError={()=>setImgError(true)}
-            onLoad={()=>setImgError(false)}/>
         )}
         {canEdit&&<button onClick={onToggleEdit} style={{position:'absolute' as const,top:8,right:8,background:'rgba(0,0,0,0.6)',color:'#fff',border:'none',borderRadius:5,padding:'5px 11px',fontSize:11,cursor:'pointer',fontWeight:600,zIndex:2}}>
           ✏️ {isEditing?'Cancel':'Edit Photo'}
@@ -2801,7 +2801,7 @@ function PhotoSlot({photoKey,defaultSrc,height=280,override,isEditing,canEdit=fa
 }
 
 // ── OPV REPORT ────────────────────────────────────────────────────────────────
-function OPVReport({subject,comps,leaseComps,avails,analytics,aiText,setPage,frozenHTML,setFrozenHTML,photoUrls={}}: {subject:SubjectForm|null,comps:Comp[],leaseComps:LeaseComp[],avails:Avail[],analytics:AnalyticsData|null,aiText:string,setPage:(p:string)=>void,frozenHTML:string|null,setFrozenHTML:(h:string|null)=>void,photoUrls?:Record<string,string>}) {
+function OPVReport({subject,comps,leaseComps,avails,analytics,aiText,setPage,frozenHTML,setFrozenHTML,photoUrls={}}: {subject:SubjectForm|null,comps:Comp[],leaseComps:LeaseComp[],avails:Avail[],analytics:AnalyticsData|null,aiText:string,setPage:(p:string)=>void,frozenHTML:string|null,setFrozenHTML:React.Dispatch<React.SetStateAction<string|null>>,photoUrls?:Record<string,string>}) {
   const today = new Date().toLocaleDateString('en-US',{month:'long',year:'numeric'}).toUpperCase()
   const [downloading, setDownloading] = useState(false)
   const [includeLeaseComps, setIncludeLeaseComps] = useState(leaseComps.length>0)
@@ -2907,10 +2907,11 @@ function OPVReport({subject,comps,leaseComps,avails,analytics,aiText,setPage,fro
     try { localStorage.setItem('opv_photo_overrides', JSON.stringify(photoOverrides)) } catch {}
   }, [photoOverrides])
 
-  // When photos change, patch their URLs directly into the frozenHTML string so text edits
-  // are preserved. Mutating the string (not the DOM) survives every React re-render.
-  // Uses functional setState to always read the latest frozenHTML without a stale closure.
+  // When photoOverrides change (set via "Edit Photo" button inside this report),
+  // patch them into frozenHTML. OPVReport is always mounted when overrides change,
+  // so this effect will fire. Also fixes placeholder visibility.
   useEffect(() => {
+    if (Object.keys(photoOverrides).length === 0) return
     setFrozenHTML(prev => {
       if (!prev) return prev
       try {
@@ -2919,15 +2920,19 @@ function OPVReport({subject,comps,leaseComps,avails,analytics,aiText,setPage,fro
         let changed = false
         doc.querySelectorAll<HTMLImageElement>('img[data-photo-key]').forEach(img => {
           const key = img.getAttribute('data-photo-key') || ''
-          const photoUrlKey = key === 'subject_cover' ? 'subject' : key.replace(/^comp_|^avail_/, '')
-          const url = photoOverrides[key] || photoUrls[photoUrlKey]
-          if (url && img.getAttribute('src') !== url) { img.setAttribute('src', url); changed = true }
+          const url = photoOverrides[key]
+          if (url) {
+            if (img.getAttribute('src') !== url) { img.setAttribute('src', url); changed = true }
+            if (img.style.display === 'none') { img.style.display = 'block'; changed = true }
+            const placeholder = doc.querySelector(`[data-photo-placeholder-for="${key}"]`)
+            if (placeholder) { placeholder.remove(); changed = true }
+          }
         })
         return changed ? doc.body.innerHTML : prev
       } catch { return prev }
     })
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [photoUrls, photoOverrides])
+  }, [photoOverrides])
 
   // Live PCRE transaction data from Supabase (last 3 years)
   type PcreRow = {address:string,city:string,property_type?:string,building_sf?:number|string,sale_price_text?:string,sale_date?:string,tenant?:string,landlord?:string,lease_price?:string,lease_date?:string}
@@ -3728,6 +3733,34 @@ export default function App() {
   useEffect(()=>{try{localStorage.setItem('opv_aitext',aiText)}catch{}},[aiText])
   useEffect(()=>{try{localStorage.setItem('opv_photos',JSON.stringify(photoUrls))}catch{}},[photoUrls])
   useEffect(()=>{try{localStorage.setItem('opv_verification',JSON.stringify(verificationStatus))}catch{}},[verificationStatus])
+
+  // Patch photoUrls into editedReportHTML whenever photos change — runs in the PARENT so it
+  // fires even when OPVReport is unmounted (user on Edit Photos page or any other step).
+  // Also fixes placeholder visibility so "No photo available" is replaced by the real image.
+  useEffect(()=>{
+    if (Object.keys(photoUrls).length === 0) return
+    setEditedReportHTML(prev => {
+      if (!prev) return prev
+      try {
+        const parser = new DOMParser()
+        const doc = parser.parseFromString(`<!DOCTYPE html><html><body>${prev}</body></html>`,'text/html')
+        let changed = false
+        doc.querySelectorAll<HTMLImageElement>('img[data-photo-key]').forEach(img => {
+          const key = img.getAttribute('data-photo-key') || ''
+          const photoUrlKey = key === 'subject_cover' ? 'subject' : key.replace(/^comp_|^avail_/,'')
+          const url = photoUrls[photoUrlKey]
+          if (url) {
+            if (img.getAttribute('src') !== url) { img.setAttribute('src', url); changed = true }
+            if (img.style.display === 'none') { img.style.display = 'block'; changed = true }
+            const placeholder = doc.querySelector(`[data-photo-placeholder-for="${key}"]`)
+            if (placeholder) { placeholder.remove(); changed = true }
+          }
+        })
+        return changed ? doc.body.innerHTML : prev
+      } catch { return prev }
+    })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  },[photoUrls])
 
   const handleSetPage=useCallback((p:string)=>setPage(p),[])
 
