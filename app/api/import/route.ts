@@ -364,18 +364,26 @@ export async function POST(req: NextRequest) {
       const text = pdfData.text
 
       // ── PARSER C: PCRE Lease Comp table format ─────────────────────────────────────────
-      // Detected by "LEASE COMPS" header + "Deal Rent" column in the PDF text.
-      // Uses county (Nassau/Suffolk) as anchor for each row, extracts fields positionally.
-      if (/LEASE COMPS/i.test(text) && /\bDeal Rent\b/i.test(text)) {
+      // Detection: uses money format "($ X)" which is unique to lease comp PDFs,
+      // plus Nassau/Suffolk county WITHOUT "COUNTY" suffix (sale comps say "Nassau County").
+      // This is more reliable than checking header text which pdf-parse may format differently.
+      const isLeaseCompPDF =
+        /\(\$\s*[\d,]+(?:\.\d+)?\s*\)/i.test(text) &&   // has ($ X ) money format
+        /\b(Nassau|Suffolk)\b/i.test(text) &&              // has county name
+        !/(Nassau|Suffolk)\s+County/i.test(text)           // NOT sale comp format (which says "Nassau County")
+      if (isLeaseCompPDF) {
         headers = ['transaction_date','address','town','county','building_sf','lot_size_ac',
                    'ceiling_height','loading_docks','drive_ins','asking_rent','deal_rent',
                    'rent_type','taxes','lease_term_years','rent_concession_months',
                    'ti_ll_work','mgmt_fee_pct','tenant','landlord']
 
-        // Collapse to single line, drop header rows
+        // Collapse to single line, drop header section
+        // Try multiple known header boundary strings; fall back to first county line
         let dataText = text.replace(/\s+/g, ' ')
-        const hdrEnd = dataText.indexOf('Tenant Landlord')
-        if (hdrEnd >= 0) dataText = dataText.slice(hdrEnd + 'Tenant Landlord'.length)
+        for (const hdrMarker of ['Tenant Landlord', 'Landlord\n', 'Deal Rent']) {
+          const hi = dataText.indexOf(hdrMarker)
+          if (hi >= 0) { dataText = dataText.slice(hi + hdrMarker.length); break }
+        }
 
         const countyRe = /\b(Nassau|Suffolk)\b/gi
         const cms = [...dataText.matchAll(countyRe)]
