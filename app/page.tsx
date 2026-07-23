@@ -2993,7 +2993,7 @@ function OPVReport({subject,comps,leaseComps,avails,analytics,aiText,setPage,fro
     const el = reportRef.current
     el.querySelectorAll<HTMLImageElement>('img[data-photo-key]').forEach(img => {
       const key = img.getAttribute('data-photo-key') || ''
-      const photoUrlKey = key === 'subject_cover' ? 'subject' : key.replace(/^comp_|^avail_/, '')
+      const photoUrlKey = key === 'subject_cover' ? 'subject' : key.replace(/^comp_|^avail_|^lease_/, '')
       const url = photoOverrides[key] || photoUrls[photoUrlKey]
       if (url && img.getAttribute('src') !== url) {
         img.setAttribute('src', url)
@@ -3871,7 +3871,7 @@ export default function App() {
         // Patch pass: apply current photoUrls to all img[data-photo-key]
         doc.querySelectorAll<HTMLImageElement>('img[data-photo-key]').forEach(img => {
           const key = img.getAttribute('data-photo-key') || ''
-          const photoUrlKey = key === 'subject_cover' ? 'subject' : key.replace(/^comp_|^avail_/,'')
+          const photoUrlKey = key === 'subject_cover' ? 'subject' : key.replace(/^comp_|^avail_|^lease_/, '')
           const url = photoUrls[photoUrlKey]
           if (url) {
             if (img.getAttribute('src') !== url) { img.setAttribute('src', url); changed = true }
