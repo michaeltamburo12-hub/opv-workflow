@@ -3066,11 +3066,11 @@ function OPVReport({subject,comps,leaseComps,avails,analytics,aiText,setPage,fro
     }
   }
   // Shorthand to render a PhotoSlot with OPVReport state wired in
-  // photoUrls (from the Edit Photos step) are keyed by: 'subject', comp.id, avail.id
-  // photoKey here is: 'subject_cover', `comp_${id}`, `avail_${id}`
-  // So we derive the photoUrls lookup key and use it as defaultSrc fallback
+  // photoUrls are keyed by: 'subject', comp.id, avail.id, lease_comp.id
+  // photoKey here is: 'subject_cover', `comp_${id}`, `avail_${id}`, `lease_${id}`
+  // Strip the prefix to get the raw ID for photoUrls lookup
   const Photo = (photoKey: string, defaultSrc: string, height=280) => {
-    const photoUrlKey = photoKey === 'subject_cover' ? 'subject' : photoKey.replace(/^comp_|^avail_/, '')
+    const photoUrlKey = photoKey === 'subject_cover' ? 'subject' : photoKey.replace(/^comp_|^avail_|^lease_/, '')
     const resolvedSrc = photoUrls[photoUrlKey] || defaultSrc
     return (
       <PhotoSlot
