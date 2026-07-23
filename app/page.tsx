@@ -1852,12 +1852,58 @@ function SubjectProperty({subject,setSubject,setPage,folders,setFolders,assignme
 }
 
 
+// ── DATE NAV ──────────────────────────────────────────────────────────────────
+function DateNav({label,value,onChange,placeholder}:{label:string,value:string,onChange:(v:string)=>void,placeholder?:string}) {
+  const fmtDisplay=(v:string)=>{if(!v)return '';const[y,m,d]=v.split('-');return(!y||!m||!d)?v:`${m}/${d}/${y}`}
+  const [text,setText]=useState(fmtDisplay(value))
+  useEffect(()=>{setText(fmtDisplay(value))},[value])
+  const parseInput=(s:string):string=>{
+    s=s.trim();if(!s)return ''
+    const m1=s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/)
+    if(m1)return `${m1[3]}-${m1[1].padStart(2,'0')}-${m1[2].padStart(2,'0')}`
+    const m2=s.match(/^(\d{1,2})\/(\d{4})$/)
+    if(m2)return `${m2[2]}-${m2[1].padStart(2,'0')}-01`
+    if(/^\d{4}-\d{2}-\d{2}$/.test(s))return s
+    return ''
+  }
+  const shiftMonth=(delta:number)=>{
+    const base=value||new Date().toISOString().slice(0,10)
+    const d=new Date(base+'T12:00:00')
+    d.setMonth(d.getMonth()+delta)
+    const nv=d.toISOString().slice(0,10)
+    onChange(nv);setText(fmtDisplay(nv))
+  }
+  const handleBlur=()=>{
+    const p=parseInput(text)
+    if(p){onChange(p);setText(fmtDisplay(p))}
+    else if(!text){onChange('')}
+    else setText(fmtDisplay(value))
+  }
+  const navBtn:React.CSSProperties={background:'none',border:'none',color:D.textSec,cursor:'pointer',fontSize:18,padding:'0 5px',lineHeight:1,display:'flex',alignItems:'center',flexShrink:0}
+  return (
+    <div>
+      <div style={{fontSize:10,fontWeight:700,color:D.textMuted,textTransform:'uppercase' as const,letterSpacing:'.07em',marginBottom:5}}>{label}</div>
+      <div style={{display:'flex',alignItems:'center',background:D.bg,border:`1px solid ${D.border}`,borderRadius:8,overflow:'hidden'}}>
+        <button style={navBtn} onClick={()=>shiftMonth(-1)}>‹</button>
+        <input
+          value={text}
+          onChange={e=>setText(e.target.value)}
+          onBlur={handleBlur}
+          placeholder={placeholder||'MM/DD/YYYY'}
+          style={{flex:1,background:'transparent',border:'none',color:D.text,fontSize:12,padding:'8px 0',outline:'none',textAlign:'center',minWidth:0}}
+        />
+        <button style={navBtn} onClick={()=>shiftMonth(1)}>›</button>
+      </div>
+    </div>
+  )
+}
+
 // ── COMP SEARCH ───────────────────────────────────────────────────────────────
 function CompSearch({subject,comps,setComps,setPage,folders,setFolders}: {subject:SubjectForm|null,comps:Comp[],setComps:(c:Comp[])=>void,setPage:(p:string)=>void,folders:Folder[],setFolders:(f:Folder[])=>void}) {
   const [results,setResults]=useState<Comp[]>([])
   const [loading,setLoading]=useState(false)
   const [searched,setSearched]=useState(false)
-  const [filters,setFilters]=useState({county:'',city:'',min_sf:'',max_sf:'',min_price:'',max_price:''})
+  const [filters,setFilters]=useState({county:'',city:'',min_sf:'',max_sf:'',min_price:'',max_price:'',min_date:'',max_date:''})
   const [folderDropdown, setFolderDropdown] = useState<string|null>(null)
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set())
   const toggleExpand = (id:string) => setExpandedRows(prev=>{const n=new Set(prev);n.has(id)?n.delete(id):n.add(id);return n})
@@ -1894,6 +1940,8 @@ function CompSearch({subject,comps,setComps,setPage,folders,setFolders}: {subjec
     if (filters.max_sf) q = q.lte('building_sf', Number(filters.max_sf))
     if (filters.min_price) q = q.gte('sale_price', Number(filters.min_price))
     if (filters.max_price) q = q.lte('sale_price', Number(filters.max_price))
+    if (filters.min_date) q = q.gte('sale_date', filters.min_date)
+    if (filters.max_date) q = q.lte('sale_date', filters.max_date)
     q = q.order('sale_date', {ascending:false}).limit(200)
     const {data,error} = await q
     if (error) { alert('Search error: ' + error.message); setLoading(false); return }
@@ -1930,7 +1978,11 @@ function CompSearch({subject,comps,setComps,setPage,folders,setFolders}: {subjec
               <Field label="Min Price"><Input type="number" placeholder="0" value={filters.min_price} onChange={e=>sf('min_price',e.target.value)}/></Field>
               <Field label="Max Price"><Input type="number" placeholder="Any" value={filters.max_price} onChange={e=>sf('max_price',e.target.value)}/></Field>
             </div>
-            <Btn onClick={search} disabled={loading} style={{width:'100%',padding:11}}>{loading?'Searching...':'🔎 Search Comps'}</Btn>
+            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginTop:4}}>
+              <DateNav label="Sale Date From" value={filters.min_date} onChange={v=>sf('min_date',v)}/>
+              <DateNav label="Sale Date To" value={filters.max_date} onChange={v=>sf('max_date',v)}/>
+            </div>
+            <Btn onClick={search} disabled={loading} style={{width:'100%',padding:11,marginTop:8}}>{loading?'Searching...':'🔎 Search Comps'}</Btn>
           </Card>
           <Card style={{marginTop:14}}>
             <Btn onClick={()=>setPage('folders')} style={{width:'100%',padding:10,fontSize:12}}>Go to Folders →</Btn>
@@ -2409,10 +2461,12 @@ function LeaseCompSearch({subject,leaseComps,setLeaseComps,setPage,folders,setFo
               <Field label="Max SF"><Input type="number" placeholder="Any" value={filters.max_sf} onChange={e=>sf('max_sf',e.target.value)}/></Field>
               <Field label="Min Deal Rent ($/SF)"><Input type="number" placeholder="0" value={filters.min_rent} onChange={e=>sf('min_rent',e.target.value)}/></Field>
               <Field label="Max Deal Rent ($/SF)"><Input type="number" placeholder="Any" value={filters.max_rent} onChange={e=>sf('max_rent',e.target.value)}/></Field>
-              <Field label="Trans. Date From"><Input type="date" value={filters.min_date} onChange={e=>sf('min_date',e.target.value)}/></Field>
-              <Field label="Trans. Date To"><Input type="date" value={filters.max_date} onChange={e=>sf('max_date',e.target.value)}/></Field>
             </div>
-            <Btn onClick={search} disabled={loading} style={{width:'100%',padding:11}}>{loading?'Searching...':'🔎 Search Lease Comps'}</Btn>
+            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginTop:4}}>
+              <DateNav label="Trans. Date From" value={filters.min_date} onChange={v=>sf('min_date',v)}/>
+              <DateNav label="Trans. Date To" value={filters.max_date} onChange={v=>sf('max_date',v)}/>
+            </div>
+            <Btn onClick={search} disabled={loading} style={{width:'100%',padding:11,marginTop:8}}>{loading?'Searching...':'🔎 Search Lease Comps'}</Btn>
           </Card>
           {leaseComps.length>0&&<Card style={{marginTop:14}}>
             <SL>Added to OPV</SL>
