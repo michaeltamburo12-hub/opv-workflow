@@ -2486,13 +2486,14 @@ function LeaseCompSearch({subject,leaseComps,setLeaseComps,setPage,folders,setFo
                           <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',gap:12,marginBottom:12}}>
                             <div>
                               <div style={{fontSize:15,fontWeight:700,color:D.text,marginBottom:5}}>{r.address||'—'}</div>
-                              <div style={{display:'flex',gap:6,flexWrap:'wrap' as const}}>
+                              <div style={{display:'flex',gap:6,flexWrap:'wrap' as const,marginBottom:10}}>
                                 <Tag color={D.green}>{r.county||'—'}</Tag>
                                 {!!r.town&&<Tag color={D.textMuted}>{String(r.town)}</Tag>}
                                 {!!r.transaction_date&&<Tag color={D.textMuted}>{fmtDate(String(r.transaction_date))}</Tag>}
                                 {!!r.rent_type&&<Tag color={D.textMuted}>{String(r.rent_type)}</Tag>}
                                 {!!r.lease_term_years&&<Tag color={D.textMuted}>{Number(r.lease_term_years)} yr</Tag>}
                               </div>
+                              <StreetViewPhoto address={`${r.address}, ${r.town||''}, NY`}/>
                             </div>
                             {(r.deal_rent||r.asking_rent)&&<div style={{textAlign:'right' as const,flexShrink:0}}>
                               <div style={{fontSize:10,color:D.textMuted,letterSpacing:'.06em',marginBottom:2}}>{r.deal_rent?'DEAL RENT':'ASKING RENT'}</div>
