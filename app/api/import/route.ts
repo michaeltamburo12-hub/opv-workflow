@@ -360,136 +360,109 @@ export async function POST(req: NextRequest) {
       })
 
     } else if (fileName.endsWith('.pdf')) {
-      const pdfData = await pdfParse(buffer)
+      const tableHint = searchParams.get('hint') || ''
+
+      // Collect positioned text items — used by Parser C (coordinate-based)
+      // and also generate properly-ordered text for Parsers A & B
+      const allItems: {x: number, y: number, str: string}[] = []
+      const pdfData = await pdfParse(buffer, {
+        pagerender: async (pageData: any) => {
+          const tc = await pageData.getTextContent()
+          const lineMap = new Map<number, {x: number, str: string}[]>()
+          for (const item of tc.items) {
+            if (!('str' in item) || !item.str.trim()) continue
+            const x = Math.round(item.transform[4])
+            const y = (item as any).transform[5] as number
+            allItems.push({ x, y, str: item.str.trim() })
+            const yk = Math.round(y)
+            if (!lineMap.has(yk)) lineMap.set(yk, [])
+            lineMap.get(yk)!.push({ x, str: item.str })
+          }
+          return [...lineMap.entries()]
+            .sort(([ya], [yb]) => yb - ya)
+            .map(([, items]) => items.sort((a, b) => a.x - b.x).map(i => i.str).join(' '))
+            .join('\n')
+        }
+      })
       const text = pdfData.text
 
-      // ── PARSER C: PCRE Lease Comp table format ─────────────────────────────────────────
-      // If the UI passes ?hint=lease_comps (the selected target table), use Parser C directly.
-      // Otherwise fall back to heuristic detection so any lease comp PDF works even without the hint.
-      const tableHint = searchParams.get('hint') || ''
+      // ── PARSER C: coordinate-based table extraction ──────────────────────────────────────
+      // Groups text items by their x/y positions — same approach as pdfplumber.
+      // Uses county cell (Nassau/Suffolk at x≈161) as row anchor; assigns all nearby
+      // items to the nearest anchor row. Much more reliable than text-only parsing.
       const isLeaseCompPDF =
-        tableHint === 'lease_comps' ||                     // explicit hint from UI (preferred)
-        (
-          /\(\$\s*[\d,]+(?:\.\d+)?\s*\)/i.test(text) &&  // has ($ X ) money format
-          /\b(Nassau|Suffolk)\b/i.test(text) &&             // has county name
-          !/(Nassau|Suffolk)\s+County/i.test(text)          // NOT sale comp format (which says "Nassau County")
-        )
+        tableHint === 'lease_comps' ||
+        (allItems.some(i => i.x >= 155 && i.x <= 200 && /^(Nassau|Suffolk)$/i.test(i.str)) &&
+         allItems.some(i => i.x >= 396 && i.x <= 420 && i.str === '('))
       if (isLeaseCompPDF) {
         headers = ['transaction_date','address','town','county','building_sf','lot_size_ac',
                    'ceiling_height','loading_docks','drive_ins','asking_rent','deal_rent',
                    'rent_type','taxes','lease_term_years','rent_concession_months',
                    'ti_ll_work','mgmt_fee_pct','tenant','landlord']
 
-        // ── Parser C: anchor on transaction dates, not county names ──────────────────────
-        // Anchoring on Nassau/Suffolk county names breaks when street addresses contain
-        // those words (e.g. "123 Nassau Blvd"). Dates are unique row-start markers.
+        // ── Parser C: coordinate-based table extraction ─────────────────────────────────
+        // Column x-boundaries calibrated from the PDF header row (y≈542).
+        // Each text item is assigned to a column by its x position.
+        const COL_NAMES = ['transaction_date','address','town','county','building_sf','lot_size_ac',
+                           'ceiling_height','loading_docks','drive_ins','asking_rent','deal_rent',
+                           'rent_type','taxes','lease_term_years','rent_concession_months',
+                           'ti_ll_work','mgmt_fee_pct','tenant','landlord']
+        const COL_X     = [0, 99, 134, 161, 192, 221, 268, 302, 338, 365, 396, 423, 452, 496, 539, 601, 643, 671, 717]
+        const getCol = (x: number): string => {
+          let col = 0
+          for (let i = 1; i < COL_X.length; i++) { if (x >= COL_X[i]) col = i }
+          return COL_NAMES[col]
+        }
 
         const normDate = (raw: string): string => {
           const m2 = raw.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/)
           if (m2) return `${m2[3]}-${m2[1].padStart(2,'0')}-${m2[2].padStart(2,'0')}`
-          const qm = raw.match(/Q([1-4])\s*(\d{2})/i)
-          if (qm) { const q: Record<string,string>={'1':'01','2':'04','3':'07','4':'10'}; return `20${qm[2]}-${q[qm[1]]}-01` }
+          const qm = raw.match(/Q([1-4])\s*'?\s*(\d{2,4})/i)
+          if (qm) { const q: Record<string,string>={'1':'01','2':'04','3':'07','4':'10'}; const yr=qm[2].length===2?`20${qm[2]}`:qm[2]; return `${yr}-${q[qm[1]]}-01` }
           return ''
         }
 
-        // Collapse whitespace; strip page headers/footers before anchoring
-        let dataText = text
-          .replace(/\r\n/g, '\n')
-          // strip lines that are page headers / column headers / page numbers
-          .replace(/^.*?(Transaction Date|Tenant\s+Landlord|Page \d+|LEASE COMPS).*$/gim, '')
-          .replace(/\s+/g, ' ')
-          .trim()
+        // Find anchor rows: unique y-levels that have a County cell (Nassau/Suffolk at x≈161-200)
+        const anchorYs = [...new Set(
+          allItems.filter(i => i.x >= 155 && i.x <= 205 && /^(Nassau|Suffolk)$/i.test(i.str)).map(i => i.y)
+        )].sort((a, b) => b - a)  // top → bottom
 
-        // Find all date anchors — these mark the start of each row
-        const DATE_ANCHOR = /\b(\d{1,2}\/\d{1,2}\/\d{4}|Q[1-4]\s*\d{2})\b/gi
-        const anchors = [...dataText.matchAll(DATE_ANCHOR)]
-
-        rows = anchors.map((anchor, i) => {
-          const segStart = anchor.index!
-          const segEnd = i + 1 < anchors.length ? anchors[i + 1].index! : dataText.length
-          const segment = dataText.slice(segStart, segEnd).trim()
-
-          const row: Record<string,string> = { status: 'Active' }
-
-          // Date at start of segment
-          row.transaction_date = normDate(anchor[1])
-          let rest = segment.slice(anchor[0].length).trim()
-          // fix digit–letter run-on caused by whitespace collapse: "2025600 West" → "600 West"
-          rest = rest.replace(/^\d{1,2}\/\d{1,2}\/\d{4}\s*/,'').replace(/(\d)([A-Z])/g,'$1 $2').trim()
-
-          // County: first standalone Nassau or Suffolk in this segment
-          // Use a position-aware match: county appears BEFORE the building specs
-          // so limit the search to the first ~80 chars to avoid false hits in tenant/landlord names
-          const countySearch = rest.slice(0, Math.min(rest.length, 200))
-          const countyM = countySearch.match(/\b(Nassau|Suffolk)\b/i)
-          if (!countyM) return null  // skip rows without a county match
-
-          row.county = countyM[1][0].toUpperCase() + countyM[1].slice(1).toLowerCase()
-          const ci = countyM.index!
-          const before = rest.slice(0, ci).trim()
-          const after = rest.slice(ci + countyM[0].length).trim()
-
-          // Address + town from 'before': split on last comma
-          const lc = before.lastIndexOf(',')
-          if (lc > 0) { row.address = before.slice(0, lc).trim(); row.town = before.slice(lc + 1).trim() }
-          else { const p = before.split(/\s+/); row.town = p[p.length - 1] || ''; row.address = p.slice(0, -1).join(' ') }
-
-          // Ceiling with ' or "Clear"
-          const ceilM = after.match(/(\d+(?:\.\d+)?)\s*(?:[''](?:\s*Clear)?|\s+Clear)/i)
-          if (ceilM) row.ceiling_height = ceilM[1]
-
-          // Rent type
-          const rtM = after.match(/\b(NNN|Gross|Modified\s+Gross)\b/i)
-          if (rtM) row.rent_type = rtM[0].trim()
-
-          // Mgmt fee %
-          const pctM = after.match(/(\d+(?:\.\d+)?)\s*%/)
-          if (pctM) row.mgmt_fee_pct = pctM[1]
-
-          // Money values: ($ X ) format
-          const mvs = [...after.matchAll(/\(\$\s*([\d,]+(?:\.\d+)?)\s*\)/g)].map(m => parseFloat(m[1].replace(/,/g,'')))
-          let dealSet = false
-          for (const v of mvs) {
-            if (!dealSet && v < 50) { row.deal_rent = String(v); dealSet = true }
-            else if (v > 100) { if (!row.taxes) row.taxes = String(v) }
-            else if (!row.taxes && v < 20) row.taxes = String(v)
-            else if (!row.ti_ll_work) row.ti_ll_work = String(v)
+        if (anchorYs.length > 0) {
+          // Assign every item to its nearest anchor row by y-distance
+          const rowBuckets = new Map<number, {x: number, str: string}[]>()
+          for (const ay of anchorYs) rowBuckets.set(ay, [])
+          for (const item of allItems) {
+            if (item.y > anchorYs[0] + 10) continue  // skip title / header rows above data
+            let nearest = anchorYs[0], minDist = Infinity
+            for (const ay of anchorYs) { const d = Math.abs(item.y - ay); if (d < minDist) { minDist = d; nearest = ay } }
+            rowBuckets.get(nearest)!.push({ x: item.x, str: item.str })
           }
 
-          // Strip known patterns to isolate plain numbers
-          const stripped = after
-            .replace(/\(\$\s*[\d,]+(?:\.\d+)?\s*\)/g,'')
-            .replace(/\b(NNN|Gross|Modified\s+Gross|N\/A)\b/gi,'')
-            .replace(/\d+(?:\.\d+)?\s*%/g,'')
-            .replace(/(\d+)\s*[''](?:\s*Clear)?/gi,'$1')
-            .replace(/\bClear\b/gi,'')
-            .replace(/\bIN\s+[\d,]+\s+SF\b/gi,'')
-            .replace(/\b(years?\s*plus\s*\d+\s*years?\s*option?)\b/gi,'')
-            .replace(/\s+/g,' ').trim()
-
-          const smallNums: number[] = []
-          let bsfDone = false
-          for (const tok of stripped.split(/\s+/)) {
-            const rng = tok.match(/^(\d+)-\d+$/)
-            const n = parseFloat((rng?.[1] || tok).replace(/,/g,''))
-            if (isNaN(n)) continue
-            if (!bsfDone && n >= 1000) { row.building_sf = String(Math.round(n)); bsfDone = true }
-            else if (n < 1000 && n !== Math.floor(n)) { if (!row.lot_size_ac) row.lot_size_ac = String(n) }
-            else if (n < 1000) smallNums.push(Math.round(n))
-          }
-
-          // If ceiling not found via explicit pattern, first num in [12,40] is ceiling
-          if (!row.ceiling_height) {
-            const ci = smallNums.findIndex(n => n >= 12 && n <= 40)
-            if (ci >= 0) { row.ceiling_height = String(smallNums[ci]); smallNums.splice(ci, 1) }
-          }
-          if (smallNums.length >= 1) row.loading_docks = String(smallNums[0])
-          if (smallNums.length >= 2) row.drive_ins = String(smallNums[1])
-          if (smallNums.length >= 4) { row.lease_term_years = String(smallNums[smallNums.length-2]); row.rent_concession_months = String(smallNums[smallNums.length-1]) }
-          else if (smallNums.length >= 3) row.lease_term_years = String(smallNums[smallNums.length-1])
-
-          return row
-        }).filter((r: Record<string,string> | null): r is Record<string,string> => r !== null && !!r.county && !!(r.address || r.building_sf))
+          rows = anchorYs.map(ay => {
+            const items = rowBuckets.get(ay)!.sort((a, b) => a.x - b.x)
+            const colMap: Record<string, string[]> = {}
+            for (const item of items) {
+              const col = getCol(item.x)
+              if (!colMap[col]) colMap[col] = []
+              colMap[col].push(item.str)
+            }
+            const row: Record<string, string> = { status: 'Active' }
+            for (const [col, vals] of Object.entries(colMap)) {
+              let val = vals.join(' ').trim()
+              // Money cells: "( $ 18.00 )" → "18.00"
+              val = val.replace(/\(\s*\$\s*([\d,]+(?:\.\d+)?)\s*\)/g, (_, n) => n.replace(/,/g, ''))
+              if (col === 'transaction_date') val = normDate(val) || ''
+              if (col === 'building_sf') val = val.replace(/,/g, '')
+              if (col === 'ceiling_height') { const m = val.match(/(\d+(?:\.\d+)?)/); val = m ? m[1] : '' }
+              if (col === 'lease_term_years') { const m = val.match(/^(\d+)/); val = m ? m[1] : val }
+              if (col === 'mgmt_fee_pct') val = val.replace(/%/g, '').trim()
+              if (col === 'address') val = val.replace(/,\s*$/, '').replace(/\s+/g, ' ').trim()
+              if (col === 'lot_size_ac' && /^N\/A$/i.test(val)) val = ''
+              if (val) row[col] = val
+            }
+            return row
+          }).filter((r: Record<string,string>) => r.county === 'Nassau' || r.county === 'Suffolk')
+        }
 
       } else {
 
@@ -667,6 +640,7 @@ export async function POST(req: NextRequest) {
       allRows: rows,
       existingTables,
       fileName: file.name,
+      _debug: { totalRows: rows.length },
     })
   } catch (err) {
     return NextResponse.json({ error: `Parse error: ${(err as Error).message}` }, { status: 500 })
