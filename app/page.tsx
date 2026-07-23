@@ -786,7 +786,7 @@ function FileImport() {
     setParsing(true); setParsed(null); setResult(null); setCreateSQL(''); setNewTableName(''); setIsNewTable(false); setColMapping({})
     const form = new FormData(); form.append('file', file)
     try {
-      const res = await fetch('/api/import', {method:'POST', body:form})
+      const res = await fetch(`/api/import?hint=${encodeURIComponent(targetTable)}`, {method:'POST', body:form})
       const data = await res.json()
       if (data.error) { alert('Parse error: ' + data.error); setParsing(false); return }
       setParsed(data)

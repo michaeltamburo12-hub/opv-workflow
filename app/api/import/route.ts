@@ -364,13 +364,16 @@ export async function POST(req: NextRequest) {
       const text = pdfData.text
 
       // ── PARSER C: PCRE Lease Comp table format ─────────────────────────────────────────
-      // Detection: uses money format "($ X)" which is unique to lease comp PDFs,
-      // plus Nassau/Suffolk county WITHOUT "COUNTY" suffix (sale comps say "Nassau County").
-      // This is more reliable than checking header text which pdf-parse may format differently.
+      // If the UI passes ?hint=lease_comps (the selected target table), use Parser C directly.
+      // Otherwise fall back to heuristic detection so any lease comp PDF works even without the hint.
+      const tableHint = searchParams.get('hint') || ''
       const isLeaseCompPDF =
-        /\(\$\s*[\d,]+(?:\.\d+)?\s*\)/i.test(text) &&   // has ($ X ) money format
-        /\b(Nassau|Suffolk)\b/i.test(text) &&              // has county name
-        !/(Nassau|Suffolk)\s+County/i.test(text)           // NOT sale comp format (which says "Nassau County")
+        tableHint === 'lease_comps' ||                     // explicit hint from UI (preferred)
+        (
+          /\(\$\s*[\d,]+(?:\.\d+)?\s*\)/i.test(text) &&  // has ($ X ) money format
+          /\b(Nassau|Suffolk)\b/i.test(text) &&             // has county name
+          !/(Nassau|Suffolk)\s+County/i.test(text)          // NOT sale comp format (which says "Nassau County")
+        )
       if (isLeaseCompPDF) {
         headers = ['transaction_date','address','town','county','building_sf','lot_size_ac',
                    'ceiling_height','loading_docks','drive_ins','asking_rent','deal_rent',
