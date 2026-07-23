@@ -380,16 +380,9 @@ export async function POST(req: NextRequest) {
                    'rent_type','taxes','lease_term_years','rent_concession_months',
                    'ti_ll_work','mgmt_fee_pct','tenant','landlord']
 
-        // Collapse to single line, drop header section
-        // Try multiple known header boundary strings; fall back to first county line
-        let dataText = text.replace(/\s+/g, ' ')
-        for (const hdrMarker of ['Tenant Landlord', 'Landlord\n', 'Deal Rent']) {
-          const hi = dataText.indexOf(hdrMarker)
-          if (hi >= 0) { dataText = dataText.slice(hi + hdrMarker.length); break }
-        }
-
-        const countyRe = /\b(Nassau|Suffolk)\b/gi
-        const cms = [...dataText.matchAll(countyRe)]
+        // ── Parser C: anchor on transaction dates, not county names ──────────────────────
+        // Anchoring on Nassau/Suffolk county names breaks when street addresses contain
+        // those words (e.g. "123 Nassau Blvd"). Dates are unique row-start markers.
 
         const normDate = (raw: string): string => {
           const m2 = raw.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/)
@@ -399,39 +392,47 @@ export async function POST(req: NextRequest) {
           return ''
         }
 
-        const DATE_PAT = /\d{1,2}\/\d{1,2}\/\d{4}|Q[1-4]\s*\d{2}/i
+        // Collapse whitespace; strip page headers/footers before anchoring
+        let dataText = text
+          .replace(/\r\n/g, '\n')
+          // strip lines that are page headers / column headers / page numbers
+          .replace(/^.*?(Transaction Date|Tenant\s+Landlord|Page \d+|LEASE COMPS).*$/gim, '')
+          .replace(/\s+/g, ' ')
+          .trim()
 
-        rows = cms.map((cm, i) => {
-          const row: Record<string,string> = { county: cm[1][0].toUpperCase() + cm[1].slice(1).toLowerCase(), status: 'Active' }
-          const cs = cm.index!, ce = cs + cm[0].length
+        // Find all date anchors — these mark the start of each row
+        const DATE_ANCHOR = /\b(\d{1,2}\/\d{1,2}\/\d{4}|Q[1-4]\s*\d{2})\b/gi
+        const anchors = [...dataText.matchAll(DATE_ANCHOR)]
 
-          // ── before county: date + address + town ──
-          const prevEnd = i > 0 ? cms[i-1].index! + cms[i-1][0].length : 0
-          const lookback = dataText.slice(prevEnd, cs)
-          const dates = [...lookback.matchAll(new RegExp(DATE_PAT.source, 'gi'))]
-          const recStart = dates.length > 0
-            ? prevEnd + dates[dates.length - 1].index!
-            : (() => { const am = [...lookback.matchAll(/\b([1-9]\d{1,4}(?:-\d+)?)\s+[A-Za-z]/g)]; return am.length > 0 ? prevEnd + am[am.length-1].index! : Math.max(prevEnd, cs - 120) })()
+        rows = anchors.map((anchor, i) => {
+          const segStart = anchor.index!
+          const segEnd = i + 1 < anchors.length ? anchors[i + 1].index! : dataText.length
+          const segment = dataText.slice(segStart, segEnd).trim()
 
-          let before = dataText.slice(recStart, cs).trim()
+          const row: Record<string,string> = { status: 'Active' }
 
-          const dm = before.match(new RegExp('^(' + DATE_PAT.source + ')\\s*', 'i'))
-          if (dm) { row.transaction_date = normDate(dm[1]); before = before.slice(dm[0].length).trim() }
-          // fix run-ons like "1/1/2025600 West" → "600 West"
-          before = before.replace(/^\d{1,2}\/\d{1,2}\/\d{4}\s*/,'').replace(/(\d)([A-Z])/g,'$1 $2').trim()
+          // Date at start of segment
+          row.transaction_date = normDate(anchor[1])
+          let rest = segment.slice(anchor[0].length).trim()
+          // fix digit–letter run-on caused by whitespace collapse: "2025600 West" → "600 West"
+          rest = rest.replace(/^\d{1,2}\/\d{1,2}\/\d{4}\s*/,'').replace(/(\d)([A-Z])/g,'$1 $2').trim()
 
+          // County: first standalone Nassau or Suffolk in this segment
+          // Use a position-aware match: county appears BEFORE the building specs
+          // so limit the search to the first ~80 chars to avoid false hits in tenant/landlord names
+          const countySearch = rest.slice(0, Math.min(rest.length, 200))
+          const countyM = countySearch.match(/\b(Nassau|Suffolk)\b/i)
+          if (!countyM) return null  // skip rows without a county match
+
+          row.county = countyM[1][0].toUpperCase() + countyM[1].slice(1).toLowerCase()
+          const ci = countyM.index!
+          const before = rest.slice(0, ci).trim()
+          const after = rest.slice(ci + countyM[0].length).trim()
+
+          // Address + town from 'before': split on last comma
           const lc = before.lastIndexOf(',')
-          if (lc > 0) { row.address = before.slice(0, lc).trim(); row.town = before.slice(lc+1).trim() }
-          else { const p = before.split(/\s+/); row.town = p[p.length-1]||''; row.address = p.slice(0,-1).join(' ') }
-
-          // ── after county: building specs + financial + names ──
-          const nextCs = i+1 < cms.length ? cms[i+1].index! : dataText.length
-          const lookahead = dataText.slice(ce, nextCs)
-          const nextDate = lookahead.match(DATE_PAT)
-          const nextAddr = lookahead.match(/\b[1-9]\d{1,4}(?:-\d+)?\s+[A-Za-z]/)
-          const markers = [nextDate?.index, nextAddr?.index].filter((x): x is number => x !== undefined)
-          const recEnd = ce + (markers.length > 0 ? Math.min(...markers) : lookahead.length)
-          const after = dataText.slice(ce, recEnd).trim()
+          if (lc > 0) { row.address = before.slice(0, lc).trim(); row.town = before.slice(lc + 1).trim() }
+          else { const p = before.split(/\s+/); row.town = p[p.length - 1] || ''; row.address = p.slice(0, -1).join(' ') }
 
           // Ceiling with ' or "Clear"
           const ceilM = after.match(/(\d+(?:\.\d+)?)\s*(?:[''](?:\s*Clear)?|\s+Clear)/i)
@@ -488,7 +489,7 @@ export async function POST(req: NextRequest) {
           else if (smallNums.length >= 3) row.lease_term_years = String(smallNums[smallNums.length-1])
 
           return row
-        }).filter((r: Record<string,string>) => r.county && (r.address || r.building_sf))
+        }).filter((r: Record<string,string> | null): r is Record<string,string> => r !== null && !!r.county && !!(r.address || r.building_sf))
 
       } else {
 
