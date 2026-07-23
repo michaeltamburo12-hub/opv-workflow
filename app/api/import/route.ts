@@ -395,47 +395,228 @@ export async function POST(req: NextRequest) {
         (allItems.some(i => i.x >= 155 && i.x <= 200 && /^(Nassau|Suffolk)$/i.test(i.str)) &&
          allItems.some(i => i.x >= 396 && i.x <= 420 && i.str === '('))
       if (isLeaseCompPDF) {
-        headers = ['transaction_date','address','town','county','building_sf','lot_size_ac',
-                   'ceiling_height','loading_docks','drive_ins','asking_rent','deal_rent',
-                   'rent_type','taxes','lease_term_years','rent_concession_months',
-                   'ti_ll_work','mgmt_fee_pct','tenant','landlord']
+        // ── Parser C: coordinate-based table extraction — works with any PDF format ───────
+        //
+        // How it works:
+        //  1. Scan every y-level for a row that contains recognizable column header keywords.
+        //     This detects the actual column positions regardless of page size, margins, or
+        //     column order — so CoStar, LoopNet, PCRE, and any broker format all work.
+        //  2. Build column x-boundaries dynamically from those detected positions.
+        //  3. Find anchor rows: y-levels that have a date OR a county/city value in the
+        //     expected column. Dual anchoring handles rows with blank dates.
+        //  4. Assign every text item to its nearest anchor row, then map by x → column.
+        //  5. Clean up values (money, dates, numbers) using format-agnostic patterns.
 
-        // ── Parser C: coordinate-based table extraction ─────────────────────────────────
-        // Column x-boundaries calibrated from the PDF header row (y≈542).
-        // Each text item is assigned to a column by its x position.
-        const COL_NAMES = ['transaction_date','address','town','county','building_sf','lot_size_ac',
-                           'ceiling_height','loading_docks','drive_ins','asking_rent','deal_rent',
-                           'rent_type','taxes','lease_term_years','rent_concession_months',
-                           'ti_ll_work','mgmt_fee_pct','tenant','landlord']
-        const COL_X     = [0, 99, 134, 161, 192, 221, 268, 302, 338, 365, 396, 423, 452, 496, 539, 601, 643, 671, 717]
-        const getCol = (x: number): string => {
-          let col = 0
-          for (let i = 1; i < COL_X.length; i++) { if (x >= COL_X[i]) col = i }
-          return COL_NAMES[col]
+        // ── HEADER KEYWORD DICTIONARY ────────────────────────────────────────────────────
+        // Covers PCRE, CoStar, LoopNet, and generic broker terminology.
+        // Longer / more specific phrases listed first — first match wins.
+        const HEADER_KW: [string, string][] = [
+          // Date — many names across platforms
+          ['transaction date','transaction_date'], ['execution date','transaction_date'],
+          ['commencement date','transaction_date'], ['effective date','transaction_date'],
+          ['lease date','transaction_date'],        ['signed date','transaction_date'],
+          ['start date','transaction_date'],        ['close date','transaction_date'],
+          ['lease start','transaction_date'],       ['date executed','transaction_date'],
+          // Address
+          ['street address','address'], ['property address','address'],
+          ['building address','address'], ['property name','address'],
+          // Town / City
+          ['town','town'], ['city','town'], ['municipality','town'],
+          // County / State / Market
+          ['county','county'], ['state','county'], ['market','county'], ['submarket','county'],
+          // Building size
+          ['building size','building_sf'],   ['building sf','building_sf'],
+          ['rentable sf','building_sf'],     ['available sf','building_sf'],
+          ['total sf','building_sf'],        ['gross sf','building_sf'],
+          ['leasable area','building_sf'],   ['lease sf','building_sf'],
+          ['leased sf','building_sf'],       ['space size','building_sf'],
+          // Lot size
+          ['lot size','lot_size_ac'], ['land area','lot_size_ac'],
+          ['lot acres','lot_size_ac'], ['site area','lot_size_ac'],
+          // Ceiling / Clear height
+          ['ceiling height','ceiling_height'], ['clear height','ceiling_height'],
+          ['clearance','ceiling_height'],      ['ceiling','ceiling_height'],
+          ['overhead clearance','ceiling_height'],
+          // Loading docks
+          ['loading docks','loading_docks'], ['dock doors','loading_docks'],
+          ['loading','loading_docks'],        ['docks','loading_docks'],
+          ['number of docks','loading_docks'],
+          // Drive-ins / grade level
+          ['drive-ins','drive_ins'],        ['drive ins','drive_ins'],
+          ['grade level doors','drive_ins'], ['grade level','drive_ins'],
+          ['drive in doors','drive_ins'],    ['drive','drive_ins'],
+          // Asking rent
+          ['asking rent','asking_rent'],  ['list price','asking_rent'],
+          ['listed rent','asking_rent'],  ['marketed rent','asking_rent'],
+          ['asking price','asking_rent'], ['asking','asking_rent'],
+          // Deal / Lease rent
+          ['deal rent','deal_rent'],       ['lease rate','deal_rent'],
+          ['base rent','deal_rent'],       ['starting rent','deal_rent'],
+          ['annual rent','deal_rent'],     ['monthly rent','deal_rent'],
+          ['effective rent','deal_rent'],  ['net rent','deal_rent'],
+          ['rent psf','deal_rent'],        ['rent/sf','deal_rent'],
+          ['rate','deal_rent'],            ['deal','deal_rent'],
+          // Rent type
+          ['rent type','rent_type'], ['lease type','rent_type'],
+          ['type','rent_type'],
+          // Taxes
+          ['real estate taxes','taxes'], ['re taxes','taxes'],
+          ['annual taxes','taxes'],      ['tax amount','taxes'],
+          ['taxes','taxes'],             ['tax','taxes'],
+          // Lease term
+          ['lease term','lease_term_years'], ['term years','lease_term_years'],
+          ['term months','lease_term_years'], ['lease length','lease_term_years'],
+          ['lease duration','lease_term_years'], ['term','lease_term_years'],
+          // Rent concession
+          ['rent concession','rent_concession_months'], ['free rent','rent_concession_months'],
+          ['concession months','rent_concession_months'], ['concession','rent_concession_months'],
+          // TI / LL Work
+          ['tenant improvement','ti_ll_work'], ['t.i. allowance','ti_ll_work'],
+          ['ti allowance','ti_ll_work'],       ['ti/ll work','ti_ll_work'],
+          ['ti/ll','ti_ll_work'],              ['ll work','ti_ll_work'],
+          ['t.i.','ti_ll_work'],               ['tia','ti_ll_work'],
+          // Mgmt fee
+          ['management fee','mgmt_fee_pct'], ['mgmt fee','mgmt_fee_pct'],
+          ['management','mgmt_fee_pct'],
+          // Tenant / Landlord
+          ['tenant name','tenant'], ['lessee','tenant'], ['occupant','tenant'], ['tenant','tenant'],
+          ['landlord name','landlord'], ['lessor','landlord'], ['owner','landlord'], ['landlord','landlord'],
+          // Short/generic fallbacks (lower priority)
+          ['address','address'], ['lot','lot_size_ac'], ['date','transaction_date'],
+          ['fee','mgmt_fee_pct'],
+        ]
+
+        // ── STEP 1: group items by y-band and find the header row ────────────────────────
+        const yBuckets = new Map<number, {x: number, str: string, y: number}[]>()
+        for (const item of allItems) {
+          const yk = Math.round(item.y / 4) * 4
+          if (!yBuckets.has(yk)) yBuckets.set(yk, [])
+          yBuckets.get(yk)!.push(item)
         }
 
+        let headerCols: {field: string, x: number}[] = []
+        let headerTopY = 0
+        for (const [, items] of [...yBuckets.entries()].sort(([ya], [yb]) => yb - ya)) {
+          const matched: {field: string, x: number}[] = []
+          const seen = new Set<string>()
+          for (const item of items.sort((a, b) => a.x - b.x)) {
+            const norm = item.str.toLowerCase().replace(/[^a-z0-9\s\-\/\.]/g, ' ').replace(/\s+/g,' ').trim()
+            for (const [kw, field] of HEADER_KW) {
+              if (!seen.has(field) && norm.includes(kw)) {
+                matched.push({ field, x: item.x }); seen.add(field); break
+              }
+            }
+          }
+          // Need ≥ 4 recognized columns AND (an address OR date column) to confirm it's a header
+          if (matched.length >= 4 &&
+              (matched.some(m => m.field === 'address') || matched.some(m => m.field === 'transaction_date'))) {
+            if (matched.length > headerCols.length) {
+              headerCols = matched
+              headerTopY = Math.max(...items.map(i => i.y))
+            }
+          }
+        }
+
+        // ── STEP 2: build column x-boundaries ───────────────────────────────────────────
+        let dynColNames: string[]
+        let dynColX: number[]
+        if (headerCols.length >= 4) {
+          headerCols.sort((a, b) => a.x - b.x)
+          dynColNames = headerCols.map(c => c.field)
+          dynColX = headerCols.map(c => c.x)
+        } else {
+          // Hardcoded fallback for the PCRE lease comp format
+          dynColNames = ['transaction_date','address','town','county','building_sf','lot_size_ac',
+                         'ceiling_height','loading_docks','drive_ins','asking_rent','deal_rent',
+                         'rent_type','taxes','lease_term_years','rent_concession_months',
+                         'ti_ll_work','mgmt_fee_pct','tenant','landlord']
+          dynColX     = [0, 99, 134, 161, 192, 221, 268, 302, 338, 365, 396, 423, 452, 496, 539, 601, 643, 671, 717]
+          headerTopY  = allItems.length > 0 ? Math.max(...allItems.map(i => i.y)) + 1 : 9999
+        }
+
+        headers = [...new Set(dynColNames)]
+        const getCol = (x: number): string => {
+          let col = 0
+          for (let i = 1; i < dynColX.length; i++) { if (x >= dynColX[i]) col = i }
+          return dynColNames[col]
+        }
+
+        // Column x-ranges for anchor detection
+        const dateIdx   = dynColNames.indexOf('transaction_date')
+        const countyIdx = dynColNames.indexOf('county')
+        const addrIdx   = dynColNames.indexOf('address')
+        const dateXMin   = dateIdx   >= 0 ? dynColX[dateIdx]                                    : 0
+        const dateXMax   = dateIdx   >= 0 && dateIdx   + 1 < dynColX.length ? dynColX[dateIdx   + 1] : 120
+        const countyXMin = countyIdx >= 0 ? dynColX[countyIdx] - 5                              : 155
+        const countyXMax = countyIdx >= 0 && countyIdx + 1 < dynColX.length ? dynColX[countyIdx + 1] - 5 : 220
+        const addrXMin   = addrIdx   >= 0 ? dynColX[addrIdx]                                    : 90
+        const addrXMax   = addrIdx   >= 0 && addrIdx   + 1 < dynColX.length ? dynColX[addrIdx   + 1] : 160
+
+        // ── STEP 3: dual-anchor detection (date column + county/city column) ────────────
+        // Using two anchor types means rows with blank dates are still captured.
+        const DATE_RE = /^\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}$|^Q[1-4]\s*['´]?\s*\d{2,4}$/i
+        const anchorYSet = new Set<number>()
+        for (const item of allItems) {
+          if (item.y > headerTopY + 5) continue  // skip title / header area
+          // Date column anchor
+          if (item.x >= dateXMin && item.x < dateXMax && DATE_RE.test(item.str.trim()))
+            anchorYSet.add(item.y)
+          // County/city column anchor — any short text value (place name, state, market name)
+          if (item.x >= countyXMin && item.x < countyXMax &&
+              /^[A-Za-z]/.test(item.str) && item.str.length >= 2 && item.str.length <= 30 &&
+              !/^(transaction|street|address|building|ceiling|loading|drive|asking|deal|rent|lease|taxes|term|concession|tenant|landlord|mgmt|management|county|town|city|lot|size|height|docks|type|date|fee|county|state|market)$/i.test(item.str))
+            anchorYSet.add(item.y)
+        }
+
+        // Deduplicate anchors that are within 3 units of each other (same physical row)
+        const rawAnchors = [...anchorYSet].sort((a, b) => b - a)
+        const anchorYs: number[] = []
+        for (const y of rawAnchors) {
+          if (anchorYs.length === 0 || (anchorYs[anchorYs.length - 1] - y) > 3) anchorYs.push(y)
+        }
+
+        // ── STEP 4: normalize date strings ───────────────────────────────────────────────
         const normDate = (raw: string): string => {
-          const m2 = raw.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/)
-          if (m2) return `${m2[3]}-${m2[1].padStart(2,'0')}-${m2[2].padStart(2,'0')}`
-          const qm = raw.match(/Q([1-4])\s*'?\s*(\d{2,4})/i)
+          // MM/DD/YYYY or MM-DD-YYYY
+          const m1 = raw.match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/)
+          if (m1) return `${m1[3]}-${m1[1].padStart(2,'0')}-${m1[2].padStart(2,'0')}`
+          // MM/DD/YY
+          const m2 = raw.match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2})$/)
+          if (m2) return `20${m2[3]}-${m2[1].padStart(2,'0')}-${m2[2].padStart(2,'0')}`
+          // Q1 25 / Q4 2024
+          const qm = raw.match(/Q([1-4])\s*['´]?\s*(\d{2,4})/i)
           if (qm) { const q: Record<string,string>={'1':'01','2':'04','3':'07','4':'10'}; const yr=qm[2].length===2?`20${qm[2]}`:qm[2]; return `${yr}-${q[qm[1]]}-01` }
+          // Month name: "January 2025" or "Jan 2025"
+          const mn = raw.match(/^(Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)[,\s]+(\d{4})/i)
+          if (mn) { const mo: Record<string,string>={jan:'01',feb:'02',mar:'03',apr:'04',may:'05',jun:'06',jul:'07',aug:'08',sep:'09',oct:'10',nov:'11',dec:'12'}; return `${mn[2]}-${mo[mn[1].slice(0,3).toLowerCase()]}-01` }
           return ''
         }
 
-        // Find anchor rows: unique y-levels that have a County cell (Nassau/Suffolk at x≈161-200)
-        const anchorYs = [...new Set(
-          allItems.filter(i => i.x >= 155 && i.x <= 205 && /^(Nassau|Suffolk)$/i.test(i.str)).map(i => i.y)
-        )].sort((a, b) => b - a)  // top → bottom
-
+        // ── STEP 5: assign items to nearest anchor, build rows ───────────────────────────
         if (anchorYs.length > 0) {
-          // Assign every item to its nearest anchor row by y-distance
           const rowBuckets = new Map<number, {x: number, str: string}[]>()
           for (const ay of anchorYs) rowBuckets.set(ay, [])
           for (const item of allItems) {
-            if (item.y > anchorYs[0] + 10) continue  // skip title / header rows above data
+            if (item.y > headerTopY + 5) continue
             let nearest = anchorYs[0], minDist = Infinity
             for (const ay of anchorYs) { const d = Math.abs(item.y - ay); if (d < minDist) { minDist = d; nearest = ay } }
             rowBuckets.get(nearest)!.push({ x: item.x, str: item.str })
+          }
+
+          // ── STEP 6: build each row from its column items ─────────────────────────────
+          // Lease type suffixes that may trail a rent figure
+          const LEASE_TYPE_SUFFIX = /(?:\s*\/\s*(?:SF|yr|year|mo|month|sf\/yr|sf\/mo)\b)?(?:\s+(?:NNN|NN|Net|Gross|MG|Modified\s+Gross|FSG|Full\s+Service|FS|Industrial\s+Gross|IG))?/i
+          const parseMoney = (v: string): string => {
+            // "($ 18.00)" or "($18.00)" — PCRE negative format
+            const p = v.match(/\(\s*\$?\s*([\d,]+(?:\.\d+)?)\s*(?:\/\s*SF(?:\/\s*YR)?)?\s*\)/)
+            if (p) return p[1].replace(/,/g,'')
+            // "$18.00", "$18.00/SF/YR", "$18.00 Gross", "$18.00/SF NNN"
+            const d = v.match(new RegExp(`^\\$\\s*([\\d,]+(?:\\.\\d+)?)${LEASE_TYPE_SUFFIX.source}$`, 'i'))
+            if (d) return d[1].replace(/,/g,'')
+            // "18.00 NNN", "18.00 Gross", "18.00" — bare number with optional lease type suffix
+            const n = v.match(new RegExp(`^([\\d,]+(?:\\.\\d+)?)${LEASE_TYPE_SUFFIX.source}$`, 'i'))
+            if (n) return n[1].replace(/,/g,'')
+            return v
           }
 
           rows = anchorYs.map(ay => {
@@ -449,19 +630,40 @@ export async function POST(req: NextRequest) {
             const row: Record<string, string> = { status: 'Active' }
             for (const [col, vals] of Object.entries(colMap)) {
               let val = vals.join(' ').trim()
-              // Money cells: "( $ 18.00 )" → "18.00"
-              val = val.replace(/\(\s*\$\s*([\d,]+(?:\.\d+)?)\s*\)/g, (_, n) => n.replace(/,/g, ''))
-              if (col === 'transaction_date') val = normDate(val) || ''
-              if (col === 'building_sf') val = val.replace(/,/g, '')
-              if (col === 'ceiling_height') { const m = val.match(/(\d+(?:\.\d+)?)/); val = m ? m[1] : '' }
-              if (col === 'lease_term_years') { const m = val.match(/^(\d+)/); val = m ? m[1] : val }
-              if (col === 'mgmt_fee_pct') val = val.replace(/%/g, '').trim()
-              if (col === 'address') val = val.replace(/,\s*$/, '').replace(/\s+/g, ' ').trim()
-              if (col === 'lot_size_ac' && /^N\/A$/i.test(val)) val = ''
+
+              // Field-specific cleaning
+              if (col === 'transaction_date')          val = normDate(val) || ''
+              else if (col === 'deal_rent' || col === 'asking_rent' || col === 'taxes' || col === 'ti_ll_work')
+                                                       val = parseMoney(val)
+              else if (col === 'building_sf')          val = val.replace(/[,\s]/g,'').replace(/sf$/i,'').replace(/,/g,'')
+              else if (col === 'ceiling_height')       { const m = val.match(/(\d+(?:\.\d+)?)/); val = m ? m[1] : '' }
+              else if (col === 'lease_term_years')     { const m = val.match(/^(\d+(?:\.\d+)?)/); if (m) val = m[1] }
+              else if (col === 'mgmt_fee_pct')         val = val.replace(/%/g,'').trim()
+              else if (col === 'address')              val = val.replace(/,\s*$/, '').replace(/\s+/g,' ').trim()
+              else if (col === 'lot_size_ac')          val = /^N\/?A$/i.test(val.trim()) ? '' : val
+
               if (val) row[col] = val
             }
             return row
-          }).filter((r: Record<string,string>) => r.county === 'Nassau' || r.county === 'Suffolk')
+          }).filter((r: Record<string,string>) => {
+            // A valid data row must have at least 2 of these key fields filled in
+            const keyFields = ['address','building_sf','deal_rent','asking_rent','tenant','transaction_date']
+            return keyFields.filter(f => r[f]?.trim()).length >= 2
+          })
+
+          // If the address column was merged into another column name (e.g. property_name),
+          // try to find a better address from an x-position near the addr column
+          if (addrIdx >= 0) {
+            rows.forEach((r: Record<string,string>) => {
+              if (!r.address) {
+                const addrItems = rowBuckets.get(
+                  anchorYs.find(ay => rowBuckets.get(ay)?.some(i => i.x >= addrXMin && i.x < addrXMax && /\d/.test(i.str))) ?? anchorYs[0]
+                ) || []
+                const addrVal = addrItems.filter(i => i.x >= addrXMin && i.x < addrXMax).map(i => i.str).join(' ').replace(/,\s*$/,'').trim()
+                if (addrVal) r.address = addrVal
+              }
+            })
+          }
         }
 
       } else {
