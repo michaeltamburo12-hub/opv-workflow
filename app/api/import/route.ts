@@ -59,7 +59,7 @@ export async function POST(req: NextRequest) {
       street_address:'address', property_address:'address', full_address:'address',
       building_address:'address', prop_address:'address',
       // City / location
-      municipality:'city', town:'city',
+      municipality:'city',
       // Building size
       building_size:'building_sf', building_size_sf:'building_sf', bldg_sf:'building_sf',
       total_sf:'building_sf', gla_sf:'building_sf', rentable_sf:'building_sf',
@@ -111,6 +111,14 @@ export async function POST(req: NextRequest) {
       term:'lease_term', lease_length:'lease_term',
       // PCRE text price
       sale_amount:'sale_price_text',
+      // Lease comp column header variations (after normalization removes parens/dots/%)
+      lot_size_if_applicable_:'lot_size_ac', lot_size_if_applicable:'lot_size_ac',
+      ceiling_height_ft_:'ceiling_height', ceiling_height_ft:'ceiling_height',
+      taxes_if_applicable_:'taxes', taxes_if_applicable:'taxes',
+      lease_term_years_:'lease_term_years',
+      rent_concession_months_:'rent_concession_months',
+      ti__ll_work:'ti_ll_work', ti__ll_work_:'ti_ll_work',
+      _mgmt_fee:'mgmt_fee_pct', mgmt_fee:'mgmt_fee_pct',
     }
 
     // Table-specific overrides (applied after synonyms)
@@ -122,6 +130,15 @@ export async function POST(req: NextRequest) {
       pcre_sale_transactions: {
         sale_price: 'sale_price_text', // PCRE stores formatted text, not numeric
       },
+      lease_comps: {
+        sale_date:         'transaction_date',  // SYNONYMS maps transaction_date → sale_date; undo it
+        city:              'town',              // column is "Town" not "City"
+        lease_price:       'deal_rent',         // SYNONYMS maps lease_rate/rent → lease_price; remap
+        lease_date:        'transaction_date',  // old field name
+        lease_term:        'lease_term_years',  // old field name
+        real_estate_taxes: 'taxes',             // synonym maps to real_estate_taxes; remap
+        price_per_sf:      'deal_rent',         // rent psf variant
+      },
     }
 
     // Canonical columns for each known table
@@ -130,11 +147,13 @@ export async function POST(req: NextRequest) {
       market_availabilities: new Set(['address','city','county','state','zip_code','property_type','building_sf','lot_size_ac','ceiling_height','loading_docks','drive_ins','power','heat','parking','sprinkler','sewer','zoning','real_estate_taxes','asking_price','price_per_sf','pricing_guidance','availability_type','status','listing_broker','market','submarket','loopnet_url','notes']),
       pcre_sale_transactions: new Set(['address','city','county','property_type','building_sf','sale_price_text','sale_date','buyer','seller','notes']),
       pcre_lease_transactions: new Set(['address','city','county','tenant','landlord','building_sf','lease_price','lease_date','lease_term','notes']),
+      lease_comps: new Set(['address','town','county','building_sf','lot_size_ac','ceiling_height','loading_docks','drive_ins','asking_rent','deal_rent','rent_type','taxes','lease_term_years','rent_concession_months','ti_ll_work','mgmt_fee_pct','tenant','landlord','transaction_date','status','notes']),
     }
 
     const TABLE_DEFAULTS: Record<string, Record<string, unknown>> = {
       industrial_sale_comps: { status: 'Closed', state: 'NY', sale_type: "Arm's Length" },
       market_availabilities: { status: 'Available', availability_type: 'For Sale', state: 'NY' },
+      lease_comps: { status: 'Active', county: 'Nassau' },
     }
 
     const tableRemap  = TABLE_REMAP[tableName]  || {}
