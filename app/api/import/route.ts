@@ -1,10 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import * as XLSX from 'xlsx'
-import { spawnSync } from 'child_process'
-import { writeFileSync, unlinkSync } from 'fs'
-import { tmpdir } from 'os'
-import { join } from 'path'
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const pdfParse = require('pdf-parse')
 
@@ -364,33 +360,126 @@ export async function POST(req: NextRequest) {
       })
 
     } else if (fileName.endsWith('.pdf')) {
-
-      // ── PARSER C: PCRE Lease Comp table format (pdfplumber via Python subprocess) ─────
-      // Runs before pdf-parse so it can handle the table-structured lease comp PDF.
-      // Falls back gracefully when Python or pdfplumber isn't available.
-      let usedParserC = false
-      try {
-        const tmpPath = join(tmpdir(), `lease_pdf_${Date.now()}.pdf`)
-        writeFileSync(tmpPath, buffer)
-        const scriptPath = join(process.cwd(), 'scripts', 'parse_lease_comps.py')
-        const result = spawnSync('python3', [scriptPath, tmpPath], {
-          encoding: 'utf8', timeout: 20000, maxBuffer: 10 * 1024 * 1024
-        })
-        try { unlinkSync(tmpPath) } catch { /* ignore cleanup errors */ }
-
-        if (!result.error && result.status === 0 && result.stdout?.trim()) {
-          const parsed = JSON.parse(result.stdout.trim())
-          if (parsed.type === 'lease_comps' && parsed.rows?.length > 0) {
-            headers = parsed.headers as string[]
-            rows = parsed.rows as Record<string, string>[]
-            usedParserC = true
-          }
-        }
-      } catch { /* Python not available — fall through to pdf-parse parsers */ }
-
-      if (!usedParserC) {
       const pdfData = await pdfParse(buffer)
       const text = pdfData.text
+
+      // ── PARSER C: PCRE Lease Comp table format ─────────────────────────────────────────
+      // Detected by "LEASE COMPS" header + "Deal Rent" column in the PDF text.
+      // Uses county (Nassau/Suffolk) as anchor for each row, extracts fields positionally.
+      if (/LEASE COMPS/i.test(text) && /\bDeal Rent\b/i.test(text)) {
+        headers = ['transaction_date','address','town','county','building_sf','lot_size_ac',
+                   'ceiling_height','loading_docks','drive_ins','asking_rent','deal_rent',
+                   'rent_type','taxes','lease_term_years','rent_concession_months',
+                   'ti_ll_work','mgmt_fee_pct','tenant','landlord']
+
+        // Collapse to single line, drop header rows
+        let dataText = text.replace(/\s+/g, ' ')
+        const hdrEnd = dataText.indexOf('Tenant Landlord')
+        if (hdrEnd >= 0) dataText = dataText.slice(hdrEnd + 'Tenant Landlord'.length)
+
+        const countyRe = /\b(Nassau|Suffolk)\b/gi
+        const cms = [...dataText.matchAll(countyRe)]
+
+        const normDate = (raw: string): string => {
+          const m2 = raw.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/)
+          if (m2) return `${m2[3]}-${m2[1].padStart(2,'0')}-${m2[2].padStart(2,'0')}`
+          const qm = raw.match(/Q([1-4])\s*(\d{2})/i)
+          if (qm) { const q: Record<string,string>={'1':'01','2':'04','3':'07','4':'10'}; return `20${qm[2]}-${q[qm[1]]}-01` }
+          return ''
+        }
+
+        const DATE_PAT = /\d{1,2}\/\d{1,2}\/\d{4}|Q[1-4]\s*\d{2}/i
+
+        rows = cms.map((cm, i) => {
+          const row: Record<string,string> = { county: cm[1][0].toUpperCase() + cm[1].slice(1).toLowerCase(), status: 'Active' }
+          const cs = cm.index!, ce = cs + cm[0].length
+
+          // ── before county: date + address + town ──
+          const prevEnd = i > 0 ? cms[i-1].index! + cms[i-1][0].length : 0
+          const lookback = dataText.slice(prevEnd, cs)
+          const dates = [...lookback.matchAll(new RegExp(DATE_PAT.source, 'gi'))]
+          const recStart = dates.length > 0
+            ? prevEnd + dates[dates.length - 1].index!
+            : (() => { const am = [...lookback.matchAll(/\b([1-9]\d{1,4}(?:-\d+)?)\s+[A-Za-z]/g)]; return am.length > 0 ? prevEnd + am[am.length-1].index! : Math.max(prevEnd, cs - 120) })()
+
+          let before = dataText.slice(recStart, cs).trim()
+
+          const dm = before.match(new RegExp('^(' + DATE_PAT.source + ')\\s*', 'i'))
+          if (dm) { row.transaction_date = normDate(dm[1]); before = before.slice(dm[0].length).trim() }
+          // fix run-ons like "1/1/2025600 West" → "600 West"
+          before = before.replace(/^\d{1,2}\/\d{1,2}\/\d{4}\s*/,'').replace(/(\d)([A-Z])/g,'$1 $2').trim()
+
+          const lc = before.lastIndexOf(',')
+          if (lc > 0) { row.address = before.slice(0, lc).trim(); row.town = before.slice(lc+1).trim() }
+          else { const p = before.split(/\s+/); row.town = p[p.length-1]||''; row.address = p.slice(0,-1).join(' ') }
+
+          // ── after county: building specs + financial + names ──
+          const nextCs = i+1 < cms.length ? cms[i+1].index! : dataText.length
+          const lookahead = dataText.slice(ce, nextCs)
+          const nextDate = lookahead.match(DATE_PAT)
+          const nextAddr = lookahead.match(/\b[1-9]\d{1,4}(?:-\d+)?\s+[A-Za-z]/)
+          const markers = [nextDate?.index, nextAddr?.index].filter((x): x is number => x !== undefined)
+          const recEnd = ce + (markers.length > 0 ? Math.min(...markers) : lookahead.length)
+          const after = dataText.slice(ce, recEnd).trim()
+
+          // Ceiling with ' or "Clear"
+          const ceilM = after.match(/(\d+(?:\.\d+)?)\s*(?:[''](?:\s*Clear)?|\s+Clear)/i)
+          if (ceilM) row.ceiling_height = ceilM[1]
+
+          // Rent type
+          const rtM = after.match(/\b(NNN|Gross|Modified\s+Gross)\b/i)
+          if (rtM) row.rent_type = rtM[0].trim()
+
+          // Mgmt fee %
+          const pctM = after.match(/(\d+(?:\.\d+)?)\s*%/)
+          if (pctM) row.mgmt_fee_pct = pctM[1]
+
+          // Money values: ($ X ) format
+          const mvs = [...after.matchAll(/\(\$\s*([\d,]+(?:\.\d+)?)\s*\)/g)].map(m => parseFloat(m[1].replace(/,/g,'')))
+          let dealSet = false
+          for (const v of mvs) {
+            if (!dealSet && v < 50) { row.deal_rent = String(v); dealSet = true }
+            else if (v > 100) { if (!row.taxes) row.taxes = String(v) }
+            else if (!row.taxes && v < 20) row.taxes = String(v)
+            else if (!row.ti_ll_work) row.ti_ll_work = String(v)
+          }
+
+          // Strip known patterns to isolate plain numbers
+          const stripped = after
+            .replace(/\(\$\s*[\d,]+(?:\.\d+)?\s*\)/g,'')
+            .replace(/\b(NNN|Gross|Modified\s+Gross|N\/A)\b/gi,'')
+            .replace(/\d+(?:\.\d+)?\s*%/g,'')
+            .replace(/(\d+)\s*[''](?:\s*Clear)?/gi,'$1')
+            .replace(/\bClear\b/gi,'')
+            .replace(/\bIN\s+[\d,]+\s+SF\b/gi,'')
+            .replace(/\b(years?\s*plus\s*\d+\s*years?\s*option?)\b/gi,'')
+            .replace(/\s+/g,' ').trim()
+
+          const smallNums: number[] = []
+          let bsfDone = false
+          for (const tok of stripped.split(/\s+/)) {
+            const rng = tok.match(/^(\d+)-\d+$/)
+            const n = parseFloat((rng?.[1] || tok).replace(/,/g,''))
+            if (isNaN(n)) continue
+            if (!bsfDone && n >= 1000) { row.building_sf = String(Math.round(n)); bsfDone = true }
+            else if (n < 1000 && n !== Math.floor(n)) { if (!row.lot_size_ac) row.lot_size_ac = String(n) }
+            else if (n < 1000) smallNums.push(Math.round(n))
+          }
+
+          // If ceiling not found via explicit pattern, first num in [12,40] is ceiling
+          if (!row.ceiling_height) {
+            const ci = smallNums.findIndex(n => n >= 12 && n <= 40)
+            if (ci >= 0) { row.ceiling_height = String(smallNums[ci]); smallNums.splice(ci, 1) }
+          }
+          if (smallNums.length >= 1) row.loading_docks = String(smallNums[0])
+          if (smallNums.length >= 2) row.drive_ins = String(smallNums[1])
+          if (smallNums.length >= 4) { row.lease_term_years = String(smallNums[smallNums.length-2]); row.rent_concession_months = String(smallNums[smallNums.length-1]) }
+          else if (smallNums.length >= 3) row.lease_term_years = String(smallNums[smallNums.length-1])
+
+          return row
+        }).filter((r: Record<string,string>) => r.county && (r.address || r.building_sf))
+
+      } else {
 
       // ── PARSER A: "date-per-row" format (MM/DD/YYYY or UNDER/IN CONTRACT at row start) ──
       const rowPattern = /^(\d{1,2}\/\d{1,2}\/\d{4}|UNDER CONTRACT|IN CONTRACT)/i
@@ -502,7 +591,7 @@ export async function POST(req: NextRequest) {
           }))
         }
       }
-      } // end if (!usedParserC)
+      } // end else (Parser A / Parser B)
     } else {
       return NextResponse.json({ error: 'Unsupported file type. Use PDF, CSV, TSV, XLSX, or XLS.' }, { status: 400 })
     }
