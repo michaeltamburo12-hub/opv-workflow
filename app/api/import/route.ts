@@ -534,6 +534,21 @@ export async function POST(req: NextRequest) {
           headerTopY  = allItems.length > 0 ? Math.max(...allItems.map(i => i.y)) + 1 : 9999
         }
 
+        // Expand header zone downward to catch multi-line headers like:
+        //   Line 1: "Lot Size"        ← detected as header at headerTopY
+        //   Line 2: "(If applicable)" ← sits 10-15 units below, bleeds into data
+        // Any item within 25 units below headerTopY that is parenthetical or matches
+        // a header keyword is treated as part of the header band.
+        let headerCutoffY = headerTopY  // items with y >= headerCutoffY are in header zone
+        for (const item of allItems) {
+          if (item.y < headerTopY && item.y >= headerTopY - 25) {
+            const norm = item.str.toLowerCase().replace(/[^a-z0-9\s\-\/\.]/g, ' ').trim()
+            const isSubLabel = /^\(/.test(item.str.trim()) || HEADER_KW.some(([kw]) => norm.includes(kw))
+            if (isSubLabel) headerCutoffY = Math.min(headerCutoffY, item.y)
+          }
+        }
+        headerCutoffY -= 3  // small buffer so the first real data row isn't clipped
+
         headers = [...new Set(dynColNames)]
         const getCol = (x: number): string => {
           let col = 0
@@ -557,7 +572,7 @@ export async function POST(req: NextRequest) {
         const DATE_RE = /^\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}$|^Q[1-4]\s*['´]?\s*\d{2,4}$/i
         const anchorYSet = new Set<number>()
         for (const item of allItems) {
-          if (item.y > headerTopY + 5) continue  // skip title / header area
+          if (item.y > headerTopY + 5 || item.y >= headerCutoffY) continue  // skip title / header zone
           // Date column anchor
           if (item.x >= dateXMin && item.x < dateXMax && DATE_RE.test(item.str.trim()))
             anchorYSet.add(item.y)
@@ -597,7 +612,7 @@ export async function POST(req: NextRequest) {
           const rowBuckets = new Map<number, {x: number, str: string}[]>()
           for (const ay of anchorYs) rowBuckets.set(ay, [])
           for (const item of allItems) {
-            if (item.y > headerTopY + 5) continue
+            if (item.y > headerTopY + 5 || item.y >= headerCutoffY) continue
             let nearest = anchorYs[0], minDist = Infinity
             for (const ay of anchorYs) { const d = Math.abs(item.y - ay); if (d < minDist) { minDist = d; nearest = ay } }
             rowBuckets.get(nearest)!.push({ x: item.x, str: item.str })
@@ -641,6 +656,13 @@ export async function POST(req: NextRequest) {
               else if (col === 'mgmt_fee_pct')         val = val.replace(/%/g,'').trim()
               else if (col === 'address')              val = val.replace(/,\s*$/, '').replace(/\s+/g,' ').trim()
               else if (col === 'lot_size_ac')          val = /^N\/?A$/i.test(val.trim()) ? '' : val
+
+              // Safety net: numeric DB columns that contain no digits can't be valid values —
+              // they're likely header bleed (e.g., "Lot Size (If applicable)") or stray labels.
+              const NUMERIC_COLS = new Set(['building_sf','lot_size_ac','ceiling_height','loading_docks',
+                                            'drive_ins','asking_rent','deal_rent','taxes',
+                                            'lease_term_years','rent_concession_months','mgmt_fee_pct','ti_ll_work'])
+              if (NUMERIC_COLS.has(col) && val && !/\d/.test(val)) val = ''
 
               if (val) row[col] = val
             }
