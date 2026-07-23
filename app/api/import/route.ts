@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import * as XLSX from 'xlsx'
+import { spawnSync } from 'child_process'
+import { writeFileSync, unlinkSync } from 'fs'
+import { tmpdir } from 'os'
+import { join } from 'path'
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const pdfParse = require('pdf-parse')
 
@@ -360,6 +364,31 @@ export async function POST(req: NextRequest) {
       })
 
     } else if (fileName.endsWith('.pdf')) {
+
+      // ── PARSER C: PCRE Lease Comp table format (pdfplumber via Python subprocess) ─────
+      // Runs before pdf-parse so it can handle the table-structured lease comp PDF.
+      // Falls back gracefully when Python or pdfplumber isn't available.
+      let usedParserC = false
+      try {
+        const tmpPath = join(tmpdir(), `lease_pdf_${Date.now()}.pdf`)
+        writeFileSync(tmpPath, buffer)
+        const scriptPath = join(process.cwd(), 'scripts', 'parse_lease_comps.py')
+        const result = spawnSync('python3', [scriptPath, tmpPath], {
+          encoding: 'utf8', timeout: 20000, maxBuffer: 10 * 1024 * 1024
+        })
+        try { unlinkSync(tmpPath) } catch { /* ignore cleanup errors */ }
+
+        if (!result.error && result.status === 0 && result.stdout?.trim()) {
+          const parsed = JSON.parse(result.stdout.trim())
+          if (parsed.type === 'lease_comps' && parsed.rows?.length > 0) {
+            headers = parsed.headers as string[]
+            rows = parsed.rows as Record<string, string>[]
+            usedParserC = true
+          }
+        }
+      } catch { /* Python not available — fall through to pdf-parse parsers */ }
+
+      if (!usedParserC) {
       const pdfData = await pdfParse(buffer)
       const text = pdfData.text
 
@@ -473,6 +502,7 @@ export async function POST(req: NextRequest) {
           }))
         }
       }
+      } // end if (!usedParserC)
     } else {
       return NextResponse.json({ error: 'Unsupported file type. Use PDF, CSV, TSV, XLSX, or XLS.' }, { status: 400 })
     }
