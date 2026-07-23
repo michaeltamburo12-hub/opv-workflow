@@ -37,7 +37,7 @@ export async function PATCH(req: NextRequest) {
   const id = searchParams.get('id')
   if (!table || !id) return NextResponse.json({ error: 'table and id required' }, { status: 400 })
 
-  const tableName = table === 'comps' ? 'industrial_sale_comps' : 'market_availabilities'
+  const tableName = table === 'comps' ? 'industrial_sale_comps' : table === 'lease-comps' ? 'lease_comps' : 'market_availabilities'
   const { status } = await req.json()
   if (!status) return NextResponse.json({ error: 'status required' }, { status: 400 })
 

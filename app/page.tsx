@@ -182,7 +182,7 @@ const FOLDER_COLORS = [D.gold, D.blue, D.green, D.purple, '#0891B2', '#DB2777', 
 type SubjectForm = {address:string,city:string,county:string,municipality:string,parcelId:string,type:string,opvType:string,size:string,lot:string,ceiling:string,docks:string,driveIn:string,power:string,heat:string,parking:string,sprinkler:string,sewer:string,zoning:string,taxes:string,yearBuilt:string,officePct:string,construction:string,condition:string,notes:string,highestBestUse:string,capRateLow:string,capRateHigh:string,leasePsfLow:string,leasePsfHigh:string,estimatedValueLow:string,estimatedValueHigh:string,preparedBy:string}
 type Comp = {id:string,address:string,city:string,county:string,building_sf:number,lot_size_ac:number,ceiling_height:string,loading_docks:string,drive_ins:string,power:string,sewer:string,zoning:string,sale_price:number,price_per_sf:number,sale_date:string,sale_type:string,buyer:string,seller:string,submarket:string,score?:number,[key:string]:unknown}
 type Avail = {id:string,address:string,city:string,county:string,building_sf:number,lot_size_ac:number,ceiling_height:string,loading_docks:string,drive_ins:string,power:string,sewer:string,zoning:string,asking_price:number,price_per_sf:number,pricing_guidance:string,listing_broker:string,loopnet_url:string,score?:number,[key:string]:unknown}
-type LeaseComp = {id:string,address:string,city:string,county:string,building_sf:number,ceiling_height:string,loading_docks:string,drive_ins:string,power:string,sewer:string,zoning:string,lease_price:number,price_per_sf:number,lease_date:string,tenant:string,landlord:string,lease_term:string,annual_escalations:string,landlord_work:string,cap_rate:number,comments:string,taxes_psf:number,office_pct:number,photo_url?:string,loopnet_url?:string}
+type LeaseComp = {id:string,address:string,town:string,county:string,building_sf:number,lot_size_ac:number,ceiling_height:string,loading_docks:string,drive_ins:string,asking_rent:number,deal_rent:number,rent_type:string,taxes:number,lease_term_years:number,rent_concession_months:number,ti_ll_work:string,mgmt_fee_pct:number,tenant:string,landlord:string,transaction_date:string,status:string,notes:string,[key:string]:unknown}
 type AnalyticsData = {mean:number,median:number,std:number,weighted:number,min:number,max:number,low:number,market:number,high:number,suggested:number,aMean:number,count:number}
 type OPVReportData = {id:number,subject:SubjectForm,comps:Comp[],avails:Avail[],analytics:AnalyticsData|null,date:string}
 type SavedOPV = {id:string, created_at:string, saved_by:string, address:string}
@@ -1040,7 +1040,7 @@ function FileImport() {
 
 // ── DATABASE MANAGER ──────────────────────────────────────────────────────────
 function DatabaseManager() {
-  const [tab, setTab] = useState<'comps'|'avails'|'pcre-sales'|'pcre-leases'>('comps')
+  const [tab, setTab] = useState<'comps'|'avails'|'pcre-sales'|'pcre-leases'|'lease-comps'>('comps')
   const [subTab, setSubTab] = useState<'add'|'import'|'file'|'browse'>('add')
   const [saving, setSaving] = useState(false)
   type DupMatch = {id:string,address?:string,city?:string,sale_date?:string,sale_price?:number,asking_price?:number,building_sf?:number}
@@ -1068,7 +1068,8 @@ function DatabaseManager() {
   const PAGE_SIZE = 20
   const COMP_STATUSES_DB  = [{value:'Closed',color:D.textMuted,label:'Closed'},{value:'Back on Market',color:D.gold,label:'Back on Market'}]
   const AVAIL_STATUSES_DB = [{value:'Available',color:D.green,label:'Available'},{value:'Under Contract',color:D.gold,label:'Under Contract'},{value:'Sold',color:D.red,label:'Sold'},{value:'Off Market',color:D.textMuted,label:'Off Market'}]
-  const dbStatusColor = (status:string,isComp:boolean) => (isComp?COMP_STATUSES_DB:AVAIL_STATUSES_DB).find(x=>x.value===status)?.color??D.textMuted
+  const LEASE_COMP_STATUSES_DB = [{value:'Active',color:D.green,label:'Active'},{value:'Expired',color:D.textMuted,label:'Expired'},{value:'Confidential',color:D.purple,label:'Confidential'}]
+  const dbStatusColor = (status:string,tabType:string) => (tabType==='comps'?COMP_STATUSES_DB:tabType==='lease-comps'?LEASE_COMP_STATUSES_DB:AVAIL_STATUSES_DB).find(x=>x.value===status)?.color??D.textMuted
 
   const blankComp = {address:'',city:'',county:'Nassau',state:'NY',property_type:'Warehouse',building_sf:'',lot_size_ac:'',ceiling_height:'',loading_docks:'',drive_ins:'',power:'',heat:'',parking:'',sprinkler:'',sewer:'Municipal',zoning:'',real_estate_taxes:'',sale_price:'',price_per_sf:'',sale_date:'',sale_type:"Arm's Length",buyer:'',seller:'',listing_broker:'',market:'',submarket:'',zip_code:'',notes:''}
   const blankAvail = {address:'',city:'',county:'Nassau',state:'NY',property_type:'Warehouse',building_sf:'',lot_size_ac:'',ceiling_height:'',loading_docks:'',drive_ins:'',power:'',heat:'',parking:'',sprinkler:'',sewer:'Municipal',zoning:'',real_estate_taxes:'',asking_price:'',price_per_sf:'',pricing_guidance:'',availability_type:'For Sale',status:'Available',listing_broker:'',market:'',submarket:'',zip_code:'',loopnet_url:'',notes:''}
@@ -1083,6 +1084,10 @@ function DatabaseManager() {
   const [pcreLeaseForm, setPcreLeaseForm] = useState({...blankPcreLease})
   const setPS = (k:string,v:string) => setPcreSaleForm(f=>({...f,[k]:v}))
   const setPL = (k:string,v:string) => setPcreLeaseForm(f=>({...f,[k]:v}))
+
+  const blankLeaseComp = {transaction_date:'',address:'',town:'',county:'Nassau',building_sf:'',lot_size_ac:'',ceiling_height:'',loading_docks:'',drive_ins:'',asking_rent:'',deal_rent:'',rent_type:'NNN',taxes:'',lease_term_years:'',rent_concession_months:'',ti_ll_work:'',mgmt_fee_pct:'',tenant:'',landlord:'',status:'Active',notes:''}
+  const [leaseCompForm, setLeaseCompForm] = useState({...blankLeaseComp})
+  const setLC = (k:string,v:string) => setLeaseCompForm(f=>({...f,[k]:v}))
   const pcreSetupAttempted = useRef(false)
   const [pcreSetupSQL, setPcreSetupSQL] = useState<{sales?:string,leases?:string}|null>(null)
   const setupPcreTables = useCallback(async () => {
@@ -1097,7 +1102,7 @@ function DatabaseManager() {
     } catch {}
   }, [])
 
-  const tableForTab = (t: typeof tab) => t==='comps'?'industrial_sale_comps':t==='avails'?'market_availabilities':t==='pcre-sales'?'pcre_sale_transactions':'pcre_lease_transactions'
+  const tableForTab = (t: typeof tab) => t==='comps'?'industrial_sale_comps':t==='avails'?'market_availabilities':t==='pcre-sales'?'pcre_sale_transactions':t==='lease-comps'?'lease_comps':'pcre_lease_transactions'
 
   const doSaveComp = async () => {
     setSaving(true)
@@ -1158,6 +1163,23 @@ function DatabaseManager() {
     setPcreLeaseForm({...blankPcreLease})
   }
 
+  const doSaveLeaseComp = async () => {
+    setSaving(true)
+    const payload: Record<string,unknown> = {...leaseCompForm}
+    const nums = ['building_sf','lot_size_ac','asking_rent','deal_rent','taxes','lease_term_years','rent_concession_months','mgmt_fee_pct']
+    nums.forEach(k=>{ if(payload[k]) payload[k]=parseFloat(payload[k] as string)||null; else payload[k]=null })
+    if (!payload.transaction_date) payload.transaction_date = null
+    const {error} = await supabase.from('lease_comps').insert([payload])
+    setSaving(false)
+    if (error) { alert('Error: '+error.message); return }
+    alert('✅ Lease comp saved to Supabase!')
+    setLeaseCompForm({...blankLeaseComp})
+  }
+  const saveLeaseComp = async () => {
+    if (!leaseCompForm.address) { alert('Address is required'); return }
+    await checkDupes('lease_comps', leaseCompForm.address, doSaveLeaseComp)
+  }
+
   const COLUMN_ALIASES: Record<string,string> = {
     'street_address':'address','property_address':'address','full_address':'address','property_name':'address','building_address':'address',
     'rentable_building_area_(sf)':'building_sf','rentable_building_area':'building_sf','building_size':'building_sf','bldg_sf':'building_sf','total_sf':'building_sf','gla_(sf)':'building_sf','building_size_(sf)':'building_sf',
@@ -1176,6 +1198,18 @@ function DatabaseManager() {
     'listing_agent':'listing_broker','broker':'listing_broker',
     'sub_market':'submarket','sub-market':'submarket',
     'zip':'zip_code','postal_code':'zip_code',
+    // lease comp columns
+    'town':'town',
+    'lot_size_(if_applicable)':'lot_size_ac','lot size (if applicable)':'lot_size_ac','lot_size':'lot_size_ac',
+    'ceiling_height_(ft.)':'ceiling_height','ceiling height (ft.)':'ceiling_height','ceiling_height_(ft)':'ceiling_height',
+    'asking_rent':'asking_rent','asking rent':'asking_rent',
+    'deal_rent':'deal_rent','deal rent':'deal_rent',
+    'rent_type':'rent_type','rent type':'rent_type',
+    'taxes_(if_applicable)':'taxes','taxes (if applicable)':'taxes','taxes':'taxes',
+    'lease_term_(years)':'lease_term_years','lease term (years)':'lease_term_years','lease_term_years':'lease_term_years',
+    'rent_concession_(months)':'rent_concession_months','rent concession (months)':'rent_concession_months','rent_concession_months':'rent_concession_months',
+    't.i._(ll_work)':'ti_ll_work','t.i. (ll work)':'ti_ll_work','ti_ll_work':'ti_ll_work',
+    '%_mgmt_fee':'mgmt_fee_pct','% mgmt fee':'mgmt_fee_pct','mgmt_fee_pct':'mgmt_fee_pct',
   }
   const parseCSV = (text: string) => {
     const lines = text.trim().split('\n').filter(l=>l.trim())
@@ -1195,7 +1229,7 @@ function DatabaseManager() {
     if (!rows.length) { alert('No data found.'); return }
     setImportPreview(rows.slice(0,5))
   }
-  const numFields = tab==='comps' ? ['building_sf','lot_size_ac','real_estate_taxes','sale_price','price_per_sf'] : tab==='avails' ? ['building_sf','lot_size_ac','real_estate_taxes','asking_price','price_per_sf'] : ['building_sf']
+  const numFields = tab==='comps' ? ['building_sf','lot_size_ac','real_estate_taxes','sale_price','price_per_sf'] : tab==='avails' ? ['building_sf','lot_size_ac','real_estate_taxes','asking_price','price_per_sf'] : tab==='lease-comps' ? ['building_sf','lot_size_ac','asking_rent','deal_rent','taxes','lease_term_years','rent_concession_months','mgmt_fee_pct'] : ['building_sf']
   const runImport = async () => {
     const rows = parseCSV(importText)
     if (!rows.length) return
@@ -1224,6 +1258,7 @@ function DatabaseManager() {
         const payload: Record<string,unknown> = {...r}
         numFields.forEach(k=>{ payload[k]=r[k]?parseFloat(r[k])||null:null })
         if (tab==='comps' && !r.sale_date) payload.sale_date=null
+        if (tab==='lease-comps' && !r.transaction_date) payload.transaction_date=null
         if (!r.county) payload.county='Nassau'
         if (!r.state) payload.state='NY'
         return payload
@@ -1253,7 +1288,7 @@ function DatabaseManager() {
   }
   const G2 = {display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}
   const G3 = {display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:12}
-  const tabBtn = (id: 'comps'|'avails'|'pcre-sales'|'pcre-leases', label: string) => (
+  const tabBtn = (id: 'comps'|'avails'|'pcre-sales'|'pcre-leases'|'lease-comps', label: string) => (
     <div onClick={()=>{setTab(id);setSubTab('add');setBrowseData([]);setBrowseSearch('');setImportPreview([]);setImportResult(null);if(id==='pcre-sales'||id==='pcre-leases')setupPcreTables()}} style={{padding:'8px 20px',borderRadius:7,cursor:'pointer',fontSize:12,fontWeight:700,background:tab===id?D.blue:'transparent',color:tab===id?'#FFFFFF':D.textSec,border:`1px solid ${tab===id?'transparent':D.border}`,transition:'all .2s'}}>{label}</div>
   )
   const subTabBtn = (id: 'add'|'import'|'file'|'browse', label: string, icon: string) => (
@@ -1296,6 +1331,7 @@ function DatabaseManager() {
       <div style={{display:'flex',gap:8,marginBottom:20,flexWrap:'wrap' as const}}>
         {tabBtn('comps','📊 Sale Comps')}
         {tabBtn('avails','🏭 Availabilities')}
+        {tabBtn('lease-comps','📝 Lease Comps')}
         {tabBtn('pcre-sales','📋 PCRE Sales')}
         {tabBtn('pcre-leases','📄 PCRE Leases')}
       </div>
@@ -1422,6 +1458,47 @@ function DatabaseManager() {
           </div>
         </Card>
       )}
+      {subTab==='add' && tab==='lease-comps' && (
+        <Card>
+          <SL>Add Lease Comp — All fields save directly to Supabase</SL>
+          <Field label="Street Address" full><Input placeholder="85 Davids Drive, Hauppauge, NY 11788" value={leaseCompForm.address} onChange={e=>setLC('address',e.target.value)}/></Field>
+          <div style={G3}>
+            <Field label="Town"><Input value={leaseCompForm.town} onChange={e=>setLC('town',e.target.value)}/></Field>
+            <Field label="County"><Sel value={leaseCompForm.county} onChange={e=>setLC('county',e.target.value)}>{['Nassau','Suffolk'].map(c=><option key={c}>{c}</option>)}</Sel></Field>
+            <Field label="Transaction Date"><Input type="date" value={leaseCompForm.transaction_date} onChange={e=>setLC('transaction_date',e.target.value)}/></Field>
+          </div>
+          <Divider label="Building"/>
+          <div style={G3}>
+            <Field label="Building Size (SF)"><Input type="number" value={leaseCompForm.building_sf} onChange={e=>setLC('building_sf',e.target.value)}/></Field>
+            <Field label="Lot Size (If applicable)"><Input type="number" step="0.01" placeholder="acres" value={leaseCompForm.lot_size_ac} onChange={e=>setLC('lot_size_ac',e.target.value)}/></Field>
+            <Field label="Ceiling Height (ft.)"><Input placeholder="22" value={leaseCompForm.ceiling_height} onChange={e=>setLC('ceiling_height',e.target.value)}/></Field>
+            <Field label="Loading Docks"><Input value={leaseCompForm.loading_docks} onChange={e=>setLC('loading_docks',e.target.value)}/></Field>
+            <Field label="Drive-ins"><Input value={leaseCompForm.drive_ins} onChange={e=>setLC('drive_ins',e.target.value)}/></Field>
+          </div>
+          <Divider label="Lease Terms"/>
+          <div style={G3}>
+            <Field label="Asking Rent ($/SF/yr)"><Input type="number" step="0.01" value={leaseCompForm.asking_rent} onChange={e=>setLC('asking_rent',e.target.value)}/></Field>
+            <Field label="Deal Rent ($/SF/yr)"><Input type="number" step="0.01" value={leaseCompForm.deal_rent} onChange={e=>setLC('deal_rent',e.target.value)}/></Field>
+            <Field label="Rent Type"><Sel value={leaseCompForm.rent_type} onChange={e=>setLC('rent_type',e.target.value)}><option>NNN</option><option>Gross</option><option>Modified Gross</option><option>MG</option></Sel></Field>
+            <Field label="Taxes (If applicable)"><Input type="number" step="0.01" placeholder="$/SF" value={leaseCompForm.taxes} onChange={e=>setLC('taxes',e.target.value)}/></Field>
+            <Field label="Lease Term (Years)"><Input type="number" step="0.5" value={leaseCompForm.lease_term_years} onChange={e=>setLC('lease_term_years',e.target.value)}/></Field>
+            <Field label="Rent Concession (Months)"><Input type="number" value={leaseCompForm.rent_concession_months} onChange={e=>setLC('rent_concession_months',e.target.value)}/></Field>
+            <Field label="T.I. (LL Work)"><Input placeholder="$10/SF or TBD" value={leaseCompForm.ti_ll_work} onChange={e=>setLC('ti_ll_work',e.target.value)}/></Field>
+            <Field label="% Mgmt Fee"><Input type="number" step="0.1" placeholder="%" value={leaseCompForm.mgmt_fee_pct} onChange={e=>setLC('mgmt_fee_pct',e.target.value)}/></Field>
+            <Field label="Status"><Sel value={leaseCompForm.status} onChange={e=>setLC('status',e.target.value)}><option>Active</option><option>Expired</option><option>Confidential</option></Sel></Field>
+          </div>
+          <Divider label="Parties"/>
+          <div style={G2}>
+            <Field label="Tenant"><Input value={leaseCompForm.tenant} onChange={e=>setLC('tenant',e.target.value)}/></Field>
+            <Field label="Landlord"><Input value={leaseCompForm.landlord} onChange={e=>setLC('landlord',e.target.value)}/></Field>
+          </div>
+          <Field label="Notes" full><textarea value={leaseCompForm.notes} onChange={e=>setLC('notes',e.target.value)} placeholder="Any additional details..." style={{...inputStyle as React.CSSProperties,minHeight:70,resize:'vertical' as const}}/></Field>
+          <div style={{display:'flex',gap:10,marginTop:4}}>
+            <Btn onClick={saveLeaseComp} disabled={saving} style={{flex:1,padding:12}}>{saving?'Saving...':'💾 Save to Supabase'}</Btn>
+            <Btn variant="ghost" onClick={()=>setLeaseCompForm({...blankLeaseComp})} style={{padding:'12px 20px'}}>Clear</Btn>
+          </div>
+        </Card>
+      )}
       {subTab==='add' && tab==='pcre-leases' && (
         <Card>
           <SL>Add PCRE Lease Transaction</SL>
@@ -1492,6 +1569,8 @@ function DatabaseManager() {
                 ? ['address','city','county','zip_code','property_type','building_sf','lot_size_ac','ceiling_height','loading_docks','drive_ins','power','heat','sprinkler','sewer','zoning','real_estate_taxes','sale_price','price_per_sf','sale_date','sale_type','buyer','seller','listing_broker','submarket','notes']
                 : tab==='avails'
                 ? ['address','city','county','zip_code','property_type','building_sf','lot_size_ac','ceiling_height','loading_docks','drive_ins','power','sprinkler','sewer','zoning','real_estate_taxes','asking_price','price_per_sf','pricing_guidance','availability_type','status','listing_broker','submarket','loopnet_url','notes']
+                : tab==='lease-comps'
+                ? ['transaction_date','address','town','county','building_sf','lot_size_ac','ceiling_height','loading_docks','drive_ins','asking_rent','deal_rent','rent_type','taxes','lease_term_years','rent_concession_months','ti_ll_work','mgmt_fee_pct','tenant','landlord','status','notes']
                 : tab==='pcre-sales'
                 ? ['address','city','county','property_type','building_sf','sale_price_text','sale_date','buyer','seller','notes']
                 : ['address','city','county','tenant','landlord','building_sf','lease_price','lease_date','lease_term','notes']
@@ -1540,7 +1619,7 @@ function DatabaseManager() {
               <div style={{flex:1,minWidth:0}}>
                 <div style={{fontSize:13,fontWeight:600,marginBottom:4,color:D.text}}>
                   {row.address||'—'}{row.city?`, ${row.city}`:''}
-                  {tab==='pcre-leases'&&row.tenant?<span style={{color:D.textSec,fontWeight:400}}>{` — ${row.tenant}`}</span>:null}
+                  {(tab==='pcre-leases'||tab==='lease-comps')&&row.tenant?<span style={{color:D.textSec,fontWeight:400}}>{` — ${row.tenant}`}</span>:null}
                 </div>
                 <div style={{display:'flex',gap:8,flexWrap:'wrap' as const}}>
                   {!!row.building_sf&&<Tag color={D.blue}>{Number(row.building_sf).toLocaleString()} SF</Tag>}
@@ -1553,19 +1632,27 @@ function DatabaseManager() {
                   {tab==='pcre-sales'&&!!row.sale_date&&<Tag color={D.textMuted}>{fmtDate(String(row.sale_date))}</Tag>}
                   {tab==='pcre-leases'&&!!row.lease_price&&<Tag color={D.gold}>{String(row.lease_price)}</Tag>}
                   {tab==='pcre-leases'&&!!row.lease_date&&<Tag color={D.textMuted}>{fmtDate(String(row.lease_date))}</Tag>}
+                  {tab==='lease-comps'&&!!row.deal_rent&&<Tag color={D.gold}>${Number(row.deal_rent).toFixed(2)}/SF/yr</Tag>}
+                  {tab==='lease-comps'&&!!row.asking_rent&&!row.deal_rent&&<Tag color={D.gold}>Ask: ${Number(row.asking_rent).toFixed(2)}/SF/yr</Tag>}
+                  {tab==='lease-comps'&&!!row.transaction_date&&<Tag color={D.textMuted}>{fmtDate(String(row.transaction_date))}</Tag>}
+                  {tab==='lease-comps'&&!!row.rent_type&&<Tag color={D.textSec}>{String(row.rent_type)}</Tag>}
+                  {tab==='lease-comps'&&!!row.lease_term_years&&<Tag color={D.textSec}>{Number(row.lease_term_years)} yr</Tag>}
+                  {tab==='lease-comps'&&<Tag color={row.status==='Active'?D.green:row.status==='Confidential'?D.purple:D.textMuted}>{String(row.status||'Active')}</Tag>}
                   {!!row.county&&<Tag color={row.county==='Nassau'?D.blue:'#0891B2'}>{String(row.county)}</Tag>}
                 </div>
               </div>
               <div style={{display:'flex',alignItems:'center',gap:8,flexShrink:0}}>
-                {(tab==='comps'||tab==='avails')&&(()=>{
-                  const id=String(row.id); const isComp=tab==='comps'
-                  const curStatus=row.status||(isComp?'Closed':'Available')
-                  const curColor=dbStatusColor(String(curStatus),isComp)
+                {(tab==='comps'||tab==='avails'||tab==='lease-comps')&&(()=>{
+                  const id=String(row.id)
+                  const defaultStatus=tab==='comps'?'Closed':tab==='lease-comps'?'Active':'Available'
+                  const curStatus=row.status||defaultStatus
+                  const curColor=dbStatusColor(String(curStatus),tab)
                   const isUpdating=updatingStatus.has(id)
-                  const opts=isComp?COMP_STATUSES_DB:AVAIL_STATUSES_DB
+                  const opts=tab==='comps'?COMP_STATUSES_DB:tab==='lease-comps'?LEASE_COMP_STATUSES_DB:AVAIL_STATUSES_DB
+                  const apiTable=tab==='comps'?'comps':tab==='lease-comps'?'lease-comps':'avails'
                   const updateStatus=async(newStatus:string)=>{
                     setUpdatingStatus(prev=>{const n=new Set(prev);n.add(id);return n})
-                    await fetch(`/api/status?table=${isComp?'comps':'avails'}&id=${id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({status:newStatus})})
+                    await fetch(`/api/status?table=${apiTable}&id=${id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({status:newStatus})})
                     setBrowseData(prev=>prev.map(r=>r.id===id?{...r,status:newStatus}:r))
                     setUpdatingStatus(prev=>{const n=new Set(prev);n.delete(id);return n})
                   }
@@ -2263,7 +2350,7 @@ function LeaseCompSearch({subject,leaseComps,setLeaseComps,setPage,folders,setFo
   const [results,setResults]=useState<LeaseComp[]>([])
   const [loading,setLoading]=useState(false)
   const [searched,setSearched]=useState(false)
-  const [filters,setFilters]=useState({county:'',city:'',min_sf:'',max_sf:'',min_price:'',max_price:'',min_date:'',max_date:''})
+  const [filters,setFilters]=useState({county:'',town:'',min_sf:'',max_sf:'',min_rent:'',max_rent:'',min_date:'',max_date:''})
   const [showManual,setShowManual]=useState(false)
   const [manual,setManual]=useState<Partial<LeaseComp>>({})
   const [folderDropdown, setFolderDropdown] = useState<string|null>(null)
@@ -2274,14 +2361,14 @@ function LeaseCompSearch({subject,leaseComps,setLeaseComps,setPage,folders,setFo
     setLoading(true); setResults([]); setSearched(false)
     let q = supabase.from('lease_comps').select('*')
     if (filters.county) q = q.eq('county', filters.county)
-    if (filters.city) q = q.ilike('city', `%${filters.city}%`)
+    if (filters.town) q = q.ilike('town', `%${filters.town}%`)
     if (filters.min_sf) q = q.gte('building_sf', Number(filters.min_sf))
     if (filters.max_sf) q = q.lte('building_sf', Number(filters.max_sf))
-    if (filters.min_price) q = q.gte('lease_price', Number(filters.min_price))
-    if (filters.max_price) q = q.lte('lease_price', Number(filters.max_price))
-    if (filters.min_date) q = q.gte('lease_date', filters.min_date)
-    if (filters.max_date) q = q.lte('lease_date', filters.max_date)
-    q = q.order('lease_date', {ascending:false}).limit(200)
+    if (filters.min_rent) q = q.gte('deal_rent', Number(filters.min_rent))
+    if (filters.max_rent) q = q.lte('deal_rent', Number(filters.max_rent))
+    if (filters.min_date) q = q.gte('transaction_date', filters.min_date)
+    if (filters.max_date) q = q.lte('transaction_date', filters.max_date)
+    q = q.order('transaction_date', {ascending:false}).limit(200)
     const {data,error} = await q
     if (error) { alert('Search error: ' + error.message); setLoading(false); return }
     setResults(data||[]); setSearched(true); setLoading(false)
@@ -2306,14 +2393,14 @@ function LeaseCompSearch({subject,leaseComps,setLeaseComps,setPage,folders,setFo
           <Card>
             <SL>Search Filters</SL>
             <Field label="County"><Sel value={filters.county} onChange={e=>sf('county',e.target.value)}><option value="">All Counties</option>{COUNTIES.map(c=><option key={c}>{c}</option>)}</Sel></Field>
-            <Field label="City"><Input placeholder="e.g. Hauppauge" value={filters.city} onChange={e=>sf('city',e.target.value)}/></Field>
+            <Field label="Town"><Input placeholder="e.g. Hauppauge" value={filters.town} onChange={e=>sf('town',e.target.value)}/></Field>
             <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8}}>
               <Field label="Min SF"><Input type="number" placeholder="0" value={filters.min_sf} onChange={e=>sf('min_sf',e.target.value)}/></Field>
               <Field label="Max SF"><Input type="number" placeholder="Any" value={filters.max_sf} onChange={e=>sf('max_sf',e.target.value)}/></Field>
-              <Field label="Min Rent ($/SF)"><Input type="number" placeholder="0" value={filters.min_price} onChange={e=>sf('min_price',e.target.value)}/></Field>
-              <Field label="Max Rent ($/SF)"><Input type="number" placeholder="Any" value={filters.max_price} onChange={e=>sf('max_price',e.target.value)}/></Field>
-              <Field label="Lease Date From"><Input type="date" value={filters.min_date} onChange={e=>sf('min_date',e.target.value)}/></Field>
-              <Field label="Lease Date To"><Input type="date" value={filters.max_date} onChange={e=>sf('max_date',e.target.value)}/></Field>
+              <Field label="Min Deal Rent ($/SF)"><Input type="number" placeholder="0" value={filters.min_rent} onChange={e=>sf('min_rent',e.target.value)}/></Field>
+              <Field label="Max Deal Rent ($/SF)"><Input type="number" placeholder="Any" value={filters.max_rent} onChange={e=>sf('max_rent',e.target.value)}/></Field>
+              <Field label="Trans. Date From"><Input type="date" value={filters.min_date} onChange={e=>sf('min_date',e.target.value)}/></Field>
+              <Field label="Trans. Date To"><Input type="date" value={filters.max_date} onChange={e=>sf('max_date',e.target.value)}/></Field>
             </div>
             <Btn onClick={search} disabled={loading} style={{width:'100%',padding:11}}>{loading?'Searching...':'🔎 Search Lease Comps'}</Btn>
           </Card>
@@ -2338,18 +2425,23 @@ function LeaseCompSearch({subject,leaseComps,setLeaseComps,setPage,folders,setFo
             <Card style={{marginBottom:16,border:`1px solid rgba(59,130,246,0.3)`}}>
               <SL style={{color:D.blue}}>Manual Lease Comp Entry</SL>
               <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10}}>
-                <Field label="Address" full><Input placeholder="Street address" value={manual.address||''} onChange={e=>sm('address',e.target.value)}/></Field>
-                <Field label="City"><Input placeholder="City/Town" value={manual.city||''} onChange={e=>sm('city',e.target.value)}/></Field>
+                <Field label="Street Address" full><Input placeholder="Street address" value={manual.address||''} onChange={e=>sm('address',e.target.value)}/></Field>
+                <Field label="Town"><Input placeholder="e.g. Hauppauge" value={manual.town||''} onChange={e=>sm('town',e.target.value)}/></Field>
                 <Field label="County"><Sel value={manual.county||'Nassau'} onChange={e=>sm('county',e.target.value)}>{COUNTIES.map(c=><option key={c}>{c}</option>)}</Sel></Field>
+                <Field label="Transaction Date"><Input type="date" value={manual.transaction_date||''} onChange={e=>sm('transaction_date',e.target.value)}/></Field>
                 <Field label="Building SF"><Input type="number" value={manual.building_sf?.toString()||''} onChange={e=>sm('building_sf',e.target.value)}/></Field>
-                <Field label="Ceiling Height"><Input placeholder="22'" value={manual.ceiling_height||''} onChange={e=>sm('ceiling_height',e.target.value)}/></Field>
+                <Field label="Lot Size (ac)"><Input type="number" step="0.01" value={manual.lot_size_ac?.toString()||''} onChange={e=>sm('lot_size_ac',e.target.value)}/></Field>
+                <Field label="Ceiling Height (ft)"><Input placeholder="22" value={manual.ceiling_height||''} onChange={e=>sm('ceiling_height',e.target.value)}/></Field>
                 <Field label="Loading Docks"><Input type="number" value={manual.loading_docks||''} onChange={e=>sm('loading_docks',e.target.value)}/></Field>
-                <Field label="Drive-In Doors"><Input type="number" value={manual.drive_ins||''} onChange={e=>sm('drive_ins',e.target.value)}/></Field>
-                <Field label="Power"><Input placeholder="400A/3ph" value={manual.power||''} onChange={e=>sm('power',e.target.value)}/></Field>
-                <Field label="Lease Rate ($/SF/yr)"><Input type="number" step="0.01" placeholder="16.00" value={manual.price_per_sf?.toString()||''} onChange={e=>sm('price_per_sf',e.target.value)}/></Field>
-                <Field label="Annual Base Rent ($)"><Input type="number" value={manual.lease_price?.toString()||''} onChange={e=>sm('lease_price',e.target.value)}/></Field>
-                <Field label="Lease Date"><Input type="date" value={manual.lease_date||''} onChange={e=>sm('lease_date',e.target.value)}/></Field>
-                <Field label="Lease Term"><Input placeholder="3 years NNN" value={manual.lease_term||''} onChange={e=>sm('lease_term',e.target.value)}/></Field>
+                <Field label="Drive-Ins"><Input type="number" value={manual.drive_ins||''} onChange={e=>sm('drive_ins',e.target.value)}/></Field>
+                <Field label="Asking Rent ($/SF/yr)"><Input type="number" step="0.01" value={manual.asking_rent?.toString()||''} onChange={e=>sm('asking_rent',e.target.value)}/></Field>
+                <Field label="Deal Rent ($/SF/yr)"><Input type="number" step="0.01" value={manual.deal_rent?.toString()||''} onChange={e=>sm('deal_rent',e.target.value)}/></Field>
+                <Field label="Rent Type"><Input placeholder="NNN, Gross, MG" value={manual.rent_type||''} onChange={e=>sm('rent_type',e.target.value)}/></Field>
+                <Field label="Taxes ($/SF)"><Input type="number" step="0.01" value={manual.taxes?.toString()||''} onChange={e=>sm('taxes',e.target.value)}/></Field>
+                <Field label="Lease Term (Years)"><Input type="number" step="0.5" value={manual.lease_term_years?.toString()||''} onChange={e=>sm('lease_term_years',e.target.value)}/></Field>
+                <Field label="Concession (Months)"><Input type="number" value={manual.rent_concession_months?.toString()||''} onChange={e=>sm('rent_concession_months',e.target.value)}/></Field>
+                <Field label="T.I. (LL Work)"><Input placeholder="$10/SF or TBD" value={manual.ti_ll_work||''} onChange={e=>sm('ti_ll_work',e.target.value)}/></Field>
+                <Field label="% Mgmt Fee"><Input type="number" step="0.1" value={manual.mgmt_fee_pct?.toString()||''} onChange={e=>sm('mgmt_fee_pct',e.target.value)}/></Field>
                 <Field label="Tenant"><Input placeholder="Tenant name" value={manual.tenant||''} onChange={e=>sm('tenant',e.target.value)}/></Field>
                 <Field label="Landlord"><Input placeholder="Landlord name" value={manual.landlord||''} onChange={e=>sm('landlord',e.target.value)}/></Field>
               </div>
@@ -2386,32 +2478,34 @@ function LeaseCompSearch({subject,leaseComps,setLeaseComps,setPage,folders,setFo
                               <div style={{fontSize:15,fontWeight:700,color:D.text,marginBottom:5}}>{r.address||'—'}</div>
                               <div style={{display:'flex',gap:6,flexWrap:'wrap' as const}}>
                                 <Tag color={D.green}>{r.county||'—'}</Tag>
-                                {r.city&&<Tag color={D.textMuted}>{r.city}</Tag>}
-                                {r.lease_date&&<Tag color={D.textMuted}>{fmtDate(r.lease_date)}</Tag>}
-                                {r.lease_term&&<Tag color={D.textMuted}>{r.lease_term}</Tag>}
+                                {!!r.town&&<Tag color={D.textMuted}>{String(r.town)}</Tag>}
+                                {!!r.transaction_date&&<Tag color={D.textMuted}>{fmtDate(String(r.transaction_date))}</Tag>}
+                                {!!r.rent_type&&<Tag color={D.textMuted}>{String(r.rent_type)}</Tag>}
+                                {!!r.lease_term_years&&<Tag color={D.textMuted}>{Number(r.lease_term_years)} yr</Tag>}
                               </div>
                             </div>
-                            {r.price_per_sf&&<div style={{textAlign:'right' as const,flexShrink:0}}>
-                              <div style={{fontSize:10,color:D.textMuted,letterSpacing:'.06em',marginBottom:2}}>LEASE RATE</div>
-                              <div style={{fontSize:18,fontWeight:700,color:D.green}}>${Number(r.price_per_sf).toFixed(2)}</div>
+                            {(r.deal_rent||r.asking_rent)&&<div style={{textAlign:'right' as const,flexShrink:0}}>
+                              <div style={{fontSize:10,color:D.textMuted,letterSpacing:'.06em',marginBottom:2}}>{r.deal_rent?'DEAL RENT':'ASKING RENT'}</div>
+                              <div style={{fontSize:18,fontWeight:700,color:D.green}}>${Number(r.deal_rent||r.asking_rent).toFixed(2)}</div>
                               <div style={{fontSize:11,color:D.textSec}}>per SF / yr</div>
                             </div>}
                           </div>
                           <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:'10px 16px',marginBottom:12}}>
                             {sc('Building SF', r.building_sf?Number(r.building_sf).toLocaleString()+' SF':null)}
-                            {sc('Annual Rent', r.lease_price?'$'+Number(r.lease_price).toLocaleString():null)}
+                            {sc('Lot Size', r.lot_size_ac?r.lot_size_ac+' AC':null)}
+                            {sc('Ceiling Height', r.ceiling_height?r.ceiling_height+' ft':null)}
+                            {sc('Loading Docks', r.loading_docks)}
+                            {sc('Drive-Ins', r.drive_ins)}
+                            {sc('Asking Rent', r.asking_rent?'$'+Number(r.asking_rent).toFixed(2)+'/SF/yr':null)}
+                            {sc('Deal Rent', r.deal_rent?'$'+Number(r.deal_rent).toFixed(2)+'/SF/yr':null)}
+                            {sc('Rent Type', r.rent_type)}
+                            {sc('Taxes', r.taxes?'$'+Number(r.taxes).toFixed(2)+'/SF':null)}
+                            {sc('Lease Term', r.lease_term_years?r.lease_term_years+' yrs':null)}
+                            {sc('Concession', r.rent_concession_months?r.rent_concession_months+' mo':null)}
+                            {sc('T.I. / LL Work', r.ti_ll_work)}
+                            {sc('Mgmt Fee', r.mgmt_fee_pct?r.mgmt_fee_pct+'%':null)}
                             {sc('Tenant', r.tenant)}
                             {sc('Landlord', r.landlord)}
-                            {sc('Ceiling Height', r.ceiling_height)}
-                            {sc('Loading Docks', r.loading_docks)}
-                            {sc('Drive-In Doors', r.drive_ins)}
-                            {sc('Power', r.power)}
-                            {sc('Sewer', r.sewer)}
-                            {sc('Zoning', r.zoning)}
-                            {sc('Annual Escalations', r.annual_escalations)}
-                            {sc('Landlord Work', r.landlord_work)}
-                            {sc('Taxes PSF', r.taxes_psf?'$'+r.taxes_psf+'/SF':null)}
-                            {sc('Office %', r.office_pct?r.office_pct+'%':null)}
                           </div>
                           <div style={{display:'flex',gap:8,alignItems:'center',paddingTop:10,borderTop:`1px solid ${D.border}`}}>
                             <div style={{position:'relative'}}>
@@ -3476,31 +3570,37 @@ function OPVReport({subject,comps,leaseComps,avails,analytics,aiText,setPage,fro
         {includeLeaseComps&&leaseComps.length>0&&<>
           <SecHeading num="V" title="RECENT LEASE TRANSACTIONS"/>
           <div style={{border:'1px solid #ccc',marginBottom:16}}>
-            <TblHeader cols={['Property Address','City','Building Size (SF)','Lease Price (PSF)']}/>
+            <TblHeader cols={['Property Address','Town','Building Size (SF)','Deal Rent (PSF)','Rent Type','Term (yrs)']}/>
             {leaseComps.map((c,i)=><TblRow key={c.id} shade={i%2===1} cells={[
-              c.address,c.city||'',
+              c.address,c.town||'',
               c.building_sf?`${Number(c.building_sf).toLocaleString()} SF`:'—',
-              c.lease_price?`$${Number(c.lease_price).toFixed(2)} PSF NNN`:c.price_per_sf?`$${Number(c.price_per_sf).toFixed(2)} PSF NNN`:'—',
+              c.deal_rent?`$${Number(c.deal_rent).toFixed(2)}/SF/yr`:c.asking_rent?`$${Number(c.asking_rent).toFixed(2)}/SF/yr`:'—',
+              c.rent_type||'—',
+              c.lease_term_years?String(c.lease_term_years):'—',
             ]}/>)}
           </div>
           {leaseComps.map((c,i)=>(
             <div key={c.id} style={{marginBottom:48,paddingBottom:48,borderBottom:'2px dashed #ddd'}}>
               <div style={{fontWeight:700,fontSize:14,paddingBottom:8,borderBottom:`2px solid ${gold}`,marginBottom:16}}>
-                LEASE COMPARABLE {i+1}  —  {(c.address||'').toUpperCase()}{c.city?', '+c.city.toUpperCase():''}
+                LEASE COMPARABLE {i+1}  —  {(c.address||'').toUpperCase()}{c.town?', '+c.town.toUpperCase():''}
               </div>
-              {Photo(`lease_${c.id}`, `/api/street-view?address=${encodeURIComponent(c.address+(c.city?', '+c.city:'')+', NY')}`)}
+              {Photo(`lease_${c.id}`, `/api/street-view?address=${encodeURIComponent(c.address+(c.town?', '+c.town:'')+', NY')}`)}
               <div style={{border:'1px solid #ccc'}}>
-                <LabelRow label="PROPERTY ADDRESS" value={`${c.address||'—'}${c.city?', '+c.city:''}`}/>
+                <LabelRow label="PROPERTY ADDRESS" value={`${c.address||'—'}${c.town?', '+c.town:''}`}/>
                 <LabelRow label="BUILDING SIZE" value={fmt(c.building_sf,'',c.building_sf?' SF':'')} shade/>
                 <LabelRow label="CEILING HEIGHT" value={c.ceiling_height?`${c.ceiling_height} ft`:'—'}/>
                 <LabelRow label="LOADING DOCKS" value={c.loading_docks||'—'} shade/>
-                <LabelRow label="DRIVE INS" value={c.drive_ins||'—'}/>
-                <LabelRow label="LEASE PRICE" value={c.lease_price?`$${Number(c.lease_price).toFixed(2)} PSF NNN`:c.price_per_sf?`$${Number(c.price_per_sf).toFixed(2)} PSF NNN`:'—'} shade/>
-                {c.lease_term&&<LabelRow label="TERM" value={c.lease_term}/>}
-                {c.annual_escalations&&<LabelRow label="ESCALATIONS" value={c.annual_escalations} shade/>}
-                {c.tenant&&<LabelRow label="TENANT" value={c.tenant}/>}
-                {c.landlord&&<LabelRow label="LANDLORD" value={c.landlord} shade/>}
-                {c.comments&&<LabelRow label="COMMENTS" value={c.comments}/>}
+                <LabelRow label="DRIVE-INS" value={c.drive_ins||'—'}/>
+                <LabelRow label="ASKING RENT" value={c.asking_rent?`$${Number(c.asking_rent).toFixed(2)} PSF/yr`:'—'} shade/>
+                <LabelRow label="DEAL RENT" value={c.deal_rent?`$${Number(c.deal_rent).toFixed(2)} PSF/yr`:'—'}/>
+                {c.rent_type&&<LabelRow label="RENT TYPE" value={String(c.rent_type)} shade/>}
+                {c.taxes&&<LabelRow label="TAXES" value={`$${Number(c.taxes).toFixed(2)}/SF`}/>}
+                {c.lease_term_years&&<LabelRow label="LEASE TERM" value={`${c.lease_term_years} years`} shade/>}
+                {c.rent_concession_months&&<LabelRow label="RENT CONCESSION" value={`${c.rent_concession_months} months`}/>}
+                {c.ti_ll_work&&<LabelRow label="T.I. / LL WORK" value={String(c.ti_ll_work)} shade/>}
+                {c.mgmt_fee_pct&&<LabelRow label="MGMT FEE" value={`${c.mgmt_fee_pct}%`}/>}
+                {c.tenant&&<LabelRow label="TENANT" value={String(c.tenant)} shade/>}
+                {c.landlord&&<LabelRow label="LANDLORD" value={String(c.landlord)}/>}
               </div>
             </div>
           ))}
