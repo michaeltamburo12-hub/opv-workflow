@@ -3970,7 +3970,10 @@ export default function App() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   },[photoUrls])
 
-  const handleSetPage=useCallback((p:string)=>setPage(p),[])
+  const handleSetPage=useCallback((p:string)=>{
+    saveReportRef.current(true) // auto-save current step before navigating
+    setPage(p)
+  },[])
 
   if (!user) return null
 
