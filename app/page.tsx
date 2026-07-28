@@ -3754,8 +3754,10 @@ function OPVReport({subject,comps,leaseComps,avails,analytics,aiText,setPage,fro
             <TblHeader cols={['Property Address','City','Tenant','Leased SF','Lease Price (PSF)','Transaction Date']}/>
             {RECENT_LEASES.map((row,i)=><TblRow key={i} shade={i%2===1} cells={row}/>)}
           </div>
-          {/* ── BROKER BIOS ── */}
-          <SubHead>ABOUT THE BROKERS</SubHead>
+        </>}
+
+        {/* ── BROKER BIOS — always shown ── */}
+        <SubHead>ABOUT THE BROKERS</SubHead>
 
           {/* Jason Miller */}
           <div style={{display:'flex',gap:24,marginBottom:36,paddingBottom:36,borderBottom:'1px solid #eee'}}>
@@ -3798,7 +3800,6 @@ function OPVReport({subject,comps,leaseComps,avails,analytics,aiText,setPage,fro
               <p style={{fontSize:11.5,lineHeight:1.85}}>Outside the boardroom, Desmond enjoys exercising, golfing, volleyball, snowboarding, and biking. With over a decade of experience, he continues to shape the industrial real estate landscape with passion, expertise, and a commitment to excellence.</p>
             </div>
           </div>
-        </>}
 
         {/* Disclaimer */}
         <div style={{borderTop:'1px solid #ddd',paddingTop:16,marginTop:16,fontSize:10,color:'#999',lineHeight:1.7}}>
