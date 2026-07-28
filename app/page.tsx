@@ -4255,7 +4255,7 @@ export default function App() {
             return (
               <div className="no-print" style={{position:'sticky',bottom:0,zIndex:50,background:`rgba(8,12,24,0.94)`,backdropFilter:'blur(16px)',borderTop:`1px solid ${D.border}`,padding:'12px 36px',display:'flex',alignItems:'center',justifyContent:'space-between',gap:12}}>
                 <button
-                  onClick={()=>setPage(prev.id)}
+                  onClick={()=>handleSetPage(prev.id)}
                   style={{display:'flex',alignItems:'center',gap:8,background:'transparent',border:`1px solid ${D.border}`,color:D.textSec,fontFamily:"'Inter',sans-serif",fontSize:12,fontWeight:500,padding:'8px 18px',borderRadius:8,cursor:'pointer',transition:'all .15s'}}
                   onMouseEnter={e=>{(e.currentTarget as HTMLButtonElement).style.borderColor=D.blue;(e.currentTarget as HTMLButtonElement).style.color=D.text}}
                   onMouseLeave={e=>{(e.currentTarget as HTMLButtonElement).style.borderColor=D.border;(e.currentTarget as HTMLButtonElement).style.color=D.textSec}}
@@ -4267,7 +4267,7 @@ export default function App() {
                 </div>
                 {next ? (
                   <button
-                    onClick={()=>setPage(next.id)}
+                    onClick={()=>handleSetPage(next.id)}
                     style={{display:'flex',alignItems:'center',gap:8,background:D.blue,border:'none',color:'#fff',fontFamily:"'Inter',sans-serif",fontSize:12,fontWeight:600,padding:'8px 20px',borderRadius:8,cursor:'pointer',transition:'all .15s',boxShadow:'0 2px 8px rgba(59,130,246,0.35)'}}
                     onMouseEnter={e=>{(e.currentTarget as HTMLButtonElement).style.background=D.blueHover}}
                     onMouseLeave={e=>{(e.currentTarget as HTMLButtonElement).style.background=D.blue}}
