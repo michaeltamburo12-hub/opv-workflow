@@ -3971,8 +3971,10 @@ export default function App() {
   },[photoUrls])
 
   const handleSetPage=useCallback((p:string)=>{
-    saveReportRef.current(true) // auto-save current step before navigating
+    // Navigate immediately — save happens in background
     setPage(p)
+    // Silently save after a short delay so new page state settles first
+    setTimeout(()=>{ try{ saveReportRef.current(true) }catch{} }, 300)
   },[])
 
   if (!user) return null
@@ -4104,7 +4106,7 @@ export default function App() {
               const isActive=page===s.id
               const isDone=completedSteps[s.id]
               return (
-                <div key={s.id} onClick={()=>setPage(s.id)} style={{display:'flex',alignItems:'center',gap:10,padding:'8px 10px',borderRadius:9,cursor:'pointer',marginBottom:2,border:`1px solid ${isActive?`${D.blue}44`:'transparent'}`,background:isActive?`rgba(59,130,246,0.1)`:'transparent',transition:'all .15s'}}>
+                <div key={s.id} onClick={()=>handleSetPage(s.id)} style={{display:'flex',alignItems:'center',gap:10,padding:'8px 10px',borderRadius:9,cursor:'pointer',marginBottom:2,border:`1px solid ${isActive?`${D.blue}44`:'transparent'}`,background:isActive?`rgba(59,130,246,0.1)`:'transparent',transition:'all .15s'}}>
                   <div style={{width:22,height:22,borderRadius:'50%',display:'flex',alignItems:'center',justifyContent:'center',fontSize:10,fontWeight:700,flexShrink:0,
                     background:isActive?`linear-gradient(135deg,${D.blue},#2563EB)`:isDone?`rgba(16,185,129,0.15)`:'transparent',
                     color:isActive?'#FFFFFF':isDone?D.green:D.textMuted,
