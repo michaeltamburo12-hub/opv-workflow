@@ -1839,7 +1839,7 @@ function SubjectProperty({subject,setSubject,setPage,folders,setFolders,assignme
             )}
           </div>
           <Field label="Prepared By"><Input placeholder="Broker name" value={form.preparedBy} onChange={e=>set('preparedBy',e.target.value)}/></Field>
-          <Btn onClick={()=>{if(!form.address||!form.size){alert('Address and building size are required.');return;}setSubject(form);autoCreateFolders(form.address);setPage(form.opvType==='For Lease'?'lease-comp-search':'comp-search')}} style={{width:'100%',padding:12,marginTop:4}}>{form.opvType==='For Lease'?'Save & Search Lease Comps →':'Save & Search Comps →'}</Btn>
+          <Btn onClick={()=>{if(!form.address||!form.size){alert('Address and building size are required.');return;}setSubject(form);autoCreateFolders(form.address);setPage(form.opvType==='lease'?'lease-comp-search':'comp-search')}} style={{width:'100%',padding:12,marginTop:4}}>{form.opvType==='lease'?'Save & Search Lease Comps →':'Save & Search Comps →'}</Btn>
         </Card>
         <div>
           <Card style={{border:`1px solid rgba(217,119,6,0.25)`}}>
