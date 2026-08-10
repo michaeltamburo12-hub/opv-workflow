@@ -2681,23 +2681,29 @@ function LeaseCompSearch({subject,leaseComps,setLeaseComps,setPage,folders,setFo
                             </div>}
                           </div>
                           <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:'10px 16px',marginBottom:12}}>
-                            {sc('Building SF', r.building_sf?Number(r.building_sf).toLocaleString()+' SF':null)}
-                            {sc('Lot Size', r.lot_size_ac?r.lot_size_ac+' AC':null)}
-                            {sc('Ceiling Height', r.ceiling_height?r.ceiling_height+' ft':null)}
-                            {sc('Loading Docks', r.loading_docks)}
-                            {sc('Drive-Ins', r.drive_ins)}
-                            {sc('Asking Rent', r.asking_rent?'$'+Number(r.asking_rent).toFixed(2)+'/SF/yr':null)}
-                            {sc('Deal Rent', r.deal_rent?'$'+Number(r.deal_rent).toFixed(2)+'/SF/yr':null)}
-                            {sc('Rent Type', r.rent_type)}
-                            {sc('Taxes', r.taxes?'$'+Number(r.taxes).toFixed(2)+'/SF':null)}
-                            {sc('Lease Term', r.lease_term_years?r.lease_term_years+' yrs':null)}
-                            {sc('Concession', r.rent_concession_months?r.rent_concession_months+' mo':null)}
-                            {sc('T.I. / LL Work', r.ti_ll_work)}
-                            {sc('Mgmt Fee', r.mgmt_fee_pct?r.mgmt_fee_pct+'%':null)}
-                            {sc('Tenant', r.tenant)}
-                            {sc('Landlord', r.landlord)}
+                            {sc('Deal Rent', r.deal_rent?'$'+Number(r.deal_rent).toFixed(2)+'/SF/yr':'—')}
+                            {sc('Asking Rent', r.asking_rent?'$'+Number(r.asking_rent).toFixed(2)+'/SF/yr':'—')}
+                            {sc('Rent Type', r.rent_type||'—')}
+                            {sc('Building SF', r.building_sf?Number(r.building_sf).toLocaleString()+' SF':'—')}
+                            {sc('Lot Size', r.lot_size_ac?r.lot_size_ac+' AC':'—')}
+                            {sc('Ceiling Height', r.ceiling_height?r.ceiling_height+' ft':'—')}
+                            {sc('Loading Docks', r.loading_docks||'—')}
+                            {sc('Drive-Ins', r.drive_ins||'—')}
+                            {sc('Taxes', r.taxes?'$'+Number(r.taxes).toFixed(2)+'/SF':'—')}
+                            {sc('Lease Term', r.lease_term_years?r.lease_term_years+' yrs':'—')}
+                            {sc('Concession', r.rent_concession_months?r.rent_concession_months+' mo':'—')}
+                            {sc('T.I. / LL Work', r.ti_ll_work||'—')}
+                            {sc('Mgmt Fee', r.mgmt_fee_pct?r.mgmt_fee_pct+'%':'—')}
+                            {sc('Tenant', r.tenant||'—')}
+                            {sc('Landlord', r.landlord||'—')}
                           </div>
                           <div style={{display:'flex',gap:8,alignItems:'center',paddingTop:10,borderTop:`1px solid ${D.border}`}}>
+                            {(() => {
+                              const inOPV = leaseComps.find(c=>c.id===r.id)
+                              return inOPV
+                                ? <Btn size="sm" onClick={()=>setLeaseComps(leaseComps.filter(c=>c.id!==r.id))} style={{background:'rgba(239,68,68,0.1)',borderColor:'rgba(239,68,68,0.3)',color:D.red}}>✕ Remove from OPV</Btn>
+                                : <Btn size="sm" onClick={()=>setLeaseComps([...leaseComps,r])} style={{background:'rgba(16,185,129,0.12)',borderColor:`${D.green}44`,color:D.green}}>＋ Add to OPV</Btn>
+                            })()}
                             <div style={{position:'relative'}}>
                               <button onClick={()=>setFolderDropdown(folderDropdown===r.id?null:r.id)} style={{background:'transparent',border:`1px solid ${D.border}`,borderRadius:6,color:D.textSec,fontSize:12,fontWeight:600,padding:'6px 12px',cursor:'pointer',fontFamily:"'Inter',sans-serif",display:'flex',alignItems:'center',gap:5}}>
                                 📁 Add to Folder
