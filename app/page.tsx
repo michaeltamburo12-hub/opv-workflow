@@ -3842,12 +3842,15 @@ function OPVReport({subject,comps,leaseComps,leaseAvails=[],avails,analytics,aiT
               {Photo(`lease_${c.id}`,`/api/street-view?address=${encodeURIComponent(c.address+(c.city?', '+c.city:'')+', NY')}`,140)}
             </div>
           ))}
-          {includeAvails&&avails.map((a,i)=>(
-            <div key={a.id}>
-              <div style={{fontSize:11,color:D.textMuted,marginBottom:4,fontWeight:600}}>Avail {i+1}: {a.address?.split(' ').slice(0,3).join(' ')}</div>
-              {Photo(`avail_${a.id}`,`/api/street-view?address=${encodeURIComponent(a.address+(a.city?', '+a.city:'')+', NY')}`,140)}
-            </div>
-          ))}
+          {includeAvails&&(subject?.opvType==='lease'?leaseAvails:avails).map((a,i)=>{
+            const key = subject?.opvType==='lease'?`lease_avail_${a.id}`:`avail_${a.id}`
+            return (
+              <div key={a.id}>
+                <div style={{fontSize:11,color:D.textMuted,marginBottom:4,fontWeight:600}}>{subject?.opvType==='lease'?'Lease Avail':'Avail'} {i+1}: {a.address?.split(' ').slice(0,3).join(' ')}</div>
+                {Photo(key,`/api/street-view?address=${encodeURIComponent(a.address+(a.city?', '+a.city:'')+', NY')}`,140)}
+              </div>
+            )
+          })}
         </div>
       </div>}
 
@@ -3961,7 +3964,7 @@ function OPVReport({subject,comps,leaseComps,leaseAvails=[],avails,analytics,aiT
                   ...(includeLeaseComps&&leaseComps.length>0?['V.  RECENT LEASE TRANSACTIONS']:[]),
                 ]
             ),
-            ...(includeAvails&&avails.length>0?['VI.  MARKET AVAILABILITIES']:[]),
+            ...(includeAvails&&(subject?.opvType==='lease'?leaseAvails.length>0:avails.length>0)?[subject?.opvType==='lease'?'VI.  LEASE MARKET AVAILABILITIES':'VI.  MARKET AVAILABILITIES']:[]),
             ...(includeMarketingStrategy?['VII.  MARKETING STRATEGY']:[]),
             ...(includePcreProfile?['VIII.  PREMIER COMMERCIAL REAL ESTATE PROFILE']:[]),
           ].map((entry,i)=>(
@@ -4631,7 +4634,7 @@ export default function App() {
     assignment: assignmentData.propertyAddress !== '',
     subject: subject !== null,
     'comp-search': comps.length > 0,
-    'avail-search': avails.length > 0,
+    'avail-search': subject?.opvType==='lease' ? leaseAvails.length > 0 : avails.length > 0,
     'lease-comps': leaseComps.length > 0,
     folders: folders.length > 0,
     analytics: analytics !== null,
@@ -4789,10 +4792,12 @@ export default function App() {
                   </div>
                   <div style={{display:'flex',alignItems:'center',gap:6,flex:1,minWidth:0}}>
                     <span style={{fontSize:12}}>{s.icon}</span>
-                    <span style={{fontSize:11,fontWeight:isActive?600:400,color:isActive?D.text:isDone?D.textSec:D.textMuted,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' as const}}>{s.id==='comp-search'&&subject?.opvType==='lease'?'Sale Comps (Support)':s.label}</span>
+                    <span style={{fontSize:11,fontWeight:isActive?600:400,color:isActive?D.text:isDone?D.textSec:D.textMuted,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' as const}}>
+                      {s.id==='comp-search'&&subject?.opvType==='lease'?'Sale Comps (Support)':s.id==='avail-search'&&subject?.opvType==='lease'?'Lease Availabilities':s.label}
+                    </span>
                   </div>
                   {s.id==='comp-search'&&comps.length>0&&<span style={{fontSize:9,background:`rgba(59,130,246,0.18)`,color:D.blue,padding:'2px 6px',borderRadius:4,fontWeight:700,flexShrink:0}}>{comps.length}</span>}
-                  {s.id==='avail-search'&&avails.length>0&&<span style={{fontSize:9,background:`rgba(59,130,246,0.18)`,color:D.blue,padding:'2px 6px',borderRadius:4,fontWeight:700,flexShrink:0}}>{avails.length}</span>}
+                  {s.id==='avail-search'&&(subject?.opvType==='lease'?leaseAvails.length>0:avails.length>0)&&<span style={{fontSize:9,background:`rgba(59,130,246,0.18)`,color:D.blue,padding:'2px 6px',borderRadius:4,fontWeight:700,flexShrink:0}}>{subject?.opvType==='lease'?leaseAvails.length:avails.length}</span>}
                   {s.id==='lease-comps'&&leaseComps.length>0&&<span style={{fontSize:9,background:`rgba(59,130,246,0.18)`,color:D.blue,padding:'2px 6px',borderRadius:4,fontWeight:700,flexShrink:0}}>{leaseComps.length}</span>}
                 </div>
               )
