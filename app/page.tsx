@@ -3506,6 +3506,14 @@ function OPVReport({subject,comps,leaseComps,leaseAvails=[],avails,analytics,aiT
       })
   },[])
 
+  // Auto-patch unformatted PCRE sale prices already baked into frozenHTML (legacy snapshots)
+  useEffect(() => {
+    if (!frozenHTML || !pcreSalesData.length) return
+    if (!/>\d{6,}</.test(frozenHTML)) return
+    const patched = frozenHTML.replace(/>(\d{6,})</g, (_: string, num: string) => `>$${parseInt(num).toLocaleString()}<`)
+    if (patched !== frozenHTML) setFrozenHTML(patched)
+  }, [pcreSalesData])
+
   const setCustomPhoto = (key: string, url: string) => {
     setPhotoOverrides(p=>({...p,[key]:url}))
     setEditingKey(null)
