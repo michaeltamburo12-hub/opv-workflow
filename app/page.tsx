@@ -3298,35 +3298,43 @@ function OPVReport({subject,comps,leaseComps,leaseAvails=[],avails,analytics,aiT
   const [editMode, setEditMode] = useState(false)
   const reportRef = useRef<HTMLDivElement>(null)
   const editFrameRef = useRef<HTMLIFrameElement>(null)
+  // Track whether iframe has ever been loaded — once loaded we never reload it,
+  // so the browser's native undo stack survives across Confirm / re-Edit cycles.
+  const iframeLoaded = useRef(false)
+
+  const loadIframe = (html: string) => {
+    const iframe = editFrameRef.current
+    if (!iframe) return
+    const doc = iframe.contentDocument!
+    doc.open()
+    doc.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><style>
+      html,body{margin:0;padding:60px 72px;font-family:Arial,sans-serif;font-size:13px;
+        line-height:1.7;color:#1a1a1a;background:#fff;box-sizing:border-box;}
+      *{box-sizing:border-box;pointer-events:auto!important;user-select:text!important;}
+      table{border-collapse:collapse;width:100%;}
+      td,th{padding:6px 10px;border:1px solid #ccc;font-size:11px;vertical-align:middle;}
+      img{max-width:100%;height:auto;}
+      [contenteditable=false]{contenteditable:true!important;}
+    </style></head><body>${html}</body>
+    <script>
+      document.designMode='on';
+      document.querySelectorAll('[contenteditable]').forEach(function(el){
+        el.removeAttribute('contenteditable');
+      });
+    </script>
+    </html>`)
+    doc.close()
+    iframeLoaded.current = true
+  }
 
   const toggleEditMode = () => {
     if (!editMode) {
-      // Capture the current report HTML and load it into the edit iframe
-      const html = reportRef.current?.innerHTML || ''
-      const iframe = editFrameRef.current
-      if (iframe) {
-        const doc = iframe.contentDocument!
-        doc.open()
-        doc.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><style>
-          html,body{margin:0;padding:60px 72px;font-family:Arial,sans-serif;font-size:13px;
-            line-height:1.7;color:#1a1a1a;background:#fff;box-sizing:border-box;}
-          *{box-sizing:border-box;pointer-events:auto!important;user-select:text!important;}
-          table{border-collapse:collapse;width:100%;}
-          td,th{padding:6px 10px;border:1px solid #ccc;font-size:11px;vertical-align:middle;}
-          img{max-width:100%;height:auto;}
-          [contenteditable=false]{contenteditable:true!important;}
-        </style></head><body>${html}</body>
-        <script>
-          // Enable editing as soon as the document is parsed
-          document.designMode='on';
-          // Strip any contenteditable=false attributes that block editing
-          document.querySelectorAll('[contenteditable]').forEach(function(el){
-            el.removeAttribute('contenteditable');
-          });
-        </script>
-        </html>`)
-        doc.close()
+      if (!iframeLoaded.current) {
+        // First time entering edit mode — load current report HTML
+        const html = reportRef.current?.innerHTML || ''
+        loadIframe(html)
       }
+      // If already loaded, just show it — undo history is preserved
       setEditMode(true)
     } else {
       // Pull the edited HTML back out of the iframe
@@ -3336,6 +3344,12 @@ function OPVReport({subject,comps,leaseComps,leaseAvails=[],avails,analytics,aiT
       }
       setEditMode(false)
     }
+  }
+
+  const hardResetIframe = () => {
+    iframeLoaded.current = false
+    setFrozenHTML(null)
+    setEditMode(false)
   }
 
   // ── INLINE TEXT EDITING ──
@@ -3748,13 +3762,14 @@ function OPVReport({subject,comps,leaseComps,leaseAvails=[],avails,analytics,aiT
           <SectionTitle>Generate Package</SectionTitle>
           <div style={{display:'flex',gap:10,alignItems:'center'}}>
             <Btn onClick={()=>{
-                // If in edit mode, pull from iframe; otherwise pull from the rendered report div
-                if (editMode && editFrameRef.current?.contentDocument?.body) {
+                // Save snapshot from iframe (if in edit mode) or from rendered div
+                // Do NOT reload the iframe — that would wipe the undo stack
+                if (editFrameRef.current?.contentDocument?.body) {
                   setFrozenHTML(editFrameRef.current.contentDocument.body.innerHTML)
-                  setEditMode(false)
                 } else if (reportRef.current) {
                   setFrozenHTML(reportRef.current.innerHTML)
                 }
+                setEditMode(false)
               }}
               style={{padding:'9px 18px',fontSize:12,background:'rgba(16,185,129,0.12)',color:D.green,border:`1px solid rgba(16,185,129,0.35)`,fontWeight:700}}>
               ✓ Confirm Edits
@@ -3762,7 +3777,7 @@ function OPVReport({subject,comps,leaseComps,leaseAvails=[],avails,analytics,aiT
             <Btn onClick={toggleEditMode} style={{padding:'9px 16px',fontSize:12,background:editMode?'rgba(16,185,129,0.15)':frozenHTML?'rgba(217,119,6,0.1)':'rgba(59,130,246,0.1)',color:editMode?D.green:frozenHTML?D.gold:D.blue,border:`1px solid ${editMode?'rgba(16,185,129,0.4)':frozenHTML?'rgba(217,119,6,0.3)':'rgba(59,130,246,0.3)'}`}}>
               {editMode ? '✏️ Still Editing…' : frozenHTML ? '✏️ Edit Text (saved)' : '✏️ Edit Text'}
             </Btn>
-            {frozenHTML&&!editMode&&<Btn variant="ghost" onClick={()=>setFrozenHTML(null)} style={{padding:'9px 12px',fontSize:11,color:D.textMuted}}>↩ Reset</Btn>}
+            {frozenHTML&&!editMode&&<Btn variant="ghost" onClick={hardResetIframe} style={{padding:'9px 12px',fontSize:11,color:D.textMuted}}>↩ Reset All</Btn>}
             <Btn onClick={downloadPDF} disabled={downloading} style={{padding:'9px 20px',fontSize:12,background:`rgba(239,68,68,0.10)`,color:'#EF4444',border:`1px solid rgba(239,68,68,0.3)`}}>
               {downloading ? 'Generating...' : '📕 Download PDF'}
             </Btn>
