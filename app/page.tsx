@@ -3485,11 +3485,16 @@ function OPVReport({subject,comps,leaseComps,leaseAvails=[],avails,analytics,aiT
     const cutoffStr = cutoff.toISOString().slice(0,10)
     supabase.from('pcre_sale_transactions').select('*').gte('sale_date',cutoffStr).order('sale_date',{ascending:false})
       .then(({data})=>{
-        if(data?.length) setPcreSalesData((data as PcreRow[]).map(r=>[
-          r.address||'—', r.city||'—', r.property_type||'Industrial',
-          r.building_sf ? Number(r.building_sf).toLocaleString() : '—',
-          r.sale_price_text||'—', toQtr(r.sale_date||'')
-        ]))
+        if(data?.length) setPcreSalesData((data as PcreRow[]).map(r=>{
+          const raw = r.sale_price_text||''
+          const n = Number(raw.replace(/[^0-9.]/g,''))
+          const fmtPrice = raw && !isNaN(n) && n>0 ? `$${n.toLocaleString()}` : raw||'—'
+          return [
+            r.address||'—', r.city||'—', r.property_type||'Industrial',
+            r.building_sf ? Number(r.building_sf).toLocaleString() : '—',
+            fmtPrice, toQtr(r.sale_date||'')
+          ]
+        }))
       })
     supabase.from('pcre_lease_transactions').select('*').gte('lease_date',cutoffStr).order('lease_date',{ascending:false})
       .then(({data})=>{
