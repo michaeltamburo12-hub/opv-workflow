@@ -4663,7 +4663,7 @@ export default function App() {
             {page==='database'&&<DatabaseManager/>}
             {page==='comp-search'&&<CompSearch subject={subject} comps={comps} setComps={setComps} setPage={handleSetPage} folders={folders} setFolders={updateFolders}/>}
             {page==='avail-search'&&<AvailSearch subject={subject} avails={avails} setAvails={setAvails} leaseAvails={leaseAvails} setLeaseAvails={setLeaseAvails} setPage={handleSetPage} folders={folders} setFolders={updateFolders}/>}
-            {page==='lease-comps'&&<LeaseCompSearch subject={subject} leaseComps={leaseComps} setLeaseComps={setLeaseComps} setPage={handleSetPage} folders={folders} setFolders={updateFolders}/>}
+            {(page==='lease-comps'||page==='lease-comp-search')&&<LeaseCompSearch subject={subject} leaseComps={leaseComps} setLeaseComps={setLeaseComps} setPage={handleSetPage} folders={folders} setFolders={updateFolders}/>}
             {page==='folders'&&<FolderManager folders={folders} setFolders={updateFolders} setPage={handleSetPage} comps={comps} setComps={setComps} avails={avails} setAvails={setAvails}/>}
             {page==='analytics'&&<Analytics comps={scoredComps.length>0?scoredComps:comps} avails={avails} analytics={analytics} setAnalytics={setAnalytics} setPage={handleSetPage} subject={subject} leaseComps={leaseComps}/>}
             {page==='broker-review'&&<BrokerReview subject={subject} comps={scoredComps.length>0?scoredComps:comps} analytics={analytics} setAnalytics={setAnalytics} aiText={aiText} setAiText={setAiText} setPage={handleSetPage} setSubject={setSubject}/>}
