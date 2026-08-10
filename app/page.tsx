@@ -2891,7 +2891,7 @@ function Analytics({comps,avails,analytics,setAnalytics,setPage,subject,leaseCom
     if (isLease) {
       // ── LEASE OPV: primary metrics from deal rent ──
       const dealRents=leaseComps.filter(c=>c.deal_rent>0).map(c=>c.deal_rent)
-      if (dealRents.length===0&&comps.length===0) { alert('Add lease comps with deal rent first.'); return }
+      if (dealRents.length===0) { alert('Add lease comps with deal rent values first. Without deal rents the lease analysis cannot be calculated.'); return }
       const askRents=leaseComps.filter(c=>c.asking_rent>0).map(c=>c.asking_rent)
       const leaseMeanDeal=dealRents.length>0?dealRents.reduce((a,b)=>a+b,0)/dealRents.length:0
       const sorted=[...dealRents].sort((a,b)=>a-b)
@@ -3284,15 +3284,16 @@ function RichEditor({initialValue, onSave, onEscape, editorStyle={}}: {initialVa
 }
 
 // ── OPV REPORT ────────────────────────────────────────────────────────────────
-function OPVReport({subject,comps,leaseComps,leaseAvails=[],avails,analytics,aiText,setPage,frozenHTML,setFrozenHTML,photoUrls={}}: {subject:SubjectForm|null,comps:Comp[],leaseComps:LeaseComp[],leaseAvails?:LeaseComp[],avails:Avail[],analytics:AnalyticsData|null,aiText:string,setPage:(p:string)=>void,frozenHTML:string|null,setFrozenHTML:React.Dispatch<React.SetStateAction<string|null>>,photoUrls?:Record<string,string>}) {
+function OPVReport({subject,comps,leaseComps,leaseAvails=[],avails,analytics,aiText,setPage,frozenHTML,setFrozenHTML,photoUrls={},opvId}: {subject:SubjectForm|null,comps:Comp[],leaseComps:LeaseComp[],leaseAvails?:LeaseComp[],avails:Avail[],analytics:AnalyticsData|null,aiText:string,setPage:(p:string)=>void,frozenHTML:string|null,setFrozenHTML:React.Dispatch<React.SetStateAction<string|null>>,photoUrls?:Record<string,string>,opvId?:string|null}) {
   const today = new Date().toLocaleDateString('en-US',{month:'long',year:'numeric'}).toUpperCase()
   const [downloading, setDownloading] = useState(false)
   const [includeLeaseComps, setIncludeLeaseComps] = useState(leaseComps.length>0)
   const [includeAvails, setIncludeAvails] = useState(true)
   const [includeMarketingStrategy, setIncludeMarketingStrategy] = useState(true)
   const [includePcreProfile, setIncludePcreProfile] = useState(true)
+  const _photoKey = `opv_photo_overrides_${opvId||'new'}`
   const [photoOverrides, setPhotoOverrides] = useState<Record<string,string>>(() => {
-    try { return JSON.parse(localStorage.getItem('opv_photo_overrides') || '{}') } catch { return {} }
+    try { return JSON.parse(localStorage.getItem(_photoKey) || '{}') } catch { return {} }
   })
   const [editingKey, setEditingKey] = useState<string|null>(null)
   const [editMode, setEditMode] = useState(false)
@@ -3353,12 +3354,13 @@ function OPVReport({subject,comps,leaseComps,leaseAvails=[],avails,analytics,aiT
   }
 
   // ── INLINE TEXT EDITING ──
+  const _textKey = `opv_text_edits_${opvId||'new'}`
   const [textEdits, setTextEdits] = useState<Record<string,string>>(() => {
-    try { return JSON.parse(localStorage.getItem('opv_text_edits') || '{}') } catch { return {} }
+    try { return JSON.parse(localStorage.getItem(_textKey) || '{}') } catch { return {} }
   })
   const [activeTextKey, setActiveTextKey] = useState<string|null>(null)
   useEffect(() => {
-    try { localStorage.setItem('opv_text_edits', JSON.stringify(textEdits)) } catch {}
+    try { localStorage.setItem(_textKey, JSON.stringify(textEdits)) } catch {}
   }, [textEdits])
   const getText = (key: string, def: string) => textEdits[key] !== undefined ? textEdits[key] : def
   const saveText = (key: string, val: string, def: string) => {
@@ -3419,7 +3421,7 @@ function OPVReport({subject,comps,leaseComps,leaseAvails=[],avails,analytics,aiT
 
   // Persist photo overrides to localStorage whenever they change
   useEffect(() => {
-    try { localStorage.setItem('opv_photo_overrides', JSON.stringify(photoOverrides)) } catch {}
+    try { localStorage.setItem(_photoKey, JSON.stringify(photoOverrides)) } catch {}
   }, [photoOverrides])
 
   // When photoOverrides change (set via "Edit Photo" button inside this report),
@@ -4631,6 +4633,8 @@ export default function App() {
     'comp-search': comps.length > 0,
     'avail-search': avails.length > 0,
     'lease-comps': leaseComps.length > 0,
+    folders: folders.length > 0,
+    analytics: analytics !== null,
     photos: false,
     verification: Object.values(verificationStatus).some(v => v === 'verified'),
     'broker-review': aiText.trim().length > 50,
@@ -4727,6 +4731,11 @@ export default function App() {
     setLastSaved(null)
     try {
       localStorage.removeItem('opv_saved_id')
+      localStorage.removeItem('opv_folders')
+      // Clear scoped keys for new-OPV sessions (restored OPVs use their own ID-scoped keys)
+      localStorage.removeItem('opv_text_edits_new')
+      localStorage.removeItem('opv_photo_overrides_new')
+      // Also clear legacy unscoped keys for backward compatibility
       localStorage.removeItem('opv_text_edits')
       localStorage.removeItem('opv_photo_overrides')
     } catch {}
@@ -4910,7 +4919,7 @@ export default function App() {
             {page==='folders'&&<FolderManager folders={folders} setFolders={updateFolders} setPage={handleSetPage} comps={comps} setComps={setComps} avails={avails} setAvails={setAvails} leaseComps={leaseComps} setLeaseComps={setLeaseComps}/>}
             {page==='analytics'&&<Analytics comps={scoredComps.length>0?scoredComps:comps} avails={avails} analytics={analytics} setAnalytics={setAnalytics} setPage={handleSetPage} subject={subject} leaseComps={leaseComps}/>}
             {page==='broker-review'&&<BrokerReview subject={subject} comps={scoredComps.length>0?scoredComps:comps} analytics={analytics} setAnalytics={setAnalytics} aiText={aiText} setAiText={setAiText} setPage={handleSetPage} setSubject={setSubject}/>}
-            {page==='opv-report'&&<OPVReport key={savedOPVId||'new'} subject={subject} comps={scoredComps.length>0?scoredComps:comps} leaseComps={leaseComps} leaseAvails={leaseAvails} avails={avails} analytics={analytics} aiText={aiText} setPage={handleSetPage} frozenHTML={editedReportHTML} setFrozenHTML={setEditedReportHTML} photoUrls={photoUrls}/>}
+            {page==='opv-report'&&<OPVReport key={savedOPVId||'new'} opvId={savedOPVId} subject={subject} comps={scoredComps.length>0?scoredComps:comps} leaseComps={leaseComps} leaseAvails={leaseAvails} avails={avails} analytics={analytics} aiText={aiText} setPage={handleSetPage} frozenHTML={editedReportHTML} setFrozenHTML={setEditedReportHTML} photoUrls={photoUrls}/>}
           </div>
           {/* ── Sticky Step Nav Bar ── */}
           {(()=>{
