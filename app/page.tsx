@@ -4631,7 +4631,7 @@ export default function App() {
       const res = await fetch('/api/opv-history',{
         method:'POST',
         headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({savedBy:user.name, address:subject.address, subject, comps, leaseComps, avails, analytics, aiText, currentStep:page, existingId:savedOPVId, assignmentData, folders, editedReportHTML})
+        body:JSON.stringify({savedBy:user.name, address:subject.address, subject, comps, leaseComps, leaseAvails, avails, analytics, aiText, currentStep:page, existingId:savedOPVId, assignmentData, folders, editedReportHTML, photoUrls, verificationStatus})
       })
       const data = await res.json()
       if(data.error) throw new Error(data.error)
@@ -4658,18 +4658,28 @@ export default function App() {
       const res = await fetch(`/api/opv-history?id=${id}`,{method:'PATCH'})
       const data = await res.json()
       if(data.error) throw new Error(data.error)
-      if(data.subject) setSubject(data.subject)
-      if(data.comps?.length) setComps(data.comps)
-      if(data.leaseComps?.length) setLeaseComps(data.leaseComps)
-      if(data.avails?.length) setAvails(data.avails)
-      if(data.analytics) setAnalytics(data.analytics)
-      if(data.aiText) setAiText(data.aiText)
-      if(data.assignmentData) setAssignmentData(data.assignmentData)
-      if(data.folders?.length) updateFolders(data.folders)
-      // Restore edited report HTML — prefer DB (works across devices), fall back to localStorage
+
+      // Wipe everything first — no old data bleeds into the new OPV
+      clearAllOPVState()
+
+      // Then load the saved OPV's data (empty defaults where not saved)
+      setSubject(data.subject || null)
+      setComps(data.comps || [])
+      setLeaseComps(data.leaseComps || [])
+      setLeaseAvails(data.leaseAvails || [])
+      setAvails(data.avails || [])
+      setAnalytics(data.analytics || null)
+      setAiText(data.aiText || '')
+      setAssignmentData(data.assignmentData || {clientName:'',propertyAddress:'',opvType:'For Sale',dueDate:'',preparedBy:'',notes:''})
+      updateFolders(data.folders || [])
+      setPhotoUrls(data.photoUrls || {})
+      setVerificationStatus(data.verificationStatus || {})
+
+      // Restore edited report HTML — prefer DB, fall back to localStorage
       const dbHTML = data.editedReportHTML || null
       const localHTML = (() => { try { return localStorage.getItem(`opv_edited_html_${id}`) } catch { return null } })()
       setEditedReportHTML(dbHTML || localHTML)
+
       setSavedOPVId(id)
       setLastSaved(new Date(data.updatedAt||data.createdAt))
       setShowSavedPanel(false)
@@ -4686,11 +4696,11 @@ export default function App() {
     } catch {}
   }
 
-  const startNewOPV=()=>{
-    if(!confirm('Start a new OPV? Your current progress is saved — you can reload it anytime.')) return
+  const clearAllOPVState = () => {
     setSubject(null)
     setComps([])
     setLeaseComps([])
+    setLeaseAvails([])
     setAvails([])
     setScoredComps([])
     setAnalytics(null)
@@ -4702,7 +4712,16 @@ export default function App() {
     setEditedReportHTML(null)
     setSavedOPVId(null)
     setLastSaved(null)
-    try{localStorage.removeItem('opv_saved_id')}catch{}
+    try {
+      localStorage.removeItem('opv_saved_id')
+      localStorage.removeItem('opv_text_edits')
+      localStorage.removeItem('opv_photo_overrides')
+    } catch {}
+  }
+
+  const startNewOPV=()=>{
+    if(!confirm('Start a new OPV? Your current progress is saved — you can reload it anytime.')) return
+    clearAllOPVState()
     setPage('assignment')
   }
 
@@ -4878,7 +4897,7 @@ export default function App() {
             {page==='folders'&&<FolderManager folders={folders} setFolders={updateFolders} setPage={handleSetPage} comps={comps} setComps={setComps} avails={avails} setAvails={setAvails} leaseComps={leaseComps} setLeaseComps={setLeaseComps}/>}
             {page==='analytics'&&<Analytics comps={scoredComps.length>0?scoredComps:comps} avails={avails} analytics={analytics} setAnalytics={setAnalytics} setPage={handleSetPage} subject={subject} leaseComps={leaseComps}/>}
             {page==='broker-review'&&<BrokerReview subject={subject} comps={scoredComps.length>0?scoredComps:comps} analytics={analytics} setAnalytics={setAnalytics} aiText={aiText} setAiText={setAiText} setPage={handleSetPage} setSubject={setSubject}/>}
-            {page==='opv-report'&&<OPVReport subject={subject} comps={scoredComps.length>0?scoredComps:comps} leaseComps={leaseComps} leaseAvails={leaseAvails} avails={avails} analytics={analytics} aiText={aiText} setPage={handleSetPage} frozenHTML={editedReportHTML} setFrozenHTML={setEditedReportHTML} photoUrls={photoUrls}/>}
+            {page==='opv-report'&&<OPVReport key={savedOPVId||'new'} subject={subject} comps={scoredComps.length>0?scoredComps:comps} leaseComps={leaseComps} leaseAvails={leaseAvails} avails={avails} analytics={analytics} aiText={aiText} setPage={handleSetPage} frozenHTML={editedReportHTML} setFrozenHTML={setEditedReportHTML} photoUrls={photoUrls}/>}
           </div>
           {/* ── Sticky Step Nav Bar ── */}
           {(()=>{
