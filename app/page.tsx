@@ -3486,9 +3486,9 @@ function OPVReport({subject,comps,leaseComps,leaseAvails=[],avails,analytics,aiT
     supabase.from('pcre_sale_transactions').select('*').gte('sale_date',cutoffStr).order('sale_date',{ascending:false})
       .then(({data})=>{
         if(data?.length) setPcreSalesData((data as PcreRow[]).map(r=>{
-          const raw = r.sale_price_text||''
-          const n = Number(raw.replace(/[^0-9.]/g,''))
-          const fmtPrice = raw && !isNaN(n) && n>0 ? `$${n.toLocaleString()}` : raw||'—'
+          const rawVal = (r as Record<string,unknown>).sale_price_text ?? (r as Record<string,unknown>).sale_price
+          const num = typeof rawVal === 'number' ? rawVal : parseFloat(String(rawVal||'').replace(/[$,\s]/g,''))
+          const fmtPrice = !isNaN(num) && num > 0 ? `$${Math.round(num).toLocaleString()}` : String(rawVal||'—')
           return [
             r.address||'—', r.city||'—', r.property_type||'Industrial',
             r.building_sf ? Number(r.building_sf).toLocaleString() : '—',
