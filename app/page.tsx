@@ -1084,6 +1084,7 @@ function DatabaseManager() {
   const [updatingStatus, setUpdatingStatus] = useState<Set<string>>(new Set())
   const [browseStatusDropdown, setBrowseStatusDropdown] = useState<string|null>(null)
   const [browseSearch, setBrowseSearch] = useState('')
+  const [browseStatusFilter, setBrowseStatusFilter] = useState('')
   const PAGE_SIZE = 20
   const COMP_STATUSES_DB  = [{value:'Closed',color:D.textMuted,label:'Closed'},{value:'Back on Market',color:D.gold,label:'Back on Market'}]
   const AVAIL_STATUSES_DB = [{value:'Available',color:D.green,label:'Available'},{value:'Under Contract',color:D.gold,label:'Under Contract'},{value:'Sold',color:D.red,label:'Sold'},{value:'Off Market',color:D.textMuted,label:'Off Market'}]
@@ -1126,7 +1127,7 @@ function DatabaseManager() {
     } catch {}
   }, [])
 
-  const tableForTab = (t: typeof tab) => t==='comps'?'industrial_sale_comps':t==='avails'?'market_availabilities':t==='pcre-sales'?'pcre_sale_transactions':(t==='lease-comps'||t==='lease-avails')?'lease_comps':'pcre_lease_transactions'
+  const tableForTab = (t: typeof tab) => t==='comps'?'industrial_sale_comps':t==='avails'?'market_availabilities':t==='pcre-sales'?'pcre_sale_transactions':t==='lease-comps'?'lease_comps':t==='lease-avails'?'lease_market_availabilities':'pcre_lease_transactions'
 
   const doSaveComp = async () => {
     setSaving(true)
@@ -1193,7 +1194,7 @@ function DatabaseManager() {
     const nums = ['building_sf','lot_size_ac','asking_rent','taxes','lease_term_years']
     nums.forEach(k=>{ if(payload[k]) payload[k]=parseFloat(payload[k] as string)||null; else payload[k]=null })
     payload.status = leaseAvailForm.status || 'Available'
-    const {error} = await supabase.from('lease_comps').insert([payload])
+    const {error} = await supabase.from('lease_market_availabilities').insert([payload])
     setSaving(false)
     if (error) { alert('Error: '+error.message); return }
     alert('✅ Lease availability saved to Supabase!')
@@ -1201,7 +1202,7 @@ function DatabaseManager() {
   }
   const saveLeaseAvail = async () => {
     if (!leaseAvailForm.address) { alert('Address is required'); return }
-    await checkDupes('lease_comps', leaseAvailForm.address, doSaveLeaseAvail)
+    await checkDupes('lease_market_availabilities', leaseAvailForm.address, doSaveLeaseAvail)
   }
 
   const doSaveLeaseComp = async () => {
@@ -1311,14 +1312,18 @@ function DatabaseManager() {
     setImporting(false); setImportResult({ok,fail,skipped,skippedAddresses})
     if (ok>0) { setImportText(''); setImportPreview([]) }
   }
-  const loadBrowse = async (offset=0, search='') => {
+  const loadBrowse = async (offset=0, search='', statusFilter='') => {
     setBrowseLoading(true)
     const table = tableForTab(tab)
     let q = supabase.from(table).select('*',{count:'exact'}).order('created_at',{ascending:false}).range(offset,offset+PAGE_SIZE-1)
     if (search.trim()) q = q.ilike('address', `%${search.trim()}%`)
-    // For lease-avails: show only availability-status records; for lease-comps: show deal records
-    if (tab==='lease-avails') q = q.in('status',['Available','Under Negotiation','Leased','Off Market'])
-    if (tab==='lease-comps') q = q.in('status',['Active','Expired','Confidential'])
+    // For lease-comps: only show deal records (not availability listings)
+    if (tab==='lease-comps') {
+      if (statusFilter) q = q.eq('status', statusFilter)
+      else q = q.in('status',['Active','Expired','Confidential'])
+    } else if (statusFilter) {
+      q = q.eq('status', statusFilter)
+    }
     const {data, count, error} = await q
     if (!error) { setBrowseData((data||[]) as BrowseRow[]); setBrowseCount(count||0); setBrowseOffset(offset) }
     setBrowseLoading(false)
@@ -1739,12 +1744,19 @@ function DatabaseManager() {
                   const curColor=dbStatusColor(String(curStatus),tab)
                   const isUpdating=updatingStatus.has(id)
                   const opts=tab==='comps'?COMP_STATUSES_DB:tab==='lease-comps'?LEASE_COMP_STATUSES_DB:tab==='lease-avails'?LEASE_AVAIL_STATUSES_DB:AVAIL_STATUSES_DB
-                  const apiTable=tab==='comps'?'comps':tab==='lease-comps'?'lease-comps':tab==='lease-avails'?'lease-comps':'avails'
+                  const apiTable=tab==='comps'?'comps':tab==='lease-comps'?'lease-comps':tab==='lease-avails'?'lease-avails':'avails'
                   const updateStatus=async(newStatus:string)=>{
                     setUpdatingStatus(prev=>{const n=new Set(prev);n.add(id);return n})
-                    await fetch(`/api/status?table=${apiTable}&id=${id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({status:newStatus})})
-                    setBrowseData(prev=>prev.map(r=>r.id===id?{...r,status:newStatus}:r))
+                    const res = await fetch(`/api/status?table=${apiTable}&id=${id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({status:newStatus})})
+                    const json = await res.json().catch(()=>({}))
                     setUpdatingStatus(prev=>{const n=new Set(prev);n.delete(id);return n})
+                    if (json.moved) {
+                      // Record physically moved to a different table — remove from current list
+                      setBrowseData(prev=>prev.filter(r=>r.id!==id))
+                      setBrowseCount(c=>c-1)
+                    } else {
+                      setBrowseData(prev=>prev.map(r=>r.id===id?{...r,status:newStatus}:r))
+                    }
                   }
                   return (
                     <div key={id} style={{position:'relative'}}>
@@ -2249,7 +2261,7 @@ function AvailSearch({subject,avails,setAvails,leaseAvails,setLeaseAvails,setPag
   }
 
   const buildLeaseAvailQuery = () => {
-    let q = supabase.from('lease_comps').select('*').eq('status','Available')
+    let q = supabase.from('lease_market_availabilities').select('*').eq('status','Available')
     if (leaseFilters.county) q = q.eq('county', leaseFilters.county)
     if (leaseFilters.town) q = q.ilike('town', `%${leaseFilters.town}%`)
     if (leaseFilters.min_sf) q = q.gte('building_sf', Number(leaseFilters.min_sf))
