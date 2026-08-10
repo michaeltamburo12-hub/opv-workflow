@@ -534,7 +534,7 @@ function DataVerification({comps,avails,verificationStatus,setVerificationStatus
 }
 
 // ── FOLDER MANAGER ────────────────────────────────────────────────────────────
-function FolderManager({folders, setFolders, setPage, comps, setComps, avails, setAvails}: {folders:Folder[], setFolders:(f:Folder[])=>void, setPage:(p:string)=>void, comps:Comp[], setComps:(c:Comp[])=>void, avails:Avail[], setAvails:(a:Avail[])=>void}) {
+function FolderManager({folders, setFolders, setPage, comps, setComps, avails, setAvails, leaseComps, setLeaseComps}: {folders:Folder[], setFolders:(f:Folder[])=>void, setPage:(p:string)=>void, comps:Comp[], setComps:(c:Comp[])=>void, avails:Avail[], setAvails:(a:Avail[])=>void, leaseComps:LeaseComp[], setLeaseComps:(c:LeaseComp[])=>void}) {
   const [activeFolder, setActiveFolder] = useState<string|null>(null)
   const [activeOPV, setActiveOPV] = useState<string|null>(null)
   const [manualName, setManualName] = useState('')
@@ -728,6 +728,9 @@ function FolderManager({folders, setFolders, setPage, comps, setComps, avails, s
                       if(active.type==='comps'){
                         const existing = comps.map(c=>c.id)
                         setComps([...comps,...items.filter(i=>!existing.includes(i.id)) as Comp[]])
+                      } else if(active.type==='lease-comps'){
+                        const existing = leaseComps.map(c=>c.id)
+                        setLeaseComps([...leaseComps,...items.filter(i=>!existing.includes(i.id)) as LeaseComp[]])
                       } else {
                         const existing = avails.map(a=>a.id)
                         setAvails([...avails,...items.filter(i=>!existing.includes(i.id)) as Avail[]])
@@ -736,9 +739,9 @@ function FolderManager({folders, setFolders, setPage, comps, setComps, avails, s
                     }} style={{flex:1,padding:'11px 16px',fontSize:13}}>
                       {selected.size===0?'Select properties to add':'➕ Add ' + selected.size + ' to OPV Report'}
                     </Btn>
-                    {(active.type==='comps'?comps.length:avails.length)>0&&(
-                      <Btn variant="ghost" onClick={()=>setPage(active.type==='comps'?'comp-search':'avail-search')} style={{fontSize:12,padding:'10px 14px',flexShrink:0}}>
-                        View OPV ({active.type==='comps'?comps.length:avails.length}) →
+                    {(active.type==='comps'?comps.length:active.type==='lease-comps'?leaseComps.length:avails.length)>0&&(
+                      <Btn variant="ghost" onClick={()=>setPage(active.type==='comps'?'comp-search':active.type==='lease-comps'?'lease-comp-search':'avail-search')} style={{fontSize:12,padding:'10px 14px',flexShrink:0}}>
+                        View OPV ({active.type==='comps'?comps.length:active.type==='lease-comps'?leaseComps.length:avails.length}) →
                       </Btn>
                     )}
                   </div>
@@ -4664,7 +4667,7 @@ export default function App() {
             {page==='comp-search'&&<CompSearch subject={subject} comps={comps} setComps={setComps} setPage={handleSetPage} folders={folders} setFolders={updateFolders}/>}
             {page==='avail-search'&&<AvailSearch subject={subject} avails={avails} setAvails={setAvails} leaseAvails={leaseAvails} setLeaseAvails={setLeaseAvails} setPage={handleSetPage} folders={folders} setFolders={updateFolders}/>}
             {(page==='lease-comps'||page==='lease-comp-search')&&<LeaseCompSearch subject={subject} leaseComps={leaseComps} setLeaseComps={setLeaseComps} setPage={handleSetPage} folders={folders} setFolders={updateFolders}/>}
-            {page==='folders'&&<FolderManager folders={folders} setFolders={updateFolders} setPage={handleSetPage} comps={comps} setComps={setComps} avails={avails} setAvails={setAvails}/>}
+            {page==='folders'&&<FolderManager folders={folders} setFolders={updateFolders} setPage={handleSetPage} comps={comps} setComps={setComps} avails={avails} setAvails={setAvails} leaseComps={leaseComps} setLeaseComps={setLeaseComps}/>}
             {page==='analytics'&&<Analytics comps={scoredComps.length>0?scoredComps:comps} avails={avails} analytics={analytics} setAnalytics={setAnalytics} setPage={handleSetPage} subject={subject} leaseComps={leaseComps}/>}
             {page==='broker-review'&&<BrokerReview subject={subject} comps={scoredComps.length>0?scoredComps:comps} analytics={analytics} setAnalytics={setAnalytics} aiText={aiText} setAiText={setAiText} setPage={handleSetPage} setSubject={setSubject}/>}
             {page==='opv-report'&&<OPVReport subject={subject} comps={scoredComps.length>0?scoredComps:comps} leaseComps={leaseComps} leaseAvails={leaseAvails} avails={avails} analytics={analytics} aiText={aiText} setPage={handleSetPage} frozenHTML={editedReportHTML} setFrozenHTML={setEditedReportHTML} photoUrls={photoUrls}/>}
