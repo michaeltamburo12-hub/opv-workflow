@@ -2698,12 +2698,6 @@ function LeaseCompSearch({subject,leaseComps,setLeaseComps,setPage,folders,setFo
                             {sc('Landlord', r.landlord||'—')}
                           </div>
                           <div style={{display:'flex',gap:8,alignItems:'center',paddingTop:10,borderTop:`1px solid ${D.border}`}}>
-                            {(() => {
-                              const inOPV = leaseComps.find(c=>c.id===r.id)
-                              return inOPV
-                                ? <Btn size="sm" onClick={()=>setLeaseComps(leaseComps.filter(c=>c.id!==r.id))} style={{background:'rgba(239,68,68,0.1)',borderColor:'rgba(239,68,68,0.3)',color:D.red}}>✕ Remove from OPV</Btn>
-                                : <Btn size="sm" onClick={()=>setLeaseComps([...leaseComps,r])} style={{background:'rgba(16,185,129,0.12)',borderColor:`${D.green}44`,color:D.green}}>＋ Add to OPV</Btn>
-                            })()}
                             <div style={{position:'relative'}}>
                               <button onClick={()=>setFolderDropdown(folderDropdown===r.id?null:r.id)} style={{background:'transparent',border:`1px solid ${D.border}`,borderRadius:6,color:D.textSec,fontSize:12,fontWeight:600,padding:'6px 12px',cursor:'pointer',fontFamily:"'Inter',sans-serif",display:'flex',alignItems:'center',gap:5}}>
                                 📁 Add to Folder
