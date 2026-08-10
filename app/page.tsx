@@ -3223,6 +3223,66 @@ function PhotoSlot({photoKey,defaultSrc,height=280,override,isEditing,canEdit=fa
   )
 }
 
+// ── RICH TEXT EDITOR ──────────────────────────────────────────────────────────
+function RichEditor({initialValue, onSave, onEscape, editorStyle={}}: {initialValue:string, onSave:(v:string)=>void, onEscape:()=>void, editorStyle?:React.CSSProperties}) {
+  const divRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    const el = divRef.current
+    if (!el) return
+    // Set initial HTML content and move cursor to end
+    el.innerHTML = initialValue || ''
+    el.focus()
+    const range = document.createRange()
+    range.selectNodeContents(el)
+    range.collapse(false)
+    const sel = window.getSelection()
+    if (sel) { sel.removeAllRanges(); sel.addRange(range) }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  const tbBtn = (label: string, cmd: string, title?: string) => (
+    <button
+      title={title||label}
+      onMouseDown={e => { e.preventDefault(); document.execCommand(cmd, false, undefined) }}
+      style={{background:'white',border:'1px solid #e5e7eb',borderRadius:4,padding:'3px 9px',cursor:'pointer',fontSize:12,fontFamily:"'Inter',sans-serif",color:'#374151',lineHeight:1.4,
+        ...(cmd==='bold'?{fontWeight:700}:{}),
+        ...(cmd==='italic'?{fontStyle:'italic'}:{}),
+        ...(cmd==='underline'?{textDecoration:'underline'}:{}),
+      }}
+    >{label}</button>
+  )
+
+  return (
+    <div style={{display:'flex',flexDirection:'column' as const,borderRadius:4,overflow:'hidden',boxShadow:'0 0 0 2px #f59e0b'}}>
+      <div className="no-print" style={{display:'flex',gap:4,padding:'5px 8px',background:'#fffbeb',borderBottom:'1px solid #fde68a',flexWrap:'wrap' as const,alignItems:'center'}}>
+        {tbBtn('B','bold','Bold (Ctrl+B)')}
+        {tbBtn('I','italic','Italic (Ctrl+I)')}
+        {tbBtn('U','underline','Underline (Ctrl+U)')}
+        <div style={{width:1,height:16,background:'#e5e7eb',margin:'0 2px',flexShrink:0}}/>
+        {tbBtn('• List','insertUnorderedList','Bullet list — Enter continues, Backspace on empty exits')}
+        {tbBtn('1. List','insertOrderedList','Numbered list — Enter continues, Backspace on empty exits')}
+        <span style={{marginLeft:'auto',fontSize:9,color:'#9ca3af',alignSelf:'center',whiteSpace:'nowrap' as const}}>Ctrl+B / Ctrl+I · Esc to close</span>
+      </div>
+      <div
+        ref={divRef}
+        contentEditable
+        suppressContentEditableWarning
+        data-rich-editor
+        onBlur={e => onSave(e.currentTarget.innerHTML)}
+        onKeyDown={e => {
+          if (e.key === 'Escape') { onSave(divRef.current?.innerHTML || ''); onEscape() }
+        }}
+        style={{
+          minHeight: 80, padding:'10px 12px',
+          background:'#fffde7', outline:'none', cursor:'text',
+          fontFamily:'inherit', fontSize:'inherit', lineHeight:'inherit', color:'inherit',
+          ...editorStyle,
+        }}
+      />
+    </div>
+  )
+}
+
 // ── OPV REPORT ────────────────────────────────────────────────────────────────
 function OPVReport({subject,comps,leaseComps,leaseAvails=[],avails,analytics,aiText,setPage,frozenHTML,setFrozenHTML,photoUrls={}}: {subject:SubjectForm|null,comps:Comp[],leaseComps:LeaseComp[],leaseAvails?:LeaseComp[],avails:Avail[],analytics:AnalyticsData|null,aiText:string,setPage:(p:string)=>void,frozenHTML:string|null,setFrozenHTML:React.Dispatch<React.SetStateAction<string|null>>,photoUrls?:Record<string,string>}) {
   const today = new Date().toLocaleDateString('en-US',{month:'long',year:'numeric'}).toUpperCase()
@@ -3293,34 +3353,52 @@ function OPVReport({subject,comps,leaseComps,leaseAvails=[],avails,analytics,aiT
     setActiveTextKey(null)
   }
   // Editable inline span — click to edit, blur to save
+  // multi=true uses RichEditor (contentEditable) with bullet/bold/italic support
   const E = ({k, d, multi=false, style={}}: {k:string, d:string, multi?:boolean, style?:React.CSSProperties}) => {
     const val = getText(k, d)
     const isActive = activeTextKey === k
     const changed = textEdits[k] !== undefined
-    const editStyle: React.CSSProperties = {
-      background: isActive ? '#fffde7' : changed ? '#fff8e1' : 'transparent',
-      border: isActive ? '1.5px solid #f59e0b' : changed ? '1px dashed #f59e0b' : '1px dashed transparent',
-      borderRadius: 3, padding: isActive ? '2px 6px' : changed ? '2px 6px' : '2px 4px',
+    const displayStyle: React.CSSProperties = {
+      background: changed ? '#fff8e1' : 'transparent',
+      border: changed ? '1px dashed #f59e0b' : '1px dashed transparent',
+      borderRadius: 3, padding: changed ? '2px 6px' : '2px 4px',
+      cursor: 'text', display: 'inline-block', minWidth: 20,
+      fontFamily: 'inherit', fontSize: 'inherit', color: 'inherit', lineHeight: 'inherit',
+      ...style,
+    }
+    const singleEditStyle: React.CSSProperties = {
+      background: '#fffde7', border: '1.5px solid #f59e0b',
+      borderRadius: 3, padding: '2px 6px',
       cursor: 'text', outline: 'none', width: '100%', fontFamily: 'inherit',
-      fontSize: 'inherit', color: 'inherit', lineHeight: 'inherit', resize: 'none' as const,
+      fontSize: 'inherit', color: 'inherit', lineHeight: 'inherit',
       ...style,
     }
     if (isActive) {
-      if (multi) return <textarea autoFocus rows={Math.max(3, val.split('\n').length+1)} defaultValue={val}
-        onBlur={e=>saveText(k, e.target.value, d)}
-        onKeyDown={e=>{ if(e.key==='Escape'){setActiveTextKey(null)} }}
-        style={{...editStyle,display:'block',minHeight:60}}/>
+      if (multi) return (
+        <RichEditor
+          initialValue={val}
+          onSave={v => saveText(k, v, d)}
+          onEscape={() => setActiveTextKey(null)}
+          editorStyle={style}
+        />
+      )
       return <input autoFocus type="text" defaultValue={val}
         onBlur={e=>saveText(k, e.target.value, d)}
         onKeyDown={e=>{ if(e.key==='Enter')e.currentTarget.blur(); if(e.key==='Escape'){setActiveTextKey(null)} }}
-        style={editStyle}/>
+        style={singleEditStyle}/>
     }
+    // Detect if stored value is HTML (from RichEditor) vs plain text
+    const isHTML = /<[a-z]/i.test(val)
     return (
-      <span title="Click to edit" onClick={()=>setActiveTextKey(k)}
-        style={{...editStyle, display:'inline-block', minWidth:20,
-          ':hover':{borderColor:'#f59e0b'}} as React.CSSProperties}>
-        {val || <span style={{color:'#aaa',fontStyle:'italic'}}>Click to add text…</span>}
-        {!isActive && <span className="no-print" style={{fontSize:9,marginLeft:4,color:'#bbb',verticalAlign:'middle'}}>✏</span>}
+      <span title="Click to edit" onClick={()=>setActiveTextKey(k)} style={displayStyle}>
+        {val
+          ? (isHTML
+              ? <span dangerouslySetInnerHTML={{__html: val}}
+                  style={{display:'block',fontFamily:'inherit',fontSize:'inherit',lineHeight:'inherit'}}/>
+              : val)
+          : <span style={{color:'#aaa',fontStyle:'italic'}}>Click to add text…</span>
+        }
+        <span className="no-print" style={{fontSize:9,marginLeft:4,color:'#bbb',verticalAlign:'middle'}}>✏</span>
       </span>
     )
   }
