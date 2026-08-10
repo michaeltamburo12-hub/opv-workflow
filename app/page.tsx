@@ -1059,7 +1059,7 @@ function FileImport() {
 
 // ── DATABASE MANAGER ──────────────────────────────────────────────────────────
 function DatabaseManager() {
-  const [tab, setTab] = useState<'comps'|'avails'|'pcre-sales'|'pcre-leases'|'lease-comps'>('comps')
+  const [tab, setTab] = useState<'comps'|'avails'|'pcre-sales'|'pcre-leases'|'lease-comps'|'lease-avails'>('comps')
   const [subTab, setSubTab] = useState<'add'|'import'|'file'|'browse'>('add')
   const [saving, setSaving] = useState(false)
   type DupMatch = {id:string,address?:string,city?:string,sale_date?:string,sale_price?:number,asking_price?:number,building_sf?:number}
@@ -1088,7 +1088,8 @@ function DatabaseManager() {
   const COMP_STATUSES_DB  = [{value:'Closed',color:D.textMuted,label:'Closed'},{value:'Back on Market',color:D.gold,label:'Back on Market'}]
   const AVAIL_STATUSES_DB = [{value:'Available',color:D.green,label:'Available'},{value:'Under Contract',color:D.gold,label:'Under Contract'},{value:'Sold',color:D.red,label:'Sold'},{value:'Off Market',color:D.textMuted,label:'Off Market'}]
   const LEASE_COMP_STATUSES_DB = [{value:'Active',color:D.green,label:'Active'},{value:'Expired',color:D.textMuted,label:'Expired'},{value:'Confidential',color:D.purple,label:'Confidential'}]
-  const dbStatusColor = (status:string,tabType:string) => (tabType==='comps'?COMP_STATUSES_DB:tabType==='lease-comps'?LEASE_COMP_STATUSES_DB:AVAIL_STATUSES_DB).find(x=>x.value===status)?.color??D.textMuted
+  const LEASE_AVAIL_STATUSES_DB = [{value:'Available',color:D.green,label:'Available'},{value:'Under Negotiation',color:D.gold,label:'Under Negotiation'},{value:'Leased',color:D.blue,label:'Leased'},{value:'Off Market',color:D.textMuted,label:'Off Market'}]
+  const dbStatusColor = (status:string,tabType:string) => (tabType==='comps'?COMP_STATUSES_DB:tabType==='lease-comps'?LEASE_COMP_STATUSES_DB:tabType==='lease-avails'?LEASE_AVAIL_STATUSES_DB:AVAIL_STATUSES_DB).find(x=>x.value===status)?.color??D.textMuted
 
   const blankComp = {address:'',city:'',county:'Nassau',state:'NY',property_type:'Warehouse',building_sf:'',lot_size_ac:'',ceiling_height:'',loading_docks:'',drive_ins:'',power:'',heat:'',parking:'',sprinkler:'',sewer:'Municipal',zoning:'',real_estate_taxes:'',sale_price:'',price_per_sf:'',sale_date:'',sale_type:"Arm's Length",buyer:'',seller:'',listing_broker:'',market:'',submarket:'',zip_code:'',notes:''}
   const blankAvail = {address:'',city:'',county:'Nassau',state:'NY',property_type:'Warehouse',building_sf:'',lot_size_ac:'',ceiling_height:'',loading_docks:'',drive_ins:'',power:'',heat:'',parking:'',sprinkler:'',sewer:'Municipal',zoning:'',real_estate_taxes:'',asking_price:'',price_per_sf:'',pricing_guidance:'',availability_type:'For Sale',status:'Available',listing_broker:'',market:'',submarket:'',zip_code:'',loopnet_url:'',notes:''}
@@ -1107,6 +1108,10 @@ function DatabaseManager() {
   const blankLeaseComp = {transaction_date:'',address:'',town:'',county:'Nassau',building_sf:'',lot_size_ac:'',ceiling_height:'',loading_docks:'',drive_ins:'',asking_rent:'',deal_rent:'',rent_type:'NNN',taxes:'',lease_term_years:'',rent_concession_months:'',ti_ll_work:'',mgmt_fee_pct:'',tenant:'',landlord:'',status:'Active',notes:''}
   const [leaseCompForm, setLeaseCompForm] = useState({...blankLeaseComp})
   const setLC = (k:string,v:string) => setLeaseCompForm(f=>({...f,[k]:v}))
+
+  const blankLeaseAvail = {address:'',town:'',county:'Nassau',building_sf:'',lot_size_ac:'',ceiling_height:'',loading_docks:'',drive_ins:'',power:'',sprinkler:'',parking:'',asking_rent:'',rent_type:'NNN',taxes:'',lease_term_years:'',escalations:'',landlord:'',listing_broker:'',loopnet_url:'',status:'Available',notes:''}
+  const [leaseAvailForm, setLeaseAvailForm] = useState({...blankLeaseAvail})
+  const setLA = (k:string,v:string) => setLeaseAvailForm(f=>({...f,[k]:v}))
   const pcreSetupAttempted = useRef(false)
   const [pcreSetupSQL, setPcreSetupSQL] = useState<{sales?:string,leases?:string}|null>(null)
   const setupPcreTables = useCallback(async () => {
@@ -1121,7 +1126,7 @@ function DatabaseManager() {
     } catch {}
   }, [])
 
-  const tableForTab = (t: typeof tab) => t==='comps'?'industrial_sale_comps':t==='avails'?'market_availabilities':t==='pcre-sales'?'pcre_sale_transactions':t==='lease-comps'?'lease_comps':'pcre_lease_transactions'
+  const tableForTab = (t: typeof tab) => t==='comps'?'industrial_sale_comps':t==='avails'?'market_availabilities':t==='pcre-sales'?'pcre_sale_transactions':(t==='lease-comps'||t==='lease-avails')?'lease_comps':'pcre_lease_transactions'
 
   const doSaveComp = async () => {
     setSaving(true)
@@ -1180,6 +1185,23 @@ function DatabaseManager() {
     if (error) { alert('Error: '+error.message); return }
     alert('✅ PCRE lease transaction saved!')
     setPcreLeaseForm({...blankPcreLease})
+  }
+
+  const doSaveLeaseAvail = async () => {
+    setSaving(true)
+    const payload: Record<string,unknown> = {...leaseAvailForm}
+    const nums = ['building_sf','lot_size_ac','asking_rent','taxes','lease_term_years']
+    nums.forEach(k=>{ if(payload[k]) payload[k]=parseFloat(payload[k] as string)||null; else payload[k]=null })
+    payload.status = leaseAvailForm.status || 'Available'
+    const {error} = await supabase.from('lease_comps').insert([payload])
+    setSaving(false)
+    if (error) { alert('Error: '+error.message); return }
+    alert('✅ Lease availability saved to Supabase!')
+    setLeaseAvailForm({...blankLeaseAvail})
+  }
+  const saveLeaseAvail = async () => {
+    if (!leaseAvailForm.address) { alert('Address is required'); return }
+    await checkDupes('lease_comps', leaseAvailForm.address, doSaveLeaseAvail)
   }
 
   const doSaveLeaseComp = async () => {
@@ -1248,7 +1270,7 @@ function DatabaseManager() {
     if (!rows.length) { alert('No data found.'); return }
     setImportPreview(rows.slice(0,5))
   }
-  const numFields = tab==='comps' ? ['building_sf','lot_size_ac','real_estate_taxes','sale_price','price_per_sf'] : tab==='avails' ? ['building_sf','lot_size_ac','real_estate_taxes','asking_price','price_per_sf'] : tab==='lease-comps' ? ['building_sf','lot_size_ac','asking_rent','deal_rent','taxes','lease_term_years','rent_concession_months','mgmt_fee_pct'] : ['building_sf']
+  const numFields = tab==='comps' ? ['building_sf','lot_size_ac','real_estate_taxes','sale_price','price_per_sf'] : tab==='avails' ? ['building_sf','lot_size_ac','real_estate_taxes','asking_price','price_per_sf'] : (tab==='lease-comps'||tab==='lease-avails') ? ['building_sf','lot_size_ac','asking_rent','deal_rent','taxes','lease_term_years','rent_concession_months','mgmt_fee_pct'] : ['building_sf']
   const runImport = async () => {
     const rows = parseCSV(importText)
     if (!rows.length) return
@@ -1294,6 +1316,9 @@ function DatabaseManager() {
     const table = tableForTab(tab)
     let q = supabase.from(table).select('*',{count:'exact'}).order('created_at',{ascending:false}).range(offset,offset+PAGE_SIZE-1)
     if (search.trim()) q = q.ilike('address', `%${search.trim()}%`)
+    // For lease-avails: show only availability-status records; for lease-comps: show deal records
+    if (tab==='lease-avails') q = q.in('status',['Available','Under Negotiation','Leased','Off Market'])
+    if (tab==='lease-comps') q = q.in('status',['Active','Expired','Confidential'])
     const {data, count, error} = await q
     if (!error) { setBrowseData((data||[]) as BrowseRow[]); setBrowseCount(count||0); setBrowseOffset(offset) }
     setBrowseLoading(false)
@@ -1307,7 +1332,7 @@ function DatabaseManager() {
   }
   const G2 = {display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}
   const G3 = {display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:12}
-  const tabBtn = (id: 'comps'|'avails'|'pcre-sales'|'pcre-leases'|'lease-comps', label: string) => (
+  const tabBtn = (id: 'comps'|'avails'|'pcre-sales'|'pcre-leases'|'lease-comps'|'lease-avails', label: string) => (
     <div onClick={()=>{setTab(id);setSubTab('add');setBrowseData([]);setBrowseSearch('');setImportPreview([]);setImportResult(null);if(id==='pcre-sales'||id==='pcre-leases')setupPcreTables()}} style={{padding:'8px 20px',borderRadius:7,cursor:'pointer',fontSize:12,fontWeight:700,background:tab===id?D.blue:'transparent',color:tab===id?'#FFFFFF':D.textSec,border:`1px solid ${tab===id?'transparent':D.border}`,transition:'all .2s'}}>{label}</div>
   )
   const subTabBtn = (id: 'add'|'import'|'file'|'browse', label: string, icon: string) => (
@@ -1351,6 +1376,7 @@ function DatabaseManager() {
         {tabBtn('comps','📊 Sale Comps')}
         {tabBtn('avails','🏭 Availabilities')}
         {tabBtn('lease-comps','📝 Lease Comps')}
+        {tabBtn('lease-avails','🏷️ Lease Availabilities')}
         {tabBtn('pcre-sales','📋 PCRE Sales')}
         {tabBtn('pcre-leases','📄 PCRE Leases')}
       </div>
@@ -1518,6 +1544,47 @@ function DatabaseManager() {
           </div>
         </Card>
       )}
+      {subTab==='add' && tab==='lease-avails' && (
+        <Card>
+          <SL>Add Lease Availability — Saves to lease_comps with status = Available</SL>
+          <Field label="Property Address" full><Input placeholder="85 Davids Drive, Hauppauge, NY 11788" value={leaseAvailForm.address} onChange={e=>setLA('address',e.target.value)}/></Field>
+          <div style={G3}>
+            <Field label="Town"><Input value={leaseAvailForm.town} onChange={e=>setLA('town',e.target.value)}/></Field>
+            <Field label="County"><Sel value={leaseAvailForm.county} onChange={e=>setLA('county',e.target.value)}>{['Nassau','Suffolk'].map(c=><option key={c}>{c}</option>)}</Sel></Field>
+            <Field label="Status"><Sel value={leaseAvailForm.status} onChange={e=>setLA('status',e.target.value)}><option>Available</option><option>Under Negotiation</option><option>Leased</option><option>Off Market</option></Sel></Field>
+          </div>
+          <Divider label="Building"/>
+          <div style={G3}>
+            <Field label="Building Size (SF)"><Input type="number" value={leaseAvailForm.building_sf} onChange={e=>setLA('building_sf',e.target.value)}/></Field>
+            <Field label="Lot Size (acres)"><Input type="number" step="0.01" value={leaseAvailForm.lot_size_ac} onChange={e=>setLA('lot_size_ac',e.target.value)}/></Field>
+            <Field label="Ceiling Height (ft.)"><Input placeholder="22" value={leaseAvailForm.ceiling_height} onChange={e=>setLA('ceiling_height',e.target.value)}/></Field>
+            <Field label="Loading Docks"><Input value={leaseAvailForm.loading_docks} onChange={e=>setLA('loading_docks',e.target.value)}/></Field>
+            <Field label="Drive-In Doors"><Input value={leaseAvailForm.drive_ins} onChange={e=>setLA('drive_ins',e.target.value)}/></Field>
+            <Field label="Power"><Input placeholder="200A / 3-Phase" value={leaseAvailForm.power} onChange={e=>setLA('power',e.target.value)}/></Field>
+            <Field label="Sprinkler System"><Input placeholder="ESFR / Wet Pipe" value={leaseAvailForm.sprinkler} onChange={e=>setLA('sprinkler',e.target.value)}/></Field>
+            <Field label="Parking"><Input placeholder="50 spaces" value={leaseAvailForm.parking} onChange={e=>setLA('parking',e.target.value)}/></Field>
+          </div>
+          <Divider label="Lease Terms"/>
+          <div style={G3}>
+            <Field label="Asking Rent ($/SF/yr)"><Input type="number" step="0.01" value={leaseAvailForm.asking_rent} onChange={e=>setLA('asking_rent',e.target.value)}/></Field>
+            <Field label="Rent Type"><Sel value={leaseAvailForm.rent_type} onChange={e=>setLA('rent_type',e.target.value)}><option>NNN</option><option>Gross</option><option>Modified Gross</option><option>MG</option></Sel></Field>
+            <Field label="Taxes ($/SF)"><Input type="number" step="0.01" value={leaseAvailForm.taxes} onChange={e=>setLA('taxes',e.target.value)}/></Field>
+            <Field label="Lease Term (Years)"><Input type="number" step="0.5" value={leaseAvailForm.lease_term_years} onChange={e=>setLA('lease_term_years',e.target.value)}/></Field>
+            <Field label="Escalations"><Input placeholder="3% annually" value={leaseAvailForm.escalations} onChange={e=>setLA('escalations',e.target.value)}/></Field>
+          </div>
+          <Divider label="Parties"/>
+          <div style={G3}>
+            <Field label="Landlord"><Input value={leaseAvailForm.landlord} onChange={e=>setLA('landlord',e.target.value)}/></Field>
+            <Field label="Listing Broker"><Input value={leaseAvailForm.listing_broker} onChange={e=>setLA('listing_broker',e.target.value)}/></Field>
+            <Field label="LoopNet URL"><Input placeholder="https://www.loopnet.com/..." value={leaseAvailForm.loopnet_url} onChange={e=>setLA('loopnet_url',e.target.value)}/></Field>
+          </div>
+          <Field label="Notes" full><textarea value={leaseAvailForm.notes} onChange={e=>setLA('notes',e.target.value)} placeholder="Any additional details..." style={{...inputStyle as React.CSSProperties,minHeight:70,resize:'vertical' as const}}/></Field>
+          <div style={{display:'flex',gap:10,marginTop:4}}>
+            <Btn onClick={saveLeaseAvail} disabled={saving} style={{flex:1,padding:12}}>{saving?'Saving...':'💾 Save to Supabase'}</Btn>
+            <Btn variant="ghost" onClick={()=>setLeaseAvailForm({...blankLeaseAvail})} style={{padding:'12px 20px'}}>Clear</Btn>
+          </div>
+        </Card>
+      )}
       {subTab==='add' && tab==='pcre-leases' && (
         <Card>
           <SL>Add PCRE Lease Transaction</SL>
@@ -1657,18 +1724,22 @@ function DatabaseManager() {
                   {tab==='lease-comps'&&!!row.rent_type&&<Tag color={D.textSec}>{String(row.rent_type)}</Tag>}
                   {tab==='lease-comps'&&!!row.lease_term_years&&<Tag color={D.textSec}>{Number(row.lease_term_years)} yr</Tag>}
                   {tab==='lease-comps'&&<Tag color={row.status==='Active'?D.green:row.status==='Confidential'?D.purple:D.textMuted}>{String(row.status||'Active')}</Tag>}
+                  {tab==='lease-avails'&&!!row.asking_rent&&<Tag color={D.gold}>${Number(row.asking_rent).toFixed(2)}/SF/yr</Tag>}
+                  {tab==='lease-avails'&&!!row.rent_type&&<Tag color={D.textSec}>{String(row.rent_type)}</Tag>}
+                  {tab==='lease-avails'&&<Tag color={row.status==='Available'?D.green:row.status==='Under Negotiation'?D.gold:row.status==='Leased'?D.blue:D.textMuted}>{String(row.status||'Available')}</Tag>}
+                  {tab==='lease-avails'&&row.town&&<Tag color={D.textMuted}>{String(row.town)}</Tag>}
                   {!!row.county&&<Tag color={row.county==='Nassau'?D.blue:'#0891B2'}>{String(row.county)}</Tag>}
                 </div>
               </div>
               <div style={{display:'flex',alignItems:'center',gap:8,flexShrink:0}}>
-                {(tab==='comps'||tab==='avails'||tab==='lease-comps')&&(()=>{
+                {(tab==='comps'||tab==='avails'||tab==='lease-comps'||tab==='lease-avails')&&(()=>{
                   const id=String(row.id)
                   const defaultStatus=tab==='comps'?'Closed':tab==='lease-comps'?'Active':'Available'
                   const curStatus=row.status||defaultStatus
                   const curColor=dbStatusColor(String(curStatus),tab)
                   const isUpdating=updatingStatus.has(id)
-                  const opts=tab==='comps'?COMP_STATUSES_DB:tab==='lease-comps'?LEASE_COMP_STATUSES_DB:AVAIL_STATUSES_DB
-                  const apiTable=tab==='comps'?'comps':tab==='lease-comps'?'lease-comps':'avails'
+                  const opts=tab==='comps'?COMP_STATUSES_DB:tab==='lease-comps'?LEASE_COMP_STATUSES_DB:tab==='lease-avails'?LEASE_AVAIL_STATUSES_DB:AVAIL_STATUSES_DB
+                  const apiTable=tab==='comps'?'comps':tab==='lease-comps'?'lease-comps':tab==='lease-avails'?'lease-comps':'avails'
                   const updateStatus=async(newStatus:string)=>{
                     setUpdatingStatus(prev=>{const n=new Set(prev);n.add(id);return n})
                     await fetch(`/api/status?table=${apiTable}&id=${id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({status:newStatus})})
