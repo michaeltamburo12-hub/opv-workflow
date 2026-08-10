@@ -3823,6 +3823,38 @@ function OPVReport({subject,comps,leaseComps,leaseAvails=[],avails,analytics,aiT
 
       {/* Full OPV Document */}
 
+      {/* Formatting toolbar — shown only in edit mode, above the iframe */}
+      {editMode&&(()=>{
+        const cmd = (c: string, v?: string) => { editFrameRef.current?.contentDocument?.execCommand(c, false, v ?? undefined) }
+        const tb = (label: string, c: string, title: string, extraStyle: React.CSSProperties = {}) => (
+          <button key={c+label} title={title} onMouseDown={e=>{e.preventDefault();cmd(c)}}
+            style={{background:'#1a1a1a',border:'1px solid #333',borderRadius:5,color:'#f1f1f1',padding:'5px 11px',fontSize:12,cursor:'pointer',fontFamily:"'Inter',sans-serif",lineHeight:1.3,...extraStyle}}>
+            {label}
+          </button>
+        )
+        return (
+          <div className="no-print" style={{display:'flex',gap:6,flexWrap:'wrap' as const,padding:'10px 14px',background:'#111',border:'1px solid #2a2a2a',borderRadius:'10px 10px 0 0',alignItems:'center',marginBottom:-2}}>
+            <button title="Undo (Ctrl+Z)" onMouseDown={e=>{e.preventDefault();cmd('undo')}}
+              style={{background:'rgba(59,130,246,0.15)',border:'1px solid rgba(59,130,246,0.4)',borderRadius:5,color:D.blue,padding:'5px 11px',fontSize:12,cursor:'pointer',fontFamily:"'Inter',sans-serif",fontWeight:700}}>↩ Undo</button>
+            <button title="Redo (Ctrl+Y)" onMouseDown={e=>{e.preventDefault();cmd('redo')}}
+              style={{background:'rgba(59,130,246,0.1)',border:'1px solid rgba(59,130,246,0.25)',borderRadius:5,color:D.blue,padding:'5px 11px',fontSize:12,cursor:'pointer',fontFamily:"'Inter',sans-serif"}}>↪ Redo</button>
+            <div style={{width:1,height:20,background:'#333',margin:'0 2px',flexShrink:0}}/>
+            {tb('B','bold','Bold (Ctrl+B)',{fontWeight:700})}
+            {tb('I','italic','Italic (Ctrl+I)',{fontStyle:'italic'})}
+            {tb('U','underline','Underline (Ctrl+U)',{textDecoration:'underline'})}
+            <div style={{width:1,height:20,background:'#333',margin:'0 2px',flexShrink:0}}/>
+            {tb('• List','insertUnorderedList','Bullet list — Enter adds bullet, Backspace on empty exits')}
+            {tb('1. List','insertOrderedList','Numbered list')}
+            <div style={{width:1,height:20,background:'#333',margin:'0 2px',flexShrink:0}}/>
+            <button title="Indent" onMouseDown={e=>{e.preventDefault();cmd('indent')}}
+              style={{background:'#1a1a1a',border:'1px solid #333',borderRadius:5,color:'#f1f1f1',padding:'5px 11px',fontSize:12,cursor:'pointer',fontFamily:"'Inter',sans-serif"}}>→ Indent</button>
+            <button title="Outdent" onMouseDown={e=>{e.preventDefault();cmd('outdent')}}
+              style={{background:'#1a1a1a',border:'1px solid #333',borderRadius:5,color:'#f1f1f1',padding:'5px 11px',fontSize:12,cursor:'pointer',fontFamily:"'Inter',sans-serif"}}>← Outdent</button>
+            <span style={{marginLeft:'auto',fontSize:10,color:'#555',alignSelf:'center'}}>Click any text in the report below to edit</span>
+          </div>
+        )
+      })()}
+
       {/* Edit iframe — text editing, shown only in edit mode */}
       <iframe
         ref={editFrameRef}
@@ -3830,7 +3862,7 @@ function OPVReport({subject,comps,leaseComps,leaseAvails=[],avails,analytics,aiT
         style={{
           display: editMode ? 'block' : 'none',
           width: '100%', minHeight: 1400, border: '2px solid rgba(16,185,129,0.5)',
-          borderRadius: 10, background: '#fff',
+          borderRadius: editMode ? '0 0 10px 10px' : 10, background: '#fff',
         }}
       />
 
