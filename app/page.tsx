@@ -183,7 +183,7 @@ type SubjectForm = {address:string,city:string,county:string,municipality:string
 type Comp = {id:string,address:string,city:string,county:string,building_sf:number,lot_size_ac:number,ceiling_height:string,loading_docks:string,drive_ins:string,power:string,sewer:string,zoning:string,sale_price:number,price_per_sf:number,sale_date:string,sale_type:string,buyer:string,seller:string,submarket:string,score?:number,[key:string]:unknown}
 type Avail = {id:string,address:string,city:string,county:string,building_sf:number,lot_size_ac:number,ceiling_height:string,loading_docks:string,drive_ins:string,power:string,sewer:string,zoning:string,asking_price:number,price_per_sf:number,pricing_guidance:string,listing_broker:string,loopnet_url:string,score?:number,[key:string]:unknown}
 type LeaseComp = {id:string,address:string,town:string,county:string,building_sf:number,lot_size_ac:number,ceiling_height:string,loading_docks:string,drive_ins:string,asking_rent:number,deal_rent:number,rent_type:string,taxes:number,lease_term_years:number,rent_concession_months:number,ti_ll_work:string,mgmt_fee_pct:number,tenant:string,landlord:string,transaction_date:string,status:string,notes:string,[key:string]:unknown}
-type AnalyticsData = {mean:number,median:number,std:number,weighted:number,min:number,max:number,low:number,market:number,high:number,suggested:number,aMean:number,count:number}
+type AnalyticsData = {mean:number,median:number,std:number,weighted:number,min:number,max:number,low:number,market:number,high:number,suggested:number,aMean:number,count:number,leaseMeanDeal?:number,leaseMedianDeal?:number,leaseMeanAsk?:number,leaseCount?:number,leaseMin?:number,leaseMax?:number,leaseSuggested?:number}
 type OPVReportData = {id:number,subject:SubjectForm,comps:Comp[],avails:Avail[],analytics:AnalyticsData|null,date:string}
 type SavedOPV = {id:string, created_at:string, saved_by:string, address:string}
 
@@ -381,8 +381,14 @@ function Assignment({assignmentData,setAssignmentData,user,setPage,setSubject,su
           <Field label="Prepared By"><Input placeholder="Broker name" value={form.preparedBy} onChange={e=>set('preparedBy',e.target.value)}/></Field>
         </div>
         <Field label="Assignment Notes" full><textarea value={form.notes} onChange={e=>set('notes',e.target.value)} placeholder="Any special instructions, client preferences, or context..." style={{...inputStyle as React.CSSProperties,minHeight:80,resize:'vertical' as const,lineHeight:1.6}}/></Field>
-        <button onClick={begin} style={{width:'100%',padding:'15px 24px',marginTop:8,background:`linear-gradient(135deg,${D.blue} 0%,#1D4ED8 100%)`,border:'1px solid rgba(59,130,246,0.45)',borderRadius:10,color:'#FFFFFF',fontSize:15,fontWeight:700,cursor:'pointer',fontFamily:"'Inter',sans-serif",boxShadow:`0 4px 28px rgba(59,130,246,0.35),0 1px 0 rgba(255,255,255,0.1) inset`,transition:'all .2s',letterSpacing:'-.01em'}}>
-          Begin OPV →
+        {form.opvType==='For Lease'&&(
+          <div style={{background:'rgba(217,119,6,0.08)',border:'1px solid rgba(217,119,6,0.3)',borderRadius:10,padding:'14px 16px',marginTop:4}}>
+            <div style={{fontSize:11,fontWeight:700,color:D.gold,letterSpacing:'.1em',textTransform:'uppercase' as const,marginBottom:6}}>🏷️ For Lease Mode Active</div>
+            <div style={{fontSize:12,color:D.textSec,lineHeight:1.6}}>This OPV will use <strong style={{color:D.text}}>lease rent metrics</strong> throughout. Analytics will compute deal rent PSF, Section III will show estimated lease rate, and lease comps will lead the report as Section IV. Sale comps are included as supporting data.</div>
+          </div>
+        )}
+        <button onClick={begin} style={{width:'100%',padding:'15px 24px',marginTop:8,background:`linear-gradient(135deg,${form.opvType==='For Lease'?D.gold+' 0%,#B45309':D.blue+' 0%,#1D4ED8'} 100%)`,border:`1px solid ${form.opvType==='For Lease'?'rgba(217,119,6,0.45)':'rgba(59,130,246,0.45)'}`,borderRadius:10,color:'#FFFFFF',fontSize:15,fontWeight:700,cursor:'pointer',fontFamily:"'Inter',sans-serif",boxShadow:`0 4px 28px ${form.opvType==='For Lease'?'rgba(217,119,6,0.35)':'rgba(59,130,246,0.35)'},0 1px 0 rgba(255,255,255,0.1) inset`,transition:'all .2s',letterSpacing:'-.01em'}}>
+          Begin {form.opvType==='For Lease'?'Lease ':''} OPV →
         </button>
       </Card>
     </div>
@@ -1810,18 +1816,27 @@ function SubjectProperty({subject,setSubject,setPage,folders,setFolders,assignme
           </div>
           <Field label="Highest & Best Use" full><textarea value={form.highestBestUse} onChange={e=>set('highestBestUse',e.target.value)} placeholder="Describe the highest and best use of the property..." style={{...inputStyle as React.CSSProperties,minHeight:64,resize:'vertical' as const,lineHeight:1.6}}/></Field>
           <Field label="Broker Notes / Special Features" full><textarea value={form.notes} onChange={e=>set('notes',e.target.value)} placeholder="Describe any features, renovations, access, or market notes..." style={{...inputStyle as React.CSSProperties,minHeight:80,resize:'vertical' as const,lineHeight:1.6}}/></Field>
-          <Divider label="Value Guidance (Optional)"/>
+          <Divider label={form.opvType==='lease'?'Lease Rate Guidance':'Value Guidance (Optional)'}/>
           <div style={G2}>
-            <Field label="Est. Value Low ($/SF)" note="For investment sale"><Input placeholder="e.g. 175" value={form.estimatedValueLow} onChange={e=>set('estimatedValueLow',e.target.value)}/></Field>
-            <Field label="Est. Value High ($/SF)"><Input placeholder="e.g. 210" value={form.estimatedValueHigh} onChange={e=>set('estimatedValueHigh',e.target.value)}/></Field>
-            {form.opvType==='investment'&&<>
-              <Field label="Cap Rate Low (%)"><Input placeholder="e.g. 5.5" value={form.capRateLow} onChange={e=>set('capRateLow',e.target.value)}/></Field>
-              <Field label="Cap Rate High (%)"><Input placeholder="e.g. 7.0" value={form.capRateHigh} onChange={e=>set('capRateHigh',e.target.value)}/></Field>
-            </>}
-            {(form.opvType==='lease'||form.opvType==='investment')&&<>
-              <Field label="Lease PSF Low ($/SF/yr)"><Input placeholder="e.g. 14.00" value={form.leasePsfLow} onChange={e=>set('leasePsfLow',e.target.value)}/></Field>
-              <Field label="Lease PSF High ($/SF/yr)"><Input placeholder="e.g. 18.00" value={form.leasePsfHigh} onChange={e=>set('leasePsfHigh',e.target.value)}/></Field>
-            </>}
+            {form.opvType==='lease'?(
+              // ── LEASE OPV: show lease rate fields prominently ──
+              <>
+                <Field label="Estimated Value For Lease — Low ($/SF/yr)"><Input placeholder="e.g. 14.00" value={form.leasePsfLow} onChange={e=>set('leasePsfLow',e.target.value)}/></Field>
+                <Field label="Estimated Value For Lease — High ($/SF/yr)"><Input placeholder="e.g. 18.00" value={form.leasePsfHigh} onChange={e=>set('leasePsfHigh',e.target.value)}/></Field>
+              </>
+            ):(
+              // ── SALE / INVESTMENT OPV: original fields ──
+              <>
+                <Field label="Est. Value Low ($/SF)" note="For investment sale"><Input placeholder="e.g. 175" value={form.estimatedValueLow} onChange={e=>set('estimatedValueLow',e.target.value)}/></Field>
+                <Field label="Est. Value High ($/SF)"><Input placeholder="e.g. 210" value={form.estimatedValueHigh} onChange={e=>set('estimatedValueHigh',e.target.value)}/></Field>
+                {form.opvType==='investment'&&<>
+                  <Field label="Cap Rate Low (%)"><Input placeholder="e.g. 5.5" value={form.capRateLow} onChange={e=>set('capRateLow',e.target.value)}/></Field>
+                  <Field label="Cap Rate High (%)"><Input placeholder="e.g. 7.0" value={form.capRateHigh} onChange={e=>set('capRateHigh',e.target.value)}/></Field>
+                  <Field label="Lease PSF Low ($/SF/yr)"><Input placeholder="e.g. 14.00" value={form.leasePsfLow} onChange={e=>set('leasePsfLow',e.target.value)}/></Field>
+                  <Field label="Lease PSF High ($/SF/yr)"><Input placeholder="e.g. 18.00" value={form.leasePsfHigh} onChange={e=>set('leasePsfHigh',e.target.value)}/></Field>
+                </>}
+              </>
+            )}
           </div>
           <Field label="Prepared By"><Input placeholder="Broker name" value={form.preparedBy} onChange={e=>set('preparedBy',e.target.value)}/></Field>
           <Btn onClick={()=>{if(!form.address||!form.size){alert('Address and building size are required.');return;}setSubject(form);autoCreateFolders(form.address);setPage('comp-search')}} style={{width:'100%',padding:12,marginTop:4}}>Save & Search Comps →</Btn>
@@ -1838,7 +1853,7 @@ function SubjectProperty({subject,setSubject,setPage,folders,setFolders,assignme
           </Card>
           <Card style={{marginTop:14}}>
             <SL>OPV Checklist</SL>
-            {[{l:'Subject property saved',done:!!subject},{l:'Sale comps found',done:false},{l:'Availabilities found',done:false},{l:'Comps scored',done:false},{l:'Analytics run',done:false},{l:'Broker analysis written',done:false},{l:'Report complete',done:false}].map((c,i)=>(
+            {[{l:'Subject property saved',done:!!subject},{l:form.opvType==='lease'?'Lease comps found':'Sale comps found',done:false},{l:form.opvType==='lease'?'Lease market availabilities':'Availabilities found',done:false},{l:'Analytics run',done:false},{l:'Broker analysis written',done:false},{l:'Report complete',done:false}].map((c,i)=>(
               <div key={i} style={{display:'flex',alignItems:'center',gap:9,padding:'6px 0',fontSize:12}}>
                 <div style={{width:16,height:16,borderRadius:'50%',background:c.done?`rgba(16,185,129,0.2)`:'transparent',border:`1.5px solid ${c.done?D.green:D.border}`,display:'flex',alignItems:'center',justifyContent:'center',fontSize:9,color:D.green,flexShrink:0}}>{c.done?'✓':''}</div>
                 <span style={{color:c.done?D.text:D.textSec}}>{c.l}</span>
@@ -2095,12 +2110,15 @@ function CompSearch({subject,comps,setComps,setPage,folders,setFolders}: {subjec
 }
 
 // ── AVAIL SEARCH ──────────────────────────────────────────────────────────────
-function AvailSearch({subject,avails,setAvails,setPage,folders,setFolders}: {subject:SubjectForm|null,avails:Avail[],setAvails:(a:Avail[])=>void,setPage:(p:string)=>void,folders:Folder[],setFolders:(f:Folder[])=>void}) {
+function AvailSearch({subject,avails,setAvails,leaseAvails,setLeaseAvails,setPage,folders,setFolders}: {subject:SubjectForm|null,avails:Avail[],setAvails:(a:Avail[])=>void,leaseAvails:LeaseComp[],setLeaseAvails:(a:LeaseComp[])=>void,setPage:(p:string)=>void,folders:Folder[],setFolders:(f:Folder[])=>void}) {
+  const isLease = subject?.opvType==='lease'
   const [results,setResults]=useState<Avail[]>([])
+  const [leaseResults,setLeaseResults]=useState<LeaseComp[]>([])
   const [loading,setLoading]=useState(false)
   const [searched,setSearched]=useState(false)
   const [selected,setSelected]=useState<Set<string>>(new Set())
   const [filters,setFilters]=useState({county:'',city:'',min_sf:'',max_sf:'',min_price:'',max_price:''})
+  const [leaseFilters,setLeaseFilters]=useState({county:'',town:'',min_sf:'',max_sf:'',min_rent:'',max_rent:''})
   const [statusFilter,setStatusFilter]=useState('Available')
   const [showAdd,setShowAdd]=useState(false)
   const [folderDropdown, setFolderDropdown] = useState<string|null>(null)
@@ -2156,18 +2174,35 @@ function AvailSearch({subject,avails,setAvails,setPage,folders,setFolders}: {sub
     return q.order('created_at', {ascending:false}).limit(200)
   }
 
+  const buildLeaseAvailQuery = () => {
+    let q = supabase.from('lease_comps').select('*').eq('status','Available')
+    if (leaseFilters.county) q = q.eq('county', leaseFilters.county)
+    if (leaseFilters.town) q = q.ilike('town', `%${leaseFilters.town}%`)
+    if (leaseFilters.min_sf) q = q.gte('building_sf', Number(leaseFilters.min_sf))
+    if (leaseFilters.max_sf) q = q.lte('building_sf', Number(leaseFilters.max_sf))
+    if (leaseFilters.min_rent) q = q.gte('asking_rent', Number(leaseFilters.min_rent))
+    if (leaseFilters.max_rent) q = q.lte('asking_rent', Number(leaseFilters.max_rent))
+    return q.order('created_at', {ascending:false}).limit(200)
+  }
+
   const search = async () => {
-    setLoading(true); setResults([]); setSearched(false)
-    // Ensure migration has run (idempotent)
-    if (!statusColReady) await fetch('/api/status').catch(()=>{})
-    let {data,error} = await buildQuery(true)
-    // If status column doesn't exist yet, retry without status filter
-    if (error && (error.message?.toLowerCase().includes('status') || error.message?.toLowerCase().includes('column'))) {
-      const result = await buildQuery(false)
-      data = result.data; error = result.error
+    setLoading(true); setResults([]); setLeaseResults([]); setSearched(false)
+    if (isLease) {
+      // Lease mode: query lease_comps where status=Available
+      const {data,error} = await buildLeaseAvailQuery()
+      if (error) { alert('Search error: ' + error.message); setLoading(false); return }
+      setLeaseResults(data||[]); setSearched(true); setLoading(false)
+    } else {
+      // Sale mode: query market_availabilities
+      if (!statusColReady) await fetch('/api/status').catch(()=>{})
+      let {data,error} = await buildQuery(true)
+      if (error && (error.message?.toLowerCase().includes('status') || error.message?.toLowerCase().includes('column'))) {
+        const result = await buildQuery(false)
+        data = result.data; error = result.error
+      }
+      if (error) { alert('Search error: ' + error.message); setLoading(false); return }
+      setResults(data||[]); setSearched(true); setLoading(false)
     }
-    if (error) { alert('Search error: ' + error.message); setLoading(false); return }
-    setResults(data||[]); setSearched(true); setLoading(false)
   }
 
   const sf = (k:string,v:string) => setFilters(f=>({...f,[k]:v}))
@@ -2232,27 +2267,55 @@ function AvailSearch({subject,avails,setAvails,setPage,folders,setFolders}: {sub
       </div>
     )}
     <div className="anim-in">
-      <SectionTitle sub="Search active Long Island industrial listings. Add them directly from LoopNet, CoStar, or your own database.">Market Availability Search</SectionTitle>
+      <SectionTitle sub={isLease?"Search active lease listings for comparison in your lease OPV. Results pull from lease_comps where status = Available.":"Search active Long Island industrial listings. Add them directly from LoopNet, CoStar, or your own database."}>
+        {isLease?'Lease Market Availabilities':'Market Availability Search'}
+      </SectionTitle>
       <div style={{display:'grid',gridTemplateColumns:'280px 1fr',gap:20,alignItems:'start'}}>
         <div>
           <Card style={{marginBottom:14}}>
             <SL>Search Filters</SL>
-            <Field label="County"><Sel value={filters.county} onChange={e=>sf('county',e.target.value)}><option value="">All Counties</option>{COUNTIES.map(c=><option key={c}>{c}</option>)}</Sel></Field>
-            <Field label="City"><Input placeholder="e.g. Hauppauge" value={filters.city} onChange={e=>sf('city',e.target.value)}/></Field>
-            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8}}>
-              <Field label="Min SF"><Input type="number" placeholder="0" value={filters.min_sf} onChange={e=>sf('min_sf',e.target.value)}/></Field>
-              <Field label="Max SF"><Input type="number" placeholder="Any" value={filters.max_sf} onChange={e=>sf('max_sf',e.target.value)}/></Field>
-              <Field label="Min Price"><Input type="number" placeholder="0" value={filters.min_price} onChange={e=>sf('min_price',e.target.value)}/></Field>
-              <Field label="Max Price"><Input type="number" placeholder="Any" value={filters.max_price} onChange={e=>sf('max_price',e.target.value)}/></Field>
-            </div>
-            <Field label="Status"><Sel value={statusFilter} onChange={e=>setStatusFilter(e.target.value)}><option value="">All Statuses</option><option value="Available">Available</option><option value="Under Contract">Under Contract</option><option value="Sold">Sold</option><option value="Off Market">Off Market</option></Sel></Field>
-            <Btn onClick={search} disabled={loading} style={{width:'100%',padding:11,background:`rgba(59,130,246,0.15)`,border:`1px solid rgba(59,130,246,0.3)`,color:D.blue}}>{loading?'Searching...':'🔍 Search Availabilities'}</Btn>
+            {isLease?(
+              <>
+                <Field label="County"><Sel value={leaseFilters.county} onChange={e=>setLeaseFilters(f=>({...f,county:e.target.value}))}><option value="">All Counties</option>{COUNTIES.map(c=><option key={c}>{c}</option>)}</Sel></Field>
+                <Field label="Town"><Input placeholder="e.g. Hauppauge" value={leaseFilters.town} onChange={e=>setLeaseFilters(f=>({...f,town:e.target.value}))}/></Field>
+                <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8}}>
+                  <Field label="Min SF"><Input type="number" placeholder="0" value={leaseFilters.min_sf} onChange={e=>setLeaseFilters(f=>({...f,min_sf:e.target.value}))}/></Field>
+                  <Field label="Max SF"><Input type="number" placeholder="Any" value={leaseFilters.max_sf} onChange={e=>setLeaseFilters(f=>({...f,max_sf:e.target.value}))}/></Field>
+                  <Field label="Min Rent ($/SF)"><Input type="number" placeholder="0" value={leaseFilters.min_rent} onChange={e=>setLeaseFilters(f=>({...f,min_rent:e.target.value}))}/></Field>
+                  <Field label="Max Rent ($/SF)"><Input type="number" placeholder="Any" value={leaseFilters.max_rent} onChange={e=>setLeaseFilters(f=>({...f,max_rent:e.target.value}))}/></Field>
+                </div>
+                <div style={{fontSize:11,color:D.textMuted,marginBottom:8,fontStyle:'italic'}}>Showing: Available listings only</div>
+              </>
+            ):(
+              <>
+                <Field label="County"><Sel value={filters.county} onChange={e=>sf('county',e.target.value)}><option value="">All Counties</option>{COUNTIES.map(c=><option key={c}>{c}</option>)}</Sel></Field>
+                <Field label="City"><Input placeholder="e.g. Hauppauge" value={filters.city} onChange={e=>sf('city',e.target.value)}/></Field>
+                <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8}}>
+                  <Field label="Min SF"><Input type="number" placeholder="0" value={filters.min_sf} onChange={e=>sf('min_sf',e.target.value)}/></Field>
+                  <Field label="Max SF"><Input type="number" placeholder="Any" value={filters.max_sf} onChange={e=>sf('max_sf',e.target.value)}/></Field>
+                  <Field label="Min Price"><Input type="number" placeholder="0" value={filters.min_price} onChange={e=>sf('min_price',e.target.value)}/></Field>
+                  <Field label="Max Price"><Input type="number" placeholder="Any" value={filters.max_price} onChange={e=>sf('max_price',e.target.value)}/></Field>
+                </div>
+                <Field label="Status"><Sel value={statusFilter} onChange={e=>setStatusFilter(e.target.value)}><option value="">All Statuses</option><option value="Available">Available</option><option value="Under Contract">Under Contract</option><option value="Sold">Sold</option><option value="Off Market">Off Market</option></Sel></Field>
+              </>
+            )}
+            <Btn onClick={search} disabled={loading} style={{width:'100%',padding:11,background:`rgba(59,130,246,0.15)`,border:`1px solid rgba(59,130,246,0.3)`,color:D.blue}}>{loading?'Searching...':isLease?'🔍 Search Lease Listings':'🔍 Search Availabilities'}</Btn>
           </Card>
-          <Card>
+          {!isLease&&<Card>
             <SL>Add New Listing</SL>
             <p style={{fontSize:12,color:D.textSec,marginBottom:12,lineHeight:1.5}}>Add listings from LoopNet, CoStar, or your own research directly to your database.</p>
             <Btn onClick={()=>setShowAdd(v=>!v)} style={{width:'100%',padding:9,fontSize:12}}>＋ Add Listing to Database</Btn>
-          </Card>
+          </Card>}
+          {isLease&&leaseAvails.length>0&&<Card style={{marginTop:14}}>
+            <SL>Added to OPV</SL>
+            <div style={{fontSize:12,color:D.textSec,marginBottom:10}}>{leaseAvails.length} listing{leaseAvails.length!==1?'s':''} selected</div>
+            {leaseAvails.map(c=>(
+              <div key={c.id} style={{display:'flex',alignItems:'center',justifyContent:'space-between',fontSize:11,padding:'5px 0',borderBottom:`1px solid ${D.border}`}}>
+                <span style={{flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' as const,color:D.text}}>{c.address}</span>
+                <button onClick={()=>setLeaseAvails(leaseAvails.filter(x=>x.id!==c.id))} style={{background:'transparent',border:'none',color:D.red,cursor:'pointer',fontSize:13,padding:'0 4px',flexShrink:0}}>×</button>
+              </div>
+            ))}
+          </Card>}
           <Card style={{marginTop:14}}>
             <Btn onClick={()=>setPage('folders')} style={{width:'100%',padding:10,fontSize:12}}>Go to Folders →</Btn>
           </Card>
@@ -2281,8 +2344,69 @@ function AvailSearch({subject,avails,setAvails,setPage,folders,setFolders}: {sub
             </Card>
           )}
           {loading&&<Card><div style={{textAlign:'center' as const,padding:'40px'}}><div className="spin" style={{width:32,height:32,border:`2px solid ${D.border}`,borderTopColor:D.blue,borderRadius:'50%',margin:'0 auto 16px'}}/><p style={{fontSize:13,color:D.textSec}}>Searching database...</p></div></Card>}
-          {!loading&&!searched&&!showAdd&&<Card style={{textAlign:'center' as const,padding:'64px 20px'}}><div style={{fontSize:48,opacity:.15,marginBottom:16}}>🔍</div><p style={{fontSize:15,fontWeight:600,marginBottom:8,color:D.text}}>Search or Add Listings</p></Card>}
-          {!loading&&searched&&(
+          {!loading&&!searched&&!showAdd&&<Card style={{textAlign:'center' as const,padding:'64px 20px'}}><div style={{fontSize:48,opacity:.15,marginBottom:16}}>🔍</div><p style={{fontSize:15,fontWeight:600,marginBottom:8,color:D.text}}>{isLease?'Search Lease Listings':'Search or Add Listings'}</p></Card>}
+          {/* Lease mode results */}
+          {isLease&&!loading&&searched&&(
+            <>
+              <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:12}}>
+                <span style={{fontSize:13,color:D.textSec}}>{leaseResults.length} lease listing{leaseResults.length!==1?'s':''} found (Available status)</span>
+                {leaseResults.length>0&&<Btn size="sm" onClick={()=>setLeaseAvails([...leaseAvails,...leaseResults.filter(r=>!leaseAvails.find(a=>a.id===r.id))])}>＋ Add All to OPV</Btn>}
+              </div>
+              {leaseResults.length===0?<Card style={{textAlign:'center' as const,padding:'48px 20px'}}><p style={{color:D.textSec}}>No available lease listings found.</p></Card>:
+              <div style={{display:'flex',flexDirection:'column' as const,gap:10}}>
+                {leaseResults.map((r,idx)=>{
+                  const inOPV=leaseAvails.find(a=>a.id===r.id)
+                  const sc=(label:string,val:unknown)=>(<div key={label}><div style={{fontSize:10,fontWeight:600,color:D.textMuted,textTransform:'uppercase' as const,letterSpacing:'.06em',marginBottom:2}}>{label}</div><div style={{fontSize:12,fontWeight:600,color:D.text}}>{val?String(val):'—'}</div></div>)
+                  return (
+                    <Card key={r.id} style={{padding:'16px 20px',border:`1px solid ${inOPV?D.gold:D.border}`,background:D.surface}}>
+                      <div style={{display:'flex',alignItems:'flex-start',gap:14}}>
+                        <div style={{display:'flex',flexDirection:'column' as const,alignItems:'center',gap:8,flexShrink:0,paddingTop:2}}>
+                          <div style={{width:28,height:28,borderRadius:'50%',background:`rgba(217,119,6,0.15)`,border:`1px solid ${D.gold}44`,display:'flex',alignItems:'center',justifyContent:'center',fontSize:10,fontWeight:700,color:D.gold}}>#{idx+1}</div>
+                        </div>
+                        <div style={{flex:1,minWidth:0}}>
+                          <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',gap:12,marginBottom:12}}>
+                            <div style={{flex:1,minWidth:0}}>
+                              <div style={{fontSize:15,fontWeight:700,color:D.text,marginBottom:5}}>{r.address||'—'}</div>
+                              <div style={{display:'flex',gap:6,flexWrap:'wrap' as const,marginBottom:10}}>
+                                <Tag color={D.gold}>{r.county||'—'}</Tag>
+                                {r.town&&<Tag color={D.textMuted}>{r.town}</Tag>}
+                                <Tag color={D.green}>Available</Tag>
+                                {inOPV&&<Tag color={D.gold}>✓ In OPV</Tag>}
+                              </div>
+                              <StreetViewPhoto address={`${r.address||''}, ${r.town||''}, NY`}/>
+                            </div>
+                            {r.asking_rent>0&&<div style={{textAlign:'right' as const,flexShrink:0}}>
+                              <div style={{fontSize:10,color:D.textMuted,letterSpacing:'.06em',marginBottom:2}}>ASKING RENT</div>
+                              <div style={{fontSize:16,fontWeight:700,color:D.gold}}>${Number(r.asking_rent).toFixed(2)}/SF/yr</div>
+                              {r.rent_type&&<div style={{fontSize:11,color:D.textSec}}>{r.rent_type}</div>}
+                            </div>}
+                          </div>
+                          <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:'10px 16px',marginBottom:12}}>
+                            {sc('Building SF', r.building_sf?Number(r.building_sf).toLocaleString()+' SF':null)}
+                            {sc('Ceiling Height', r.ceiling_height?r.ceiling_height+' ft':null)}
+                            {sc('Loading Docks', r.loading_docks)}
+                            {sc('Drive-In Doors', r.drive_ins)}
+                            {sc('Lot Size', r.lot_size_ac?r.lot_size_ac+' AC':null)}
+                            {sc('Landlord', r.landlord)}
+                            {sc('Lease Term', r.lease_term_years?r.lease_term_years+' yrs':null)}
+                            {sc('Taxes', r.taxes?'$'+Number(r.taxes).toFixed(2)+'/SF':null)}
+                          </div>
+                          <div style={{paddingTop:10,borderTop:`1px solid ${D.border}`,display:'flex',gap:8}}>
+                            {inOPV
+                              ?<Btn size="sm" onClick={()=>setLeaseAvails(leaseAvails.filter(a=>a.id!==r.id))} style={{background:'rgba(239,68,68,0.1)',borderColor:'rgba(239,68,68,0.3)',color:D.red}}>✕ Remove from OPV</Btn>
+                              :<Btn size="sm" onClick={()=>setLeaseAvails([...leaseAvails,r])}>＋ Add to OPV</Btn>
+                            }
+                          </div>
+                        </div>
+                      </div>
+                    </Card>
+                  )
+                })}
+              </div>}
+            </>
+          )}
+          {/* Sale mode results */}
+          {!isLease&&!loading&&searched&&(
             <>
               <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:12}}>
                 <span style={{fontSize:13,color:D.textSec}}>{results.length} listings found</span>
@@ -2408,6 +2532,7 @@ function AvailSearch({subject,avails,setAvails,setPage,folders,setFolders}: {sub
 
 
 // ── LEASE COMP SEARCH ─────────────────────────────────────────────────────────
+
 function LeaseCompSearch({subject,leaseComps,setLeaseComps,setPage,folders,setFolders}: {subject:SubjectForm|null,leaseComps:LeaseComp[],setLeaseComps:(c:LeaseComp[])=>void,setPage:(p:string)=>void,folders:Folder[],setFolders:(f:Folder[])=>void}) {
   const [results,setResults]=useState<LeaseComp[]>([])
   const [loading,setLoading]=useState(false)
@@ -2673,22 +2798,54 @@ function Scoring({subject,comps,scoredComps,setScoredComps,setPage}: {subject:Su
 }
 
 // ── ANALYTICS ─────────────────────────────────────────────────────────────────
-function Analytics({comps,avails,analytics,setAnalytics,setPage}: {comps:Comp[],avails:Avail[],analytics:AnalyticsData|null,setAnalytics:(a:AnalyticsData)=>void,setPage:(p:string)=>void}) {
+function Analytics({comps,avails,analytics,setAnalytics,setPage,subject,leaseComps}: {comps:Comp[],avails:Avail[],analytics:AnalyticsData|null,setAnalytics:(a:AnalyticsData)=>void,setPage:(p:string)=>void,subject:SubjectForm|null,leaseComps:LeaseComp[]}) {
+  const isLease = subject?.opvType==='lease'
   const [ran,setRan]=useState(!!analytics)
   const run = () => {
-    const psfs=comps.filter(c=>c.price_per_sf>0).map(c=>c.price_per_sf)
-    if (psfs.length===0) { alert('Add comps with sale prices first.'); return }
-    const mean=psfs.reduce((a,b)=>a+b,0)/psfs.length
-    const sorted=[...psfs].sort((a,b)=>a-b)
-    const median=sorted[Math.floor(sorted.length/2)]
-    const std=Math.sqrt(psfs.map(p=>(p-mean)**2).reduce((a,b)=>a+b,0)/psfs.length)
-    const totalSF=comps.filter(c=>c.building_sf&&c.price_per_sf).reduce((a,c)=>a+c.building_sf,0)
-    const weighted=totalSF>0?comps.filter(c=>c.building_sf&&c.price_per_sf).reduce((a,c)=>a+c.price_per_sf*c.building_sf,0)/totalSF:mean
-    const aPsfs=avails.filter(a=>a.price_per_sf>0).map(a=>a.price_per_sf)
-    const aMean=aPsfs.length>0?aPsfs.reduce((a,b)=>a+b,0)/aPsfs.length:0
-    const low=mean-std*0.5,market=mean,high=mean+std*0.5
-    const suggested=Math.round(market*1.05/5)*5
-    setAnalytics({mean,median,std,weighted,min:Math.min(...psfs),max:Math.max(...psfs),low,market,high,suggested,aMean,count:comps.length})
+    if (isLease) {
+      // ── LEASE OPV: primary metrics from deal rent ──
+      const dealRents=leaseComps.filter(c=>c.deal_rent>0).map(c=>c.deal_rent)
+      if (dealRents.length===0&&comps.length===0) { alert('Add lease comps with deal rent first.'); return }
+      const askRents=leaseComps.filter(c=>c.asking_rent>0).map(c=>c.asking_rent)
+      const leaseMeanDeal=dealRents.length>0?dealRents.reduce((a,b)=>a+b,0)/dealRents.length:0
+      const sorted=[...dealRents].sort((a,b)=>a-b)
+      const leaseMedianDeal=sorted.length>0?sorted[Math.floor(sorted.length/2)]:0
+      const leaseMeanAsk=askRents.length>0?askRents.reduce((a,b)=>a+b,0)/askRents.length:0
+      const leaseMin=dealRents.length>0?Math.min(...dealRents):0
+      const leaseMax=dealRents.length>0?Math.max(...dealRents):0
+      const leaseSuggested=leaseMeanAsk>0?Math.round(leaseMeanAsk*1.05*4)/4:leaseMax>0?Math.round(leaseMax*1.05*4)/4:0
+      // Also run sale stats (secondary)
+      const psfs=comps.filter(c=>c.price_per_sf>0).map(c=>c.price_per_sf)
+      const smean=psfs.length>0?psfs.reduce((a,b)=>a+b,0)/psfs.length:0
+      const ssorted=[...psfs].sort((a,b)=>a-b)
+      const smedian=ssorted.length>0?ssorted[Math.floor(ssorted.length/2)]:0
+      const sstd=psfs.length>0?Math.sqrt(psfs.map(p=>(p-smean)**2).reduce((a,b)=>a+b,0)/psfs.length):0
+      const totalSF=comps.filter(c=>c.building_sf&&c.price_per_sf).reduce((a,c)=>a+c.building_sf,0)
+      const weighted=totalSF>0?comps.filter(c=>c.building_sf&&c.price_per_sf).reduce((a,c)=>a+c.price_per_sf*c.building_sf,0)/totalSF:smean
+      const aPsfs=avails.filter(a=>a.price_per_sf>0).map(a=>a.price_per_sf)
+      const aMean=aPsfs.length>0?aPsfs.reduce((a,b)=>a+b,0)/aPsfs.length:0
+      setAnalytics({
+        mean:smean,median:smedian,std:sstd,weighted,min:psfs.length>0?Math.min(...psfs):0,max:psfs.length>0?Math.max(...psfs):0,
+        low:smean-sstd*0.5,market:smean,high:smean+sstd*0.5,suggested:smean?Math.round(smean*1.05/5)*5:0,
+        aMean,count:comps.length,
+        leaseMeanDeal,leaseMedianDeal,leaseMeanAsk,leaseCount:dealRents.length,leaseMin,leaseMax,leaseSuggested,
+      })
+    } else {
+      // ── SALE OPV: primary metrics from sale price PSF ──
+      const psfs=comps.filter(c=>c.price_per_sf>0).map(c=>c.price_per_sf)
+      if (psfs.length===0) { alert('Add comps with sale prices first.'); return }
+      const mean=psfs.reduce((a,b)=>a+b,0)/psfs.length
+      const sorted=[...psfs].sort((a,b)=>a-b)
+      const median=sorted[Math.floor(sorted.length/2)]
+      const std=Math.sqrt(psfs.map(p=>(p-mean)**2).reduce((a,b)=>a+b,0)/psfs.length)
+      const totalSF=comps.filter(c=>c.building_sf&&c.price_per_sf).reduce((a,c)=>a+c.building_sf,0)
+      const weighted=totalSF>0?comps.filter(c=>c.building_sf&&c.price_per_sf).reduce((a,c)=>a+c.price_per_sf*c.building_sf,0)/totalSF:mean
+      const aPsfs=avails.filter(a=>a.price_per_sf>0).map(a=>a.price_per_sf)
+      const aMean=aPsfs.length>0?aPsfs.reduce((a,b)=>a+b,0)/aPsfs.length:0
+      const low=mean-std*0.5,market=mean,high=mean+std*0.5
+      const suggested=Math.round(market*1.05/5)*5
+      setAnalytics({mean,median,std,weighted,min:Math.min(...psfs),max:Math.max(...psfs),low,market,high,suggested,aMean,count:comps.length})
+    }
     setRan(true)
   }
   const Stat=({l,v,c,note}: {l:string,v:string,c?:string,note?:string})=>(
@@ -2698,15 +2855,53 @@ function Analytics({comps,avails,analytics,setAnalytics,setPage}: {comps:Comp[],
       {note&&<div style={{fontSize:10,color:D.textMuted,marginTop:5,lineHeight:1.4}}>{note}</div>}
     </div>
   )
+  const noData = isLease ? leaseComps.length===0&&comps.length===0 : comps.length===0
   return (
     <div className="anim-in">
-      <SectionTitle sub="Statistical analysis of your sale comps to establish value range and suggested listing price.">Analytics & Valuation</SectionTitle>
+      <SectionTitle sub={isLease?"Statistical analysis of your lease comps to establish rental rate range.":"Statistical analysis of your sale comps to establish value range and suggested listing price."}>Analytics & Valuation</SectionTitle>
       <div style={{display:'flex',gap:12,marginBottom:20}}>
         <Btn onClick={run} style={{padding:'10px 20px'}}>Run Analytics →</Btn>
         {ran&&<Btn variant="ghost" onClick={()=>setPage('broker-review')} style={{padding:'10px 20px'}}>Next: Broker Review →</Btn>}
       </div>
-      {!ran&&<Card style={{textAlign:'center' as const,padding:'56px 20px'}}><div style={{fontSize:40,opacity:.2,marginBottom:12}}>📈</div><p style={{color:D.textSec}}>{comps.length===0?'Add comps from Sale Comp Search first.':'Click Run Analytics to calculate valuation metrics.'}</p></Card>}
-      {ran&&analytics&&(
+      {!ran&&<Card style={{textAlign:'center' as const,padding:'56px 20px'}}><div style={{fontSize:40,opacity:.2,marginBottom:12}}>📈</div><p style={{color:D.textSec}}>{noData?(isLease?'Add lease comps with deal rent first.':'Add comps from Sale Comp Search first.'):'Click Run Analytics to calculate valuation metrics.'}</p></Card>}
+      {ran&&analytics&&isLease&&(
+        <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:20}} className="anim-in">
+          <Card>
+            <SL>Lease Comp Statistics ({analytics.leaseCount??0} comps)</SL>
+            <Stat l="Avg Deal Rent/SF/yr" v={analytics.leaseMeanDeal?`$${analytics.leaseMeanDeal.toFixed(2)}`:'—'}/>
+            <Stat l="Median Deal Rent/SF/yr" v={analytics.leaseMedianDeal?`$${analytics.leaseMedianDeal.toFixed(2)}`:'—'}/>
+            <Stat l="Avg Asking Rent/SF/yr" v={analytics.leaseMeanAsk?`$${analytics.leaseMeanAsk.toFixed(2)}`:'—'} c={D.blue}/>
+            <Stat l="Min Deal Rent" v={analytics.leaseMin?`$${analytics.leaseMin.toFixed(2)}`:'—'} c={D.red}/>
+            <Stat l="Max Deal Rent" v={analytics.leaseMax?`$${analytics.leaseMax.toFixed(2)}`:'—'} c={D.green}/>
+          </Card>
+          <Card>
+            <SL>Rental Rate Conclusion</SL>
+            <Stat l="Market Deal Rent" v={analytics.leaseMeanDeal?`$${analytics.leaseMeanDeal.toFixed(2)}/SF/yr`:'—'} note="Average closed rent"/>
+            <Stat l="Market Asking Rent" v={analytics.leaseMeanAsk?`$${analytics.leaseMeanAsk.toFixed(2)}/SF/yr`:'—'} c={D.blue} note="Average asking rent"/>
+            <div style={{background:`rgba(217,119,6,0.08)`,border:`1px solid rgba(217,119,6,0.25)`,borderRadius:12,padding:'16px 18px',marginTop:12,borderLeft:`3px solid ${D.gold}`}}>
+              <div style={{fontSize:10,color:D.gold,fontWeight:700,textTransform:'uppercase' as const,letterSpacing:'.12em',marginBottom:8}}>Suggested Asking Rent</div>
+              <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:28,fontWeight:700,color:D.gold,letterSpacing:'-.02em'}}>{analytics.leaseSuggested?`$${analytics.leaseSuggested.toFixed(2)}/SF/yr`:'—'}</div>
+              <div style={{fontSize:10,color:D.textMuted,marginTop:6}}>Asking + 5% premium over market</div>
+            </div>
+          </Card>
+          <Card>
+            <SL>Rent Distribution</SL>
+            {leaseComps.filter(c=>c.deal_rent>0).map((c,i)=>(
+              <div key={i} style={{display:'flex',alignItems:'center',gap:8,marginBottom:6}}>
+                <div style={{width:80,fontSize:10,color:D.textSec,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' as const}}>{c.address?.split(',')[0]||'—'}</div>
+                <div style={{flex:1,height:4,background:D.surface2,borderRadius:2}}><div style={{height:'100%',background:D.gold,borderRadius:2,width:`${analytics.leaseMax&&analytics.leaseMin&&analytics.leaseMax>analytics.leaseMin?((c.deal_rent-analytics.leaseMin!)/(analytics.leaseMax!-analytics.leaseMin!)*100).toFixed(0):'50'}%`}}/></div>
+                <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:10,color:D.text,width:52,textAlign:'right' as const}}>${Number(c.deal_rent).toFixed(2)}</div>
+              </div>
+            ))}
+            {analytics.count>0&&<>
+              <SL style={{marginTop:16}}>Supporting Sale Data ({analytics.count})</SL>
+              <Stat l="Avg Sale Price/SF" v={analytics.mean?`$${analytics.mean.toFixed(2)}`:'—'}/>
+              <Stat l="Weighted Avg PSF" v={analytics.weighted?`$${analytics.weighted.toFixed(2)}`:'—'} c={D.gold}/>
+            </>}
+          </Card>
+        </div>
+      )}
+      {ran&&analytics&&!isLease&&(
         <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:20}} className="anim-in">
           <Card>
             <SL>Sale Comp Statistics ({analytics.count} comps)</SL>
@@ -2749,6 +2944,7 @@ function Analytics({comps,avails,analytics,setAnalytics,setPage}: {comps:Comp[],
 
 // ── BROKER REVIEW ─────────────────────────────────────────────────────────────
 function BrokerReview({subject,comps,analytics,setAnalytics,aiText,setAiText,setPage,setSubject}: {subject:SubjectForm|null,comps:Comp[],analytics:AnalyticsData|null,setAnalytics:(a:AnalyticsData)=>void,aiText:string,setAiText:(t:string)=>void,setPage:(p:string)=>void,setSubject:(s:SubjectForm)=>void}) {
+  const isLease = subject?.opvType==='lease'
   const computeAnalytics = () => {
     const psfs=comps.filter(c=>c.price_per_sf>0).map(c=>c.price_per_sf)
     if (psfs.length===0) return null
@@ -2776,48 +2972,84 @@ function BrokerReview({subject,comps,analytics,setAnalytics,aiText,setAiText,set
       <div style={{display:'grid',gridTemplateColumns:'320px 1fr',gap:20,alignItems:'start'}}>
         <div>
           <Card style={{marginBottom:16}}>
-            <SL>Analytics Summary</SL>
-            {!a&&<p style={{fontSize:12,color:D.textSec}}>No comp data yet. Add sale comps first.</p>}
-            {a&&<>
-              {([
-                ['Avg PSF',`$${a.mean.toFixed(2)}`,D.gold],
-                ['Median PSF',`$${a.median.toFixed(2)}`,D.text],
-                ['Weighted Avg PSF',`$${a.weighted.toFixed(2)}`,D.gold],
-                ['Min PSF',`$${a.min.toFixed(2)}`,D.red],
-                ['Max PSF',`$${a.max.toFixed(2)}`,D.green],
-                ['Std Deviation',`$${a.std.toFixed(2)}`,D.textSec],
-              ] as [string,string,string][]).map(([l,v,c])=>(
-                <div key={l} style={{display:'flex',justifyContent:'space-between',padding:'6px 0',borderBottom:`1px solid ${D.border}`,fontSize:12}}>
-                  <span style={{color:D.textSec}}>{l}</span><span style={{fontWeight:700,color:c,fontFamily:"'JetBrains Mono',monospace"}}>{v}</span>
-                </div>
-              ))}
-              <div style={{marginTop:12,padding:'12px 14px',borderRadius:8,background:`rgba(217,119,6,0.1)`,border:`1px solid rgba(217,119,6,0.25)`}}>
-                <div style={{fontSize:10,color:D.gold,fontWeight:700,textTransform:'uppercase' as const,letterSpacing:'.08em',marginBottom:4}}>Value Range</div>
-                <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:14,fontWeight:700,color:D.text}}>${a.low.toFixed(2)} – ${a.high.toFixed(2)}/SF</div>
-                <div style={{fontSize:11,color:D.textSec,marginTop:4}}>Suggested: <strong style={{color:D.gold}}>${a.suggested}/SF</strong></div>
-              </div>
-              <SL style={{marginTop:16}}>Distribution</SL>
-              {comps.filter(c=>c.price_per_sf>0).map((c,i)=>(
-                <div key={i} style={{display:'flex',alignItems:'center',gap:6,marginBottom:5}}>
-                  <div style={{width:70,fontSize:9,color:D.textMuted,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' as const}}>{c.address?.split(',')[0]}</div>
-                  <div style={{flex:1,height:3,background:D.surface2,borderRadius:2}}><div style={{height:'100%',background:D.gold,borderRadius:2,width:`${a.max>a.min?((c.price_per_sf-a.min)/(a.max-a.min)*100).toFixed(0):'50'}%`}}/></div>
-                  <div style={{fontSize:9,fontFamily:"'JetBrains Mono',monospace",color:D.textSec,width:40,textAlign:'right' as const}}>${c.price_per_sf.toFixed(0)}</div>
-                </div>
-              ))}
-            </>}
+            <SL>{isLease?'Lease Analytics Summary':'Analytics Summary'}</SL>
+            {isLease?(
+              /* ── LEASE OPV: show rent metrics ── */
+              a?.leaseCount ? (
+                <>
+                  {([
+                    ['Avg Deal Rent/SF/yr', a.leaseMeanDeal?`$${a.leaseMeanDeal.toFixed(2)}`:null, D.gold],
+                    ['Median Deal Rent/SF/yr', a.leaseMedianDeal?`$${a.leaseMedianDeal.toFixed(2)}`:null, D.text],
+                    ['Avg Asking Rent/SF/yr', a.leaseMeanAsk?`$${a.leaseMeanAsk.toFixed(2)}`:null, D.blue],
+                    ['Min Deal Rent', a.leaseMin?`$${a.leaseMin.toFixed(2)}`:null, D.red],
+                    ['Max Deal Rent', a.leaseMax?`$${a.leaseMax.toFixed(2)}`:null, D.green],
+                    ...(a.count>0?[['Avg Sale Price/SF', `$${a.mean.toFixed(2)}`, D.textSec]]:[] as [string,string|null,string][]),
+                  ] as [string,string|null,string][]).filter(([,v])=>v).map(([l,v,c])=>(
+                    <div key={l} style={{display:'flex',justifyContent:'space-between',padding:'6px 0',borderBottom:`1px solid ${D.border}`,fontSize:12}}>
+                      <span style={{color:D.textSec}}>{l}</span><span style={{fontWeight:700,color:c,fontFamily:"'JetBrains Mono',monospace"}}>{v}</span>
+                    </div>
+                  ))}
+                  <div style={{marginTop:12,padding:'12px 14px',borderRadius:8,background:`rgba(217,119,6,0.1)`,border:`1px solid rgba(217,119,6,0.25)`}}>
+                    <div style={{fontSize:10,color:D.gold,fontWeight:700,textTransform:'uppercase' as const,letterSpacing:'.08em',marginBottom:4}}>Suggested Asking Rent</div>
+                    <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:14,fontWeight:700,color:D.text}}>{a.leaseSuggested?`$${a.leaseSuggested.toFixed(2)}/SF/yr`:'—'}</div>
+                    <div style={{fontSize:11,color:D.textSec,marginTop:4}}>Based on market asking + 5% premium</div>
+                  </div>
+                </>
+              ) : <p style={{fontSize:12,color:D.textSec}}>Run Analytics on the Analytics step first to see lease metrics here.</p>
+            ):(
+              /* ── SALE OPV: original sale stats ── */
+              <>
+                {!a&&<p style={{fontSize:12,color:D.textSec}}>No comp data yet. Add sale comps first.</p>}
+                {a&&<>
+                  {([
+                    ['Avg PSF',`$${a.mean.toFixed(2)}`,D.gold],
+                    ['Median PSF',`$${a.median.toFixed(2)}`,D.text],
+                    ['Weighted Avg PSF',`$${a.weighted.toFixed(2)}`,D.gold],
+                    ['Min PSF',`$${a.min.toFixed(2)}`,D.red],
+                    ['Max PSF',`$${a.max.toFixed(2)}`,D.green],
+                    ['Std Deviation',`$${a.std.toFixed(2)}`,D.textSec],
+                  ] as [string,string,string][]).map(([l,v,c])=>(
+                    <div key={l} style={{display:'flex',justifyContent:'space-between',padding:'6px 0',borderBottom:`1px solid ${D.border}`,fontSize:12}}>
+                      <span style={{color:D.textSec}}>{l}</span><span style={{fontWeight:700,color:c,fontFamily:"'JetBrains Mono',monospace"}}>{v}</span>
+                    </div>
+                  ))}
+                  <div style={{marginTop:12,padding:'12px 14px',borderRadius:8,background:`rgba(217,119,6,0.1)`,border:`1px solid rgba(217,119,6,0.25)`}}>
+                    <div style={{fontSize:10,color:D.gold,fontWeight:700,textTransform:'uppercase' as const,letterSpacing:'.08em',marginBottom:4}}>Value Range</div>
+                    <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:14,fontWeight:700,color:D.text}}>${a.low.toFixed(2)} – ${a.high.toFixed(2)}/SF</div>
+                    <div style={{fontSize:11,color:D.textSec,marginTop:4}}>Suggested: <strong style={{color:D.gold}}>${a.suggested}/SF</strong></div>
+                  </div>
+                  <SL style={{marginTop:16}}>Distribution</SL>
+                  {comps.filter(c=>c.price_per_sf>0).map((c,i)=>(
+                    <div key={i} style={{display:'flex',alignItems:'center',gap:6,marginBottom:5}}>
+                      <div style={{width:70,fontSize:9,color:D.textMuted,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' as const}}>{c.address?.split(',')[0]}</div>
+                      <div style={{flex:1,height:3,background:D.surface2,borderRadius:2}}><div style={{height:'100%',background:D.gold,borderRadius:2,width:`${a.max>a.min?((c.price_per_sf-a.min)/(a.max-a.min)*100).toFixed(0):'50'}%`}}/></div>
+                      <div style={{fontSize:9,fontFamily:"'JetBrains Mono',monospace",color:D.textSec,width:40,textAlign:'right' as const}}>${c.price_per_sf.toFixed(0)}</div>
+                    </div>
+                  ))}
+                </>}
+              </>
+            )}
           </Card>
           <Card>
-            <SL>Value Inputs</SL>
-            <Field label="Est. Value Low ($/SF)"><Input placeholder="e.g. 175" value={subject?.estimatedValueLow||''} onChange={e=>updateSubjectValue('estimatedValueLow',e.target.value)}/></Field>
-            <Field label="Est. Value High ($/SF)"><Input placeholder="e.g. 210" value={subject?.estimatedValueHigh||''} onChange={e=>updateSubjectValue('estimatedValueHigh',e.target.value)}/></Field>
-            {(subject?.opvType==='investment'||subject?.opvType==='Investment Sale')&&<>
-              <Field label="Cap Rate Low (%)"><Input placeholder="5.5" value={subject?.capRateLow||''} onChange={e=>updateSubjectValue('capRateLow',e.target.value)}/></Field>
-              <Field label="Cap Rate High (%)"><Input placeholder="7.0" value={subject?.capRateHigh||''} onChange={e=>updateSubjectValue('capRateHigh',e.target.value)}/></Field>
-            </>}
-            {(subject?.opvType==='lease'||subject?.opvType==='For Lease')&&<>
-              <Field label="Lease PSF Low ($/SF/yr)"><Input placeholder="14.00" value={subject?.leasePsfLow||''} onChange={e=>updateSubjectValue('leasePsfLow',e.target.value)}/></Field>
-              <Field label="Lease PSF High ($/SF/yr)"><Input placeholder="18.00" value={subject?.leasePsfHigh||''} onChange={e=>updateSubjectValue('leasePsfHigh',e.target.value)}/></Field>
-            </>}
+            <SL>{isLease?'Lease Rate Inputs':'Value Inputs'}</SL>
+            {isLease?(
+              /* ── LEASE OPV: show lease rate fields as primary ── */
+              <>
+                <Field label="Estimated Value For Lease — Low ($/SF/yr)"><Input placeholder="e.g. 14.00" value={subject?.leasePsfLow||''} onChange={e=>updateSubjectValue('leasePsfLow',e.target.value)}/></Field>
+                <Field label="Estimated Value For Lease — High ($/SF/yr)"><Input placeholder="e.g. 18.00" value={subject?.leasePsfHigh||''} onChange={e=>updateSubjectValue('leasePsfHigh',e.target.value)}/></Field>
+                <div style={{fontSize:11,color:D.textMuted,marginTop:4,lineHeight:1.5}}>These populate Section III of the report. Run Analytics first for the suggested asking rent.</div>
+              </>
+            ):(
+              /* ── SALE / INVESTMENT OPV: original fields ── */
+              <>
+                <Field label="Est. Value Low ($/SF)"><Input placeholder="e.g. 175" value={subject?.estimatedValueLow||''} onChange={e=>updateSubjectValue('estimatedValueLow',e.target.value)}/></Field>
+                <Field label="Est. Value High ($/SF)"><Input placeholder="e.g. 210" value={subject?.estimatedValueHigh||''} onChange={e=>updateSubjectValue('estimatedValueHigh',e.target.value)}/></Field>
+                {(subject?.opvType==='investment'||subject?.opvType==='Investment Sale')&&<>
+                  <Field label="Cap Rate Low (%)"><Input placeholder="5.5" value={subject?.capRateLow||''} onChange={e=>updateSubjectValue('capRateLow',e.target.value)}/></Field>
+                  <Field label="Cap Rate High (%)"><Input placeholder="7.0" value={subject?.capRateHigh||''} onChange={e=>updateSubjectValue('capRateHigh',e.target.value)}/></Field>
+                </>}
+              </>
+            )}
           </Card>
         </div>
         <Card style={{minHeight:480}}>
@@ -2828,7 +3060,9 @@ function BrokerReview({subject,comps,analytics,setAnalytics,aiText,setAiText,set
           <textarea
             value={aiText}
             onChange={e=>setAiText(e.target.value)}
-            placeholder={`Write your broker analysis here...\n\nExample structure:\n\nMARKET OVERVIEW\nThe Long Island industrial market continues to experience strong demand...\n\nLOCATION ANALYSIS\n${subject?.address||'The subject property'} benefits from...\n\nBUILDING ASSESSMENT\nThe subject improvements consist of...\n\nCOMPARABLE SALES\nBased on ${comps.length} comparable transactions...\n\nVALUE CONCLUSION\nBased on our analysis, we estimate the market value at...`}
+            placeholder={isLease
+              ? `Write your broker analysis here...\n\nExample structure:\n\nMARKET OVERVIEW\nThe Long Island industrial leasing market continues to see strong demand...\n\nLOCATION ANALYSIS\n${subject?.address||'The subject property'} benefits from excellent highway access...\n\nBUILDING ASSESSMENT\nThe subject property offers ${subject?.size?Number(subject.size).toLocaleString()+' SF':'competitive square footage'} of industrial space...\n\nLEASE COMPARABLE ANALYSIS\nBased on ${comps.length>0?comps.length+' supporting sale transactions and ':''}recent lease transactions in the market...\n\nRENTAL RATE CONCLUSION\nBased on our analysis, we estimate the market rental rate at...`
+              : `Write your broker analysis here...\n\nExample structure:\n\nMARKET OVERVIEW\nThe Long Island industrial market continues to experience strong demand...\n\nLOCATION ANALYSIS\n${subject?.address||'The subject property'} benefits from...\n\nBUILDING ASSESSMENT\nThe subject improvements consist of...\n\nCOMPARABLE SALES\nBased on ${comps.length} comparable transactions...\n\nVALUE CONCLUSION\nBased on our analysis, we estimate the market value at...`}
             style={{width:'100%',minHeight:420,background:D.surface2,border:`1px solid ${D.border}`,borderRadius:8,padding:16,fontSize:13,color:D.text,lineHeight:1.85,resize:'vertical',fontFamily:'inherit',outline:'none',boxSizing:'border-box'}}
           />
           <div style={{display:'flex',gap:8,marginTop:10}}>
@@ -2904,7 +3138,7 @@ function PhotoSlot({photoKey,defaultSrc,height=280,override,isEditing,canEdit=fa
 }
 
 // ── OPV REPORT ────────────────────────────────────────────────────────────────
-function OPVReport({subject,comps,leaseComps,avails,analytics,aiText,setPage,frozenHTML,setFrozenHTML,photoUrls={}}: {subject:SubjectForm|null,comps:Comp[],leaseComps:LeaseComp[],avails:Avail[],analytics:AnalyticsData|null,aiText:string,setPage:(p:string)=>void,frozenHTML:string|null,setFrozenHTML:React.Dispatch<React.SetStateAction<string|null>>,photoUrls?:Record<string,string>}) {
+function OPVReport({subject,comps,leaseComps,leaseAvails=[],avails,analytics,aiText,setPage,frozenHTML,setFrozenHTML,photoUrls={}}: {subject:SubjectForm|null,comps:Comp[],leaseComps:LeaseComp[],leaseAvails?:LeaseComp[],avails:Avail[],analytics:AnalyticsData|null,aiText:string,setPage:(p:string)=>void,frozenHTML:string|null,setFrozenHTML:React.Dispatch<React.SetStateAction<string|null>>,photoUrls?:Record<string,string>}) {
   const today = new Date().toLocaleDateString('en-US',{month:'long',year:'numeric'}).toUpperCase()
   const [downloading, setDownloading] = useState(false)
   const [includeLeaseComps, setIncludeLeaseComps] = useState(leaseComps.length>0)
@@ -3453,6 +3687,9 @@ function OPVReport({subject,comps,leaseComps,avails,analytics,aiText,setPage,fro
           <div style={{fontSize:28,fontWeight:900,color:'#1a1a1a',letterSpacing:'.15em',marginBottom:4}}>PREMIER COMMERCIAL REAL ESTATE</div>
           <div style={{width:120,height:3,background:gold,margin:'12px auto 40px'}}/>
           <div style={{fontSize:42,fontWeight:900,color:'#1a1a1a',letterSpacing:'.08em',marginBottom:8}}>OPINION OF VALUE</div>
+          {subject.opvType==='lease'&&(
+            <div style={{fontSize:18,fontWeight:700,color:gold,letterSpacing:'.2em',marginBottom:4,borderTop:`1px solid ${gold}`,borderBottom:`1px solid ${gold}`,padding:'6px 32px',display:'inline-block'}}>FOR LEASE</div>
+          )}
           <div style={{width:80,height:1,background:'#ccc',margin:'16px auto'}}/>
           <div style={{marginTop:32,marginBottom:6,fontSize:11,color:'#888',textTransform:'uppercase' as const,letterSpacing:'.1em'}}>Date Prepared</div>
           <div style={{fontSize:16,fontWeight:700,marginBottom:32}}>{today}</div>
@@ -3488,8 +3725,16 @@ function OPVReport({subject,comps,leaseComps,avails,analytics,aiText,setPage,fro
             'I.  EXECUTIVE SUMMARY',
             'II.  BUILDING DESCRIPTION',
             'III.  OPINION OF VALUE',
-            ...(comps.length>0?['IV.  RECENT INVESTMENT/SALE TRANSACTIONS']:[]),
-            ...(includeLeaseComps&&leaseComps.length>0?['V.  RECENT LEASE TRANSACTIONS']:[]),
+            ...(subject.opvType==='lease'
+              ? [
+                  ...(includeLeaseComps&&leaseComps.length>0?['IV.  RECENT LEASE TRANSACTIONS']:[]),
+                  ...(comps.length>0?['V.  SUPPORTING SALE MARKET DATA']:[]),
+                ]
+              : [
+                  ...(comps.length>0?['IV.  RECENT '+(subject.opvType==='investment'?'INVESTMENT':'SALE')+' TRANSACTIONS']:[]),
+                  ...(includeLeaseComps&&leaseComps.length>0?['V.  RECENT LEASE TRANSACTIONS']:[]),
+                ]
+            ),
             ...(includeAvails&&avails.length>0?['VI.  MARKET AVAILABILITIES']:[]),
             ...(includeMarketingStrategy?['VII.  MARKETING STRATEGY']:[]),
             ...(includePcreProfile?['VIII.  PREMIER COMMERCIAL REAL ESTATE PROFILE']:[]),
@@ -3562,34 +3807,74 @@ function OPVReport({subject,comps,leaseComps,avails,analytics,aiText,setPage,fro
         {/* ── SECTION III: OPINION OF VALUE ── */}
         <SecHeading num="III" title="OPINION OF VALUE"/>
         <p style={{fontSize:13,marginBottom:16,lineHeight:1.7}}><E k="opv_intro" d="Based upon the aforementioned assumptions, our knowledge of current market conditions, and a review of the Comparables found in Section IV." multi style={{width:'100%'}}/></p>
-        <div style={{display:'grid',gridTemplateColumns:'200px 1fr 1fr',border:'1px solid #ccc',marginBottom:24}}>
-          <div style={{background:darkBg,color:'#fff',padding:'10px 12px',fontWeight:700,fontSize:11,borderRight:'1px solid #444'}}>Estimated Value For Sale</div>
-          <div style={{background:darkBg,color:'#fff',padding:'10px 12px',fontWeight:700,fontSize:11,textAlign:'center' as const,borderRight:'1px solid #444'}}>Per SF</div>
-          <div style={{background:darkBg,color:'#fff',padding:'10px 12px',fontWeight:700,fontSize:11,textAlign:'center' as const}}>Total</div>
-          <div style={{background:'#EBEBEB',padding:'14px 12px',borderRight:'1px solid #ccc',borderTop:'1px solid #ccc'}}/>
-          <div style={{background:'#FFF8E1',padding:'14px 12px',textAlign:'center' as const,borderRight:'1px solid #ccc',borderTop:'1px solid #ccc'}}>
-            <span style={{fontSize:20,fontWeight:700,color:gold}}>
-              {valLowPsf&&valHighPsf?`$${valLowPsf.toFixed(2)} – $${valHighPsf.toFixed(2)}`:avgPsf?`$${Number(avgPsf).toFixed(2)}`:'[ __________ ]'}
-            </span>
+        {subject.opvType==='lease'?(
+          /* ── LEASE OPV: rental rate conclusion — matches template format ── */
+          <div style={{border:'1px solid #ccc',marginBottom:24}}>
+            {/* Row 1: Estimated Value For Lease */}
+            <div style={{display:'grid',gridTemplateColumns:'260px 1fr',borderBottom:'1px solid #ccc'}}>
+              <div style={{background:darkBg,color:'#fff',padding:'14px 16px',fontWeight:700,fontSize:12,borderRight:'1px solid #444',display:'flex',alignItems:'center'}}>ESTIMATED VALUE FOR LEASE</div>
+              <div style={{background:'#FFF8E1',padding:'14px 16px',display:'flex',alignItems:'center'}}>
+                <span style={{fontSize:18,fontWeight:700,color:gold}}>
+                  {subject.leasePsfLow&&subject.leasePsfHigh
+                    ? `$${subject.leasePsfLow} – $${subject.leasePsfHigh} per SF per year — Modified Gross / NNN`
+                    : subject.leasePsfLow||subject.leasePsfHigh
+                    ? `$${subject.leasePsfLow||subject.leasePsfHigh} per SF per year — Modified Gross / NNN`
+                    : '[ $_________ per SF per year — Modified Gross / NNN ]'}
+                </span>
+              </div>
+            </div>
+            {/* Row 2: Recommended Asking Lease Price */}
+            <div style={{display:'grid',gridTemplateColumns:'260px 1fr'}}>
+              <div style={{background:darkBg,color:'#fff',padding:'14px 16px',fontWeight:700,fontSize:12,borderRight:'1px solid #444',display:'flex',alignItems:'center'}}>RECOMMENDED ASKING LEASE PRICE</div>
+              <div style={{background:'#FFF8E1',padding:'14px 16px',display:'flex',alignItems:'center'}}>
+                <span style={{fontSize:18,fontWeight:700,color:gold}}>
+                  {analytics?.leaseSuggested
+                    ? `$${analytics.leaseSuggested.toFixed(2)} per SF per year — Modified Gross / NNN`
+                    : subject.leasePsfHigh
+                    ? `$${subject.leasePsfHigh} per SF per year — Modified Gross / NNN`
+                    : '[ $_________ per SF per year — Modified Gross / NNN ]'}
+                </span>
+              </div>
+            </div>
           </div>
-          <div style={{background:'#FFF8E1',padding:'14px 12px',textAlign:'center' as const,borderTop:'1px solid #ccc'}}>
-            <span style={{fontSize:20,fontWeight:700,color:gold}}>
-              {valLowPsf&&valHighPsf&&bldgSF?`$${Math.round(valLowPsf*bldgSF).toLocaleString()} – $${Math.round(valHighPsf*bldgSF).toLocaleString()}`:bldgSF&&avgPsf?`$${Math.round(bldgSF*avgPsf).toLocaleString()}`:'[ __________ ]'}
-            </span>
-          </div>
-        </div>
-        {(subject.opvType==='investment'||subject.capRateLow)&&(
-          <div style={{marginBottom:24}}>
-            <div style={{fontSize:13,marginBottom:12}}>The value shall be established as a function of:</div>
-            <Bullet>A "Fair Market" Rental Rate for an acceptable lease term.</Bullet>
-            <Bullet>An acceptable Rate of Return (Cap Rate) to the investor/Purchaser.</Bullet>
-            {(subject.leasePsfLow||subject.leasePsfHigh)&&<div style={{border:'1px solid #ccc',marginTop:16}}><LabelRow label="Lease/Rental Rate (Year 1)" value={`$${subject.leasePsfLow} to $${subject.leasePsfHigh} PSF NNN`}/></div>}
-            {(subject.capRateLow||subject.capRateHigh)&&<div style={{border:'1px solid #ccc',marginTop:4}}><LabelRow label="Cap Rate" value={`${subject.capRateLow}% to ${subject.capRateHigh}%`}/></div>}
-          </div>
+        ):(
+          /* ── SALE / INVESTMENT OPV: price PSF conclusion ── */
+          <>
+            <div style={{display:'grid',gridTemplateColumns:'200px 1fr 1fr',border:'1px solid #ccc',marginBottom:24}}>
+              <div style={{background:darkBg,color:'#fff',padding:'10px 12px',fontWeight:700,fontSize:11,borderRight:'1px solid #444'}}>Estimated Value For Sale</div>
+              <div style={{background:darkBg,color:'#fff',padding:'10px 12px',fontWeight:700,fontSize:11,textAlign:'center' as const,borderRight:'1px solid #444'}}>Per SF</div>
+              <div style={{background:darkBg,color:'#fff',padding:'10px 12px',fontWeight:700,fontSize:11,textAlign:'center' as const}}>Total</div>
+              <div style={{background:'#EBEBEB',padding:'14px 12px',borderRight:'1px solid #ccc',borderTop:'1px solid #ccc'}}/>
+              <div style={{background:'#FFF8E1',padding:'14px 12px',textAlign:'center' as const,borderRight:'1px solid #ccc',borderTop:'1px solid #ccc'}}>
+                <span style={{fontSize:20,fontWeight:700,color:gold}}>
+                  {valLowPsf&&valHighPsf?`$${valLowPsf.toFixed(2)} – $${valHighPsf.toFixed(2)}`:avgPsf?`$${Number(avgPsf).toFixed(2)}`:'[ __________ ]'}
+                </span>
+              </div>
+              <div style={{background:'#FFF8E1',padding:'14px 12px',textAlign:'center' as const,borderTop:'1px solid #ccc'}}>
+                <span style={{fontSize:20,fontWeight:700,color:gold}}>
+                  {valLowPsf&&valHighPsf&&bldgSF?`$${Math.round(valLowPsf*bldgSF).toLocaleString()} – $${Math.round(valHighPsf*bldgSF).toLocaleString()}`:bldgSF&&avgPsf?`$${Math.round(bldgSF*avgPsf).toLocaleString()}`:'[ __________ ]'}
+                </span>
+              </div>
+            </div>
+            {(subject.opvType==='investment'||subject.capRateLow)&&(
+              <div style={{marginBottom:24}}>
+                <div style={{fontSize:13,marginBottom:12}}>The value shall be established as a function of:</div>
+                <Bullet>A "Fair Market" Rental Rate for an acceptable lease term.</Bullet>
+                <Bullet>An acceptable Rate of Return (Cap Rate) to the investor/Purchaser.</Bullet>
+                {(subject.leasePsfLow||subject.leasePsfHigh)&&<div style={{border:'1px solid #ccc',marginTop:16}}><LabelRow label="Lease/Rental Rate (Year 1)" value={`$${subject.leasePsfLow} to $${subject.leasePsfHigh} PSF NNN`}/></div>}
+                {(subject.capRateLow||subject.capRateHigh)&&<div style={{border:'1px solid #ccc',marginTop:4}}><LabelRow label="Cap Rate" value={`${subject.capRateLow}% to ${subject.capRateHigh}%`}/></div>}
+              </div>
+            )}
+          </>
         )}
 
-        {/* ── SECTION IV: SALE COMPS ── */}
-        {comps.length>0&&<>
+        {/* ── SECTIONS IV & V: order depends on OPV type ── */}
+
+        {/* Lease comp card helper — used in both positions */}
+        {/* SALE OPV → Section IV: SALE COMPS, Section V: LEASE COMPS (supporting) */}
+        {/* LEASE OPV → Section IV: LEASE COMPS (primary), Section V: SALE COMPS (supporting) */}
+
+        {subject.opvType!=='lease'&&comps.length>0&&<>
           <SecHeading num="IV" title={subject.opvType==='investment'?'RECENT INVESTMENT TRANSACTIONS':'RECENT SALE TRANSACTIONS'}/>
           <div style={{border:'1px solid #ccc',marginBottom:16}}>
             <TblHeader cols={['Property Address','City','Building Size (SF)','Sale Price','Price PSF']}/>
@@ -3631,8 +3916,94 @@ function OPVReport({subject,comps,leaseComps,avails,analytics,aiText,setPage,fro
           })}
         </>}
 
-        {/* ── SECTION V: LEASE COMPS ── */}
-        {includeLeaseComps&&leaseComps.length>0&&<>
+        {/* LEASE OPV: Lease Comps as Section IV (primary) */}
+        {subject.opvType==='lease'&&includeLeaseComps&&leaseComps.length>0&&<>
+          <SecHeading num="IV" title="RECENT LEASE TRANSACTIONS"/>
+          <div style={{border:'1px solid #ccc',marginBottom:16}}>
+            <TblHeader cols={['Property Address','Town','Building Size (SF)','Rent PSF (Type)','Term (yrs)']}/>
+            {leaseComps.map((c,i)=><TblRow key={c.id} shade={i%2===1} cells={[
+              c.address,c.town||'',
+              c.building_sf?`${Number(c.building_sf).toLocaleString()} SF`:'—',
+              c.deal_rent?`$${Number(c.deal_rent).toFixed(2)}${c.rent_type?' ('+c.rent_type+')':''}`:c.asking_rent?`$${Number(c.asking_rent).toFixed(2)} (Ask)`:'—',
+              c.lease_term_years?String(c.lease_term_years):'—',
+            ]}/>)}
+          </div>
+          <p style={{fontSize:12,color:'#555',marginBottom:24,fontStyle:'italic'}}>Each lease comparable is detailed on the following pages.</p>
+          {leaseComps.map((c,i)=>(
+            <div key={c.id} style={{marginBottom:48,paddingBottom:48,borderBottom:'2px dashed #ddd'}}>
+              <div style={{fontWeight:700,fontSize:14,paddingBottom:8,borderBottom:`2px solid ${gold}`,marginBottom:16,display:'flex',justifyContent:'space-between',alignItems:'baseline'}}>
+                <span>LEASE COMPARABLE {i+1}  —  {(c.address||'').toUpperCase()}{c.town?', '+c.town.toUpperCase():''}</span>
+                {c.deal_rent>0&&<span style={{color:gold,fontSize:16}}>${Number(c.deal_rent).toFixed(2)}/SF/yr</span>}
+              </div>
+              {Photo(`lease_${c.id}`, `/api/street-view?address=${encodeURIComponent(c.address+(c.town?', '+c.town:'')+', NY')}`)}
+              <div style={{border:'1px solid #ccc'}}>
+                <LabelRow label="PROPERTY ADDRESS" value={`${c.address||'—'}${c.town?', '+c.town:''}`}/>
+                {/* Template order: Building Size, Lot Size, Office Size, Loading, Ceiling Height, Power, Sprinklers, Parking, Lease Price, Taxes, Term, Escalations, Concession, Landlord Work, Tenant Name, Landlord Name, Transaction Date */}
+                <LabelRow label="BUILDING SIZE" value={fmt(c.building_sf,'',c.building_sf?' SF':'')} shade/>
+                <LabelRow label="LOT SIZE" value={c.lot_size_ac?`${c.lot_size_ac} Acres`:'—'}/>
+                <LabelRow label="OFFICE SIZE" value={(c as any).office_sf?`${Number((c as any).office_sf).toLocaleString()} SF`:'—'} shade/>
+                <LabelRow label="LOADING" value={c.loading_docks&&c.drive_ins?`${c.loading_docks} Docks / ${c.drive_ins} Drive-In`:c.loading_docks?`${c.loading_docks} Docks`:c.drive_ins?`${c.drive_ins} Drive-In`:'—'}/>
+                <LabelRow label="CEILING HEIGHT" value={c.ceiling_height?`${c.ceiling_height} ft`:'—'} shade/>
+                <LabelRow label="POWER" value={(c as any).power?String((c as any).power):'—'}/>
+                <LabelRow label="SPRINKLERS" value={(c as any).sprinkler?String((c as any).sprinkler):'—'} shade/>
+                <LabelRow label="PARKING" value={(c as any).parking?String((c as any).parking):'—'}/>
+                <LabelRow label="LEASE PRICE" value={c.deal_rent?`$${Number(c.deal_rent).toFixed(2)} PSF/yr${c.rent_type?' — '+c.rent_type:''}`:c.asking_rent?`$${Number(c.asking_rent).toFixed(2)} PSF/yr (Ask)`:'—'} shade/>
+                <LabelRow label="TAXES" value={c.taxes?`$${Number(c.taxes).toFixed(2)}/SF`:'—'}/>
+                <LabelRow label="TERM" value={c.lease_term_years?`${c.lease_term_years} years`:'—'} shade/>
+                <LabelRow label="ESCALATIONS" value={(c as any).escalations?String((c as any).escalations):'—'}/>
+                <LabelRow label="CONCESSION" value={c.rent_concession_months?`${c.rent_concession_months} months`:'—'} shade/>
+                <LabelRow label="LANDLORD WORK" value={c.ti_ll_work?String(c.ti_ll_work):'—'}/>
+                <LabelRow label="TENANT NAME" value={c.tenant?String(c.tenant):'—'} shade/>
+                <LabelRow label="LANDLORD NAME" value={c.landlord?String(c.landlord):'—'}/>
+                <LabelRow label="TRANSACTION DATE" value={c.transaction_date?new Date(c.transaction_date).toLocaleDateString('en-US',{month:'long',year:'numeric'}):'—'} shade/>
+                {c.notes&&<LabelRow label="ADDITIONAL COMMENTS" value={String(c.notes)}/>}
+              </div>
+            </div>
+          ))}
+        </>}
+
+        {/* LEASE OPV: Sale Comps as Section V (supporting) */}
+        {subject.opvType==='lease'&&comps.length>0&&<>
+          <SecHeading num="V" title="SUPPORTING SALE MARKET DATA"/>
+          <p style={{fontSize:12,color:'#555',marginBottom:12,fontStyle:'italic'}}>The following sale transactions are provided as supporting market context.</p>
+          <div style={{border:'1px solid #ccc',marginBottom:16}}>
+            <TblHeader cols={['Property Address','City','Building Size (SF)','Sale Price','Price PSF']}/>
+            {comps.map((c,i)=><TblRow key={c.id} shade={i%2===1} cells={[
+              c.address,c.city||'',
+              c.building_sf?`${Number(c.building_sf).toLocaleString()} SF`:'—',
+              c.sale_price?`$${Number(c.sale_price).toLocaleString()}`:'—',
+              (c.price_per_sf||(c.sale_price&&c.building_sf?Number(c.sale_price)/Number(c.building_sf):0))?`$${(c.price_per_sf||Number(c.sale_price)/Number(c.building_sf)).toFixed(2)}`:'—',
+            ]}/>)}
+          </div>
+          {comps.map((c,i)=>{
+            const psf = c.price_per_sf||(c.sale_price&&c.building_sf?Number(c.sale_price)/Number(c.building_sf):0)
+            return (
+              <div key={c.id} style={{marginBottom:48,paddingBottom:48,borderBottom:'2px dashed #ddd'}}>
+                <div style={{fontWeight:700,fontSize:14,paddingBottom:8,borderBottom:`2px solid #aaa`,marginBottom:16,display:'flex',justifyContent:'space-between',alignItems:'baseline'}}>
+                  <span>SALE COMP {i+1}  —  {(c.address||'').toUpperCase()}{c.city?', '+c.city.toUpperCase():''}</span>
+                  {psf>0&&<span style={{color:'#555',fontSize:16}}>${Number(psf).toFixed(2)}/SF</span>}
+                </div>
+                {Photo(`comp_${c.id}`, `/api/street-view?address=${encodeURIComponent(c.address+(c.city?', '+c.city:'')+', NY')}`)}
+                <div style={{border:'1px solid #ccc'}}>
+                  <LabelRow label="PROPERTY ADDRESS" value={`${c.address||'—'}${c.city?', '+c.city:''}`}/>
+                  <LabelRow label="BUILDING SIZE" value={fmt(c.building_sf,'',c.building_sf?' SF':'')} shade/>
+                  {c.lot_size_ac&&<LabelRow label="LOT SIZE" value={`${c.lot_size_ac} Acres`}/>}
+                  <LabelRow label="CEILING HEIGHT" value={c.ceiling_height?`${c.ceiling_height} ft`:'—'} shade={!!c.lot_size_ac}/>
+                  <LabelRow label="LOADING DOCKS" value={c.loading_docks||'—'} shade={!c.lot_size_ac}/>
+                  <LabelRow label="DRIVE INS" value={c.drive_ins||'—'} shade={!!c.lot_size_ac}/>
+                  {c.zoning&&<LabelRow label="ZONING" value={c.zoning} shade={!c.lot_size_ac}/>}
+                  <LabelRow label="SALE PRICE" value={`${fmt(c.sale_price,'$')}${psf?` ($${Number(psf).toFixed(2)} PSF)`:''}`}/>
+                  <LabelRow label="TRANSACTION DATE" value={c.sale_date?new Date(c.sale_date).toLocaleDateString('en-US',{month:'long',year:'numeric'}):'—'} shade/>
+                  {c.buyer&&<LabelRow label="BUYER" value={c.buyer}/>}
+                  {c.seller&&<LabelRow label="SELLER" value={c.seller} shade/>}
+                </div>
+              </div>
+            )
+          })}
+        </>}
+
+        {/* SALE OPV: Lease Comps as Section V (if included) */}
+        {subject.opvType!=='lease'&&includeLeaseComps&&leaseComps.length>0&&<>
           <SecHeading num="V" title="RECENT LEASE TRANSACTIONS"/>
           <div style={{border:'1px solid #ccc',marginBottom:16}}>
             <TblHeader cols={['Property Address','Town','Building Size (SF)','Deal Rent (PSF)','Rent Type','Term (yrs)']}/>
@@ -3666,52 +4037,97 @@ function OPVReport({subject,comps,leaseComps,avails,analytics,aiText,setPage,fro
                 {c.mgmt_fee_pct&&<LabelRow label="MGMT FEE" value={`${c.mgmt_fee_pct}%`}/>}
                 {c.tenant&&<LabelRow label="TENANT" value={String(c.tenant)} shade/>}
                 {c.landlord&&<LabelRow label="LANDLORD" value={String(c.landlord)}/>}
+                {c.notes&&<LabelRow label="ADDITIONAL COMMENTS" value={String(c.notes)} shade/>}
               </div>
             </div>
           ))}
         </>}
 
         {/* ── SECTION VI: MARKET AVAILABILITIES ── */}
-        {includeAvails&&avails.length>0&&<>
-          <SecHeading num="VI" title="MARKET AVAILABILITIES"/>
-          <div style={{border:'1px solid #ccc',marginBottom:16}}>
-            <TblHeader cols={['Property Address','City','Bldg SF','Lot Size','Asking Price','Price PSF']}/>
-            {avails.map((a,i)=><TblRow key={a.id} shade={i%2===1} cells={[
-              a.address,a.city||'',
-              a.building_sf?`${Number(a.building_sf).toLocaleString()} SF`:'—',
-              a.lot_size_ac?`${a.lot_size_ac} AC`:'—',
-              a.asking_price?`$${Number(a.asking_price).toLocaleString()}`:'—',
-              a.asking_price&&a.building_sf?`$${(Number(a.asking_price)/Number(a.building_sf)).toFixed(2)}`:'—',
-            ]}/>)}
-          </div>
-          <p style={{fontSize:12,color:'#555',marginBottom:24,fontStyle:'italic'}}>Each market availability is detailed on the following pages.</p>
-          {avails.map((a,i)=>{
-            const psf = a.price_per_sf||(a.asking_price&&a.building_sf?Number(a.asking_price)/Number(a.building_sf):0)
-            return (
+        {/* For lease OPV: show lease availabilities; for sale OPV: show for-sale availabilities */}
+        {subject.opvType==='lease'?(
+          includeAvails&&leaseAvails.length>0&&<>
+            <SecHeading num="VI" title="LEASE MARKET AVAILABILITIES"/>
+            <p style={{fontSize:12,color:'#555',marginBottom:12,fontStyle:'italic'}}>Active lease listings in the market for comparison.</p>
+            <div style={{border:'1px solid #ccc',marginBottom:16}}>
+              <TblHeader cols={['Property Address','Town','Bldg SF','Ceiling','Asking Rent','Rent Type']}/>
+              {leaseAvails.map((a,i)=><TblRow key={a.id} shade={i%2===1} cells={[
+                a.address, a.town||'',
+                a.building_sf?`${Number(a.building_sf).toLocaleString()} SF`:'—',
+                a.ceiling_height?`${a.ceiling_height} ft`:'—',
+                a.asking_rent?`$${Number(a.asking_rent).toFixed(2)}/SF/yr`:'—',
+                a.rent_type||'—',
+              ]}/>)}
+            </div>
+            <p style={{fontSize:12,color:'#555',marginBottom:24,fontStyle:'italic'}}>Each availability is detailed on the following pages.</p>
+            {leaseAvails.map((a,i)=>(
               <div key={a.id} style={{marginBottom:48,paddingBottom:48,borderBottom:'2px dashed #ddd'}}>
                 <div style={{fontWeight:700,fontSize:14,paddingBottom:8,borderBottom:`2px solid ${gold}`,marginBottom:16,display:'flex',justifyContent:'space-between',alignItems:'baseline'}}>
-                  <span>AVAILABILITY {i+1}  —  {(a.address||'').toUpperCase()}{a.city?', '+a.city.toUpperCase():''}</span>
-                  {psf>0&&<span style={{color:'#3b82f6',fontSize:16}}>${Number(psf).toFixed(2)}/SF</span>}
+                  <span>AVAILABILITY {i+1}  —  {(a.address||'').toUpperCase()}{a.town?', '+a.town.toUpperCase():''}</span>
+                  {a.asking_rent>0&&<span style={{color:'#3b82f6',fontSize:16}}>${Number(a.asking_rent).toFixed(2)}/SF/yr</span>}
                 </div>
-                {Photo(`avail_${a.id}`, `/api/street-view?address=${encodeURIComponent(a.address+(a.city?', '+a.city:'')+', NY')}`)}
+                {Photo(`lease_avail_${a.id}`, `/api/street-view?address=${encodeURIComponent(a.address+(a.town?', '+a.town:'')+', NY')}`)}
                 <div style={{border:'1px solid #ccc'}}>
-                  <LabelRow label="PROPERTY ADDRESS" value={`${a.address||'—'}${a.city?', '+a.city:''}`}/>
+                  <LabelRow label="PROPERTY ADDRESS" value={`${a.address||'—'}${a.town?', '+a.town:''}`}/>
                   <LabelRow label="BUILDING SIZE" value={fmt(a.building_sf,'',a.building_sf?' SF':'')} shade/>
                   {a.lot_size_ac&&<LabelRow label="LOT SIZE" value={`${a.lot_size_ac} Acres`}/>}
                   <LabelRow label="CEILING HEIGHT" value={a.ceiling_height?`${a.ceiling_height} ft`:'—'} shade={!!a.lot_size_ac}/>
                   <LabelRow label="LOADING DOCKS" value={a.loading_docks||'—'} shade={!a.lot_size_ac}/>
-                  <LabelRow label="DRIVE INS" value={a.drive_ins||'—'} shade={!!a.lot_size_ac}/>
-                  {a.power&&<LabelRow label="POWER" value={a.power}/>}
-                  {a.sewer&&<LabelRow label="SEWERS" value={a.sewer} shade/>}
-                  <LabelRow label="ASKING PRICE" value={a.asking_price?`$${Number(a.asking_price).toLocaleString()}`:'—'} shade={!a.sewer}/>
-                  <LabelRow label="ASKING $/SF" value={psf?`$${Number(psf).toFixed(2)} PSF`:'—'} shade/>
-                  {a.pricing_guidance&&<LabelRow label="PRICING GUIDANCE" value={a.pricing_guidance}/>}
-                  {a.listing_broker&&<LabelRow label="LISTING BROKER" value={a.listing_broker} shade/>}
+                  <LabelRow label="DRIVE-INS" value={a.drive_ins||'—'} shade={!!a.lot_size_ac}/>
+                  {(a as any).power&&<LabelRow label="POWER" value={String((a as any).power)}/>}
+                  {(a as any).sprinkler&&<LabelRow label="SPRINKLERS" value={String((a as any).sprinkler)} shade/>}
+                  {(a as any).parking&&<LabelRow label="PARKING" value={String((a as any).parking)}/>}
+                  <LabelRow label="ASKING RENT" value={a.asking_rent?`$${Number(a.asking_rent).toFixed(2)}/SF/yr`:'—'} shade/>
+                  {a.rent_type&&<LabelRow label="RENT TYPE" value={String(a.rent_type)}/>}
+                  {a.taxes&&<LabelRow label="TAXES" value={`$${Number(a.taxes).toFixed(2)}/SF`} shade/>}
+                  {a.landlord&&<LabelRow label="LANDLORD" value={String(a.landlord)}/>}
+                  {a.notes&&<LabelRow label="NOTES" value={String(a.notes)} shade/>}
                 </div>
               </div>
-            )
-          })}
-        </>}
+            ))}
+          </>
+        ):(
+          includeAvails&&avails.length>0&&<>
+            <SecHeading num="VI" title="MARKET AVAILABILITIES"/>
+            <div style={{border:'1px solid #ccc',marginBottom:16}}>
+              <TblHeader cols={['Property Address','City','Bldg SF','Lot Size','Asking Price','Price PSF']}/>
+              {avails.map((a,i)=><TblRow key={a.id} shade={i%2===1} cells={[
+                a.address,a.city||'',
+                a.building_sf?`${Number(a.building_sf).toLocaleString()} SF`:'—',
+                a.lot_size_ac?`${a.lot_size_ac} AC`:'—',
+                a.asking_price?`$${Number(a.asking_price).toLocaleString()}`:'—',
+                a.asking_price&&a.building_sf?`$${(Number(a.asking_price)/Number(a.building_sf)).toFixed(2)}`:'—',
+              ]}/>)}
+            </div>
+            <p style={{fontSize:12,color:'#555',marginBottom:24,fontStyle:'italic'}}>Each market availability is detailed on the following pages.</p>
+            {avails.map((a,i)=>{
+              const psf = a.price_per_sf||(a.asking_price&&a.building_sf?Number(a.asking_price)/Number(a.building_sf):0)
+              return (
+                <div key={a.id} style={{marginBottom:48,paddingBottom:48,borderBottom:'2px dashed #ddd'}}>
+                  <div style={{fontWeight:700,fontSize:14,paddingBottom:8,borderBottom:`2px solid ${gold}`,marginBottom:16,display:'flex',justifyContent:'space-between',alignItems:'baseline'}}>
+                    <span>AVAILABILITY {i+1}  —  {(a.address||'').toUpperCase()}{a.city?', '+a.city.toUpperCase():''}</span>
+                    {psf>0&&<span style={{color:'#3b82f6',fontSize:16}}>${Number(psf).toFixed(2)}/SF</span>}
+                  </div>
+                  {Photo(`avail_${a.id}`, `/api/street-view?address=${encodeURIComponent(a.address+(a.city?', '+a.city:'')+', NY')}`)}
+                  <div style={{border:'1px solid #ccc'}}>
+                    <LabelRow label="PROPERTY ADDRESS" value={`${a.address||'—'}${a.city?', '+a.city:''}`}/>
+                    <LabelRow label="BUILDING SIZE" value={fmt(a.building_sf,'',a.building_sf?' SF':'')} shade/>
+                    {a.lot_size_ac&&<LabelRow label="LOT SIZE" value={`${a.lot_size_ac} Acres`}/>}
+                    <LabelRow label="CEILING HEIGHT" value={a.ceiling_height?`${a.ceiling_height} ft`:'—'} shade={!!a.lot_size_ac}/>
+                    <LabelRow label="LOADING DOCKS" value={a.loading_docks||'—'} shade={!a.lot_size_ac}/>
+                    <LabelRow label="DRIVE INS" value={a.drive_ins||'—'} shade={!!a.lot_size_ac}/>
+                    {a.power&&<LabelRow label="POWER" value={a.power}/>}
+                    {a.sewer&&<LabelRow label="SEWERS" value={a.sewer} shade/>}
+                    <LabelRow label="ASKING PRICE" value={a.asking_price?`$${Number(a.asking_price).toLocaleString()}`:'—'} shade={!a.sewer}/>
+                    <LabelRow label="ASKING $/SF" value={psf?`$${Number(psf).toFixed(2)} PSF`:'—'} shade/>
+                    {a.pricing_guidance&&<LabelRow label="PRICING GUIDANCE" value={a.pricing_guidance}/>}
+                    {a.listing_broker&&<LabelRow label="LISTING BROKER" value={a.listing_broker} shade/>}
+                  </div>
+                </div>
+              )
+            })}
+          </>
+        )}
 
         {/* ── AI TEXT ── */}
         {aiText&&<>
@@ -3844,6 +4260,10 @@ export default function App() {
     if(typeof window==='undefined') return []
     try{return JSON.parse(localStorage.getItem('opv_lease_comps')||'[]')}catch{return []}
   })
+  const [leaseAvails,setLeaseAvails]=useState<LeaseComp[]>(()=>{
+    if(typeof window==='undefined') return []
+    try{return JSON.parse(localStorage.getItem('opv_lease_avails')||'[]')}catch{return []}
+  })
   const [scoredComps,setScoredComps]=useState<Comp[]>([])
   const [analytics,setAnalytics]=useState<AnalyticsData|null>(()=>{
     if(typeof window==='undefined') return null
@@ -3914,6 +4334,7 @@ export default function App() {
   useEffect(()=>{try{localStorage.setItem('opv_comps',JSON.stringify(comps))}catch{}},[comps])
   useEffect(()=>{try{localStorage.setItem('opv_avails',JSON.stringify(avails))}catch{}},[avails])
   useEffect(()=>{try{localStorage.setItem('opv_lease_comps',JSON.stringify(leaseComps))}catch{}},[leaseComps])
+  useEffect(()=>{try{localStorage.setItem('opv_lease_avails',JSON.stringify(leaseAvails))}catch{}},[leaseAvails])
   useEffect(()=>{if(savedOPVId)try{localStorage.setItem('opv_saved_id',savedOPVId)}catch{}},[savedOPVId])
   useEffect(()=>{try{localStorage.setItem('opv_analytics',JSON.stringify(analytics))}catch{}},[analytics])
   useEffect(()=>{try{localStorage.setItem('opv_aitext',aiText)}catch{}},[aiText])
@@ -4116,7 +4537,7 @@ export default function App() {
                   </div>
                   <div style={{display:'flex',alignItems:'center',gap:6,flex:1,minWidth:0}}>
                     <span style={{fontSize:12}}>{s.icon}</span>
-                    <span style={{fontSize:11,fontWeight:isActive?600:400,color:isActive?D.text:isDone?D.textSec:D.textMuted,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' as const}}>{s.label}</span>
+                    <span style={{fontSize:11,fontWeight:isActive?600:400,color:isActive?D.text:isDone?D.textSec:D.textMuted,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' as const}}>{s.id==='comp-search'&&subject?.opvType==='lease'?'Sale Comps (Support)':s.label}</span>
                   </div>
                   {s.id==='comp-search'&&comps.length>0&&<span style={{fontSize:9,background:`rgba(59,130,246,0.18)`,color:D.blue,padding:'2px 6px',borderRadius:4,fontWeight:700,flexShrink:0}}>{comps.length}</span>}
                   {s.id==='avail-search'&&avails.length>0&&<span style={{fontSize:9,background:`rgba(59,130,246,0.18)`,color:D.blue,padding:'2px 6px',borderRadius:4,fontWeight:700,flexShrink:0}}>{avails.length}</span>}
@@ -4241,12 +4662,12 @@ export default function App() {
             {page==='subject'&&<SubjectProperty subject={subject} setSubject={setSubject} setPage={handleSetPage} folders={folders} setFolders={updateFolders} assignmentData={assignmentData}/>}
             {page==='database'&&<DatabaseManager/>}
             {page==='comp-search'&&<CompSearch subject={subject} comps={comps} setComps={setComps} setPage={handleSetPage} folders={folders} setFolders={updateFolders}/>}
-            {page==='avail-search'&&<AvailSearch subject={subject} avails={avails} setAvails={setAvails} setPage={handleSetPage} folders={folders} setFolders={updateFolders}/>}
+            {page==='avail-search'&&<AvailSearch subject={subject} avails={avails} setAvails={setAvails} leaseAvails={leaseAvails} setLeaseAvails={setLeaseAvails} setPage={handleSetPage} folders={folders} setFolders={updateFolders}/>}
             {page==='lease-comps'&&<LeaseCompSearch subject={subject} leaseComps={leaseComps} setLeaseComps={setLeaseComps} setPage={handleSetPage} folders={folders} setFolders={updateFolders}/>}
             {page==='folders'&&<FolderManager folders={folders} setFolders={updateFolders} setPage={handleSetPage} comps={comps} setComps={setComps} avails={avails} setAvails={setAvails}/>}
-            {page==='analytics'&&<Analytics comps={scoredComps.length>0?scoredComps:comps} avails={avails} analytics={analytics} setAnalytics={setAnalytics} setPage={handleSetPage}/>}
+            {page==='analytics'&&<Analytics comps={scoredComps.length>0?scoredComps:comps} avails={avails} analytics={analytics} setAnalytics={setAnalytics} setPage={handleSetPage} subject={subject} leaseComps={leaseComps}/>}
             {page==='broker-review'&&<BrokerReview subject={subject} comps={scoredComps.length>0?scoredComps:comps} analytics={analytics} setAnalytics={setAnalytics} aiText={aiText} setAiText={setAiText} setPage={handleSetPage} setSubject={setSubject}/>}
-            {page==='opv-report'&&<OPVReport subject={subject} comps={scoredComps.length>0?scoredComps:comps} leaseComps={leaseComps} avails={avails} analytics={analytics} aiText={aiText} setPage={handleSetPage} frozenHTML={editedReportHTML} setFrozenHTML={setEditedReportHTML} photoUrls={photoUrls}/>}
+            {page==='opv-report'&&<OPVReport subject={subject} comps={scoredComps.length>0?scoredComps:comps} leaseComps={leaseComps} leaseAvails={leaseAvails} avails={avails} analytics={analytics} aiText={aiText} setPage={handleSetPage} frozenHTML={editedReportHTML} setFrozenHTML={setEditedReportHTML} photoUrls={photoUrls}/>}
           </div>
           {/* ── Sticky Step Nav Bar ── */}
           {(()=>{
