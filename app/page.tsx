@@ -202,7 +202,7 @@ const WORKFLOW_STEPS = [
   {id:'opv-report',icon:'📦',label:'Generate Package'},
 ]
 
-function ProgressStepper({current, completedSteps}: {current:string, completedSteps:Record<string,boolean>}) {
+function ProgressStepper({current, completedSteps, labelOverrides}: {current:string, completedSteps:Record<string,boolean>, labelOverrides?:Record<string,string>}) {
   const idx = WORKFLOW_STEPS.findIndex(s=>s.id===current)
   return (
     <div style={{display:'flex',alignItems:'center',gap:0,marginBottom:28,overflowX:'auto',background:D.surface,borderRadius:12,padding:'14px 18px',border:`1px solid ${D.border}`,boxShadow:'0 2px 16px rgba(0,0,0,0.35)'}}>
@@ -218,7 +218,7 @@ function ProgressStepper({current, completedSteps}: {current:string, completedSt
             }}>
               {completedSteps[s.id]&&i!==idx?'✓':i+1}
             </div>
-            <span style={{fontSize:9,color:i===idx?D.blue:completedSteps[s.id]?D.green:D.textMuted,fontWeight:i===idx?700:500,whiteSpace:'nowrap' as const,letterSpacing:'.05em',textTransform:'uppercase' as const,maxWidth:66,textAlign:'center' as const,lineHeight:1.25}}>{s.label}</span>
+            <span style={{fontSize:9,color:i===idx?D.blue:completedSteps[s.id]?D.green:D.textMuted,fontWeight:i===idx?700:500,whiteSpace:'nowrap' as const,letterSpacing:'.05em',textTransform:'uppercase' as const,maxWidth:66,textAlign:'center' as const,lineHeight:1.25}}>{labelOverrides?.[s.id]||s.label}</span>
           </div>
           {i<WORKFLOW_STEPS.length-1&&<div style={{width:22,height:'1.5px',background:completedSteps[s.id]?`rgba(16,185,129,0.35)`:`rgba(255,255,255,0.06)`,margin:'0 3px',marginBottom:20,flexShrink:0,borderRadius:1}}/>}
         </div>
@@ -4912,7 +4912,7 @@ export default function App() {
           {/* Page content */}
           <div style={{padding:'32px 36px'}}>
             {isWorkflowPage&&page!=='dashboard'&&(
-              <ProgressStepper current={page} completedSteps={completedSteps}/>
+              <ProgressStepper current={page} completedSteps={completedSteps} labelOverrides={subject?.opvType==='lease'?{'comp-search':'Sale Comps (Support)','avail-search':'Lease Availabilities'}:undefined}/>
             )}
             {page==='dashboard'&&<Dashboard user={user} subject={subject} comps={comps} avails={avails} leaseComps={leaseComps} analytics={analytics} savedOPVs={savedOPVs} setPage={handleSetPage} loadSavedOPVs={loadSavedOPVs} restoreOPV={restoreOPV} onNewOPV={startNewOPV}/>}
             {page==='assignment'&&<Assignment assignmentData={assignmentData} setAssignmentData={setAssignmentData} user={user} setPage={handleSetPage} setSubject={setSubject} subject={subject}/>}
