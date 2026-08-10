@@ -1719,7 +1719,7 @@ function DatabaseManager() {
                   {tab==='comps'&&<Tag color={row.status==='Back on Market'?D.gold:D.textMuted}>{String(row.status||'Closed')}</Tag>}
                   {tab==='avails'&&!!row.asking_price&&<Tag color={D.purple}>${Number(row.asking_price).toLocaleString()}</Tag>}
                   {tab==='avails'&&<Tag color={row.status==='Available'?D.green:row.status==='Under Contract'?D.gold:row.status==='Sold'?D.red:D.textMuted}>{String(row.status||'Available')}</Tag>}
-                  {tab==='pcre-sales'&&!!row.sale_price_text&&<Tag color={D.gold}>{String(row.sale_price_text)}</Tag>}
+                  {tab==='pcre-sales'&&!!row.sale_price_text&&<Tag color={D.gold}>{(()=>{const n=Number(String(row.sale_price_text).replace(/[^0-9.]/g,''));return isNaN(n)||n===0?String(row.sale_price_text):`$${n.toLocaleString()}`})()}</Tag>}
                   {tab==='pcre-sales'&&!!row.sale_date&&<Tag color={D.textMuted}>{fmtDate(String(row.sale_date))}</Tag>}
                   {tab==='pcre-leases'&&!!row.lease_price&&<Tag color={D.gold}>{String(row.lease_price)}</Tag>}
                   {tab==='pcre-leases'&&!!row.lease_date&&<Tag color={D.textMuted}>{fmtDate(String(row.lease_date))}</Tag>}
