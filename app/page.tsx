@@ -1726,10 +1726,18 @@ function DatabaseManager() {
               style={{...inputStyle as React.CSSProperties, flex:1, minWidth:180, padding:'6px 12px', fontSize:12}}
             />
             {(tab==='comps'||tab==='avails'||tab==='lease-comps'||tab==='lease-avails')&&(
-              <select value={browseStatusFilter} onChange={e=>{setBrowseStatusFilter(e.target.value);loadBrowse(0,browseSearch,e.target.value)}} style={{...inputStyle as React.CSSProperties,padding:'6px 10px',fontSize:12,minWidth:140,cursor:'pointer'}}>
-                <option value="">All Statuses</option>
-                {(tab==='comps'?COMP_STATUSES_DB:tab==='lease-comps'?LEASE_COMP_STATUSES_DB:tab==='lease-avails'?LEASE_AVAIL_STATUSES_DB:AVAIL_STATUSES_DB).map(s=><option key={s.value} value={s.value}>{s.label}</option>)}
-              </select>
+              <div style={{display:'flex',gap:6,flexWrap:'wrap' as const,alignItems:'center'}}>
+                {[{value:'',label:'All'},...(tab==='comps'?COMP_STATUSES_DB:tab==='lease-comps'?LEASE_COMP_STATUSES_DB:tab==='lease-avails'?LEASE_AVAIL_STATUSES_DB:AVAIL_STATUSES_DB)].map(s=>{
+                  const active = browseStatusFilter===s.value
+                  const color = s.value===''?D.textSec:(tab==='comps'?COMP_STATUSES_DB:tab==='lease-comps'?LEASE_COMP_STATUSES_DB:tab==='lease-avails'?LEASE_AVAIL_STATUSES_DB:AVAIL_STATUSES_DB).find(x=>x.value===s.value)?.color??D.textSec
+                  return (
+                    <button key={s.value} onClick={()=>{setBrowseStatusFilter(s.value);loadBrowse(0,browseSearch,s.value)}} style={{padding:'5px 12px',borderRadius:20,fontSize:11,fontWeight:active?700:500,cursor:'pointer',fontFamily:"'Inter',sans-serif",border:`1px solid ${active?color:D.border}`,background:active?`${color}18`:'transparent',color:active?color:D.textMuted,transition:'all .15s',whiteSpace:'nowrap' as const}}>
+                      {s.value&&active&&<span style={{display:'inline-block',width:6,height:6,borderRadius:'50%',background:color,marginRight:5,verticalAlign:'middle',boxShadow:`0 0 5px ${color}88`}}/>}
+                      {s.label}
+                    </button>
+                  )
+                })}
+              </div>
             )}
             <Btn variant="ghost" size="sm" onClick={()=>loadBrowse(0, browseSearch, browseStatusFilter)}>🔍 Search</Btn>
             {(browseSearch||browseStatusFilter)&&<Btn variant="ghost" size="sm" onClick={()=>{setBrowseSearch('');setBrowseStatusFilter('');loadBrowse(0,'','')}}>✕ Clear</Btn>}
