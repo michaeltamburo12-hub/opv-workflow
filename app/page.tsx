@@ -1766,34 +1766,60 @@ function DatabaseManager() {
           </div>
           {browseLoading&&<div style={{textAlign:'center' as const,padding:40}}><div className="spin" style={{width:28,height:28,border:`2px solid ${D.border}`,borderTopColor:D.blue,borderRadius:'50%',margin:'0 auto 12px'}}/><p style={{color:D.textSec,fontSize:12}}>Loading...</p></div>}
           {!browseLoading&&browseData.length===0&&<p style={{color:D.textSec,fontSize:12,textAlign:'center' as const,padding:32}}>No records found.</p>}
-          {!browseLoading&&browseData.map((row,i)=>(
-            <div key={String(row.id)} style={{padding:'12px 0',borderBottom:`1px solid ${D.border}`,display:'flex',alignItems:'flex-start',gap:12}}>
+          {!browseLoading&&browseData.map((row,i)=>{
+            const rowAccent = tab==='comps'?D.blue:tab==='avails'?D.green:tab==='pcre-sales'?D.gold:tab==='pcre-leases'?D.purple:tab==='lease-comps'?'#0891B2':'#16a34a'
+            return (
+            <div key={String(row.id)} style={{padding:'12px 16px',marginBottom:8,borderRadius:10,background:D.surface2,border:`1px solid ${D.border}`,borderLeft:`3px solid ${rowAccent}`,display:'flex',alignItems:'flex-start',gap:12}}>
               <div style={{flex:1,minWidth:0}}>
-                <div style={{fontSize:13,fontWeight:600,marginBottom:4,color:D.text}}>
-                  {row.address||'—'}{row.city?`, ${row.city}`:''}
-                  {(tab==='pcre-leases'||tab==='lease-comps')&&row.tenant?<span style={{color:D.textSec,fontWeight:400}}>{` — ${row.tenant}`}</span>:null}
+                <div style={{fontSize:13,fontWeight:600,marginBottom:6,color:D.text,display:'flex',alignItems:'center',gap:8,flexWrap:'wrap' as const}}>
+                  <span>{row.address||'—'}{row.city?`, ${row.city}`:''}</span>
+                  {(tab==='pcre-leases'||tab==='lease-comps')&&row.tenant?<span style={{color:D.textSec,fontWeight:400,fontSize:12}}>{`— ${row.tenant}`}</span>:null}
                 </div>
-                <div style={{display:'flex',gap:8,flexWrap:'wrap' as const}}>
+                <div style={{display:'flex',gap:6,flexWrap:'wrap' as const}}>
                   {!!row.building_sf&&<Tag color={D.blue}>{Number(row.building_sf).toLocaleString()} SF</Tag>}
+                  {/* comps */}
+                  {tab==='comps'&&!!(row as Record<string,unknown>).property_type&&<Tag color={D.purple}>{String((row as Record<string,unknown>).property_type)}</Tag>}
                   {tab==='comps'&&!!row.price_per_sf&&<Tag color={D.gold}>${Number(row.price_per_sf).toFixed(2)}/SF</Tag>}
+                  {tab==='comps'&&!!(row as Record<string,unknown>).sale_price&&<Tag color={'#22c55e'}>${Number((row as Record<string,unknown>).sale_price).toLocaleString()}</Tag>}
                   {tab==='comps'&&!!row.sale_date&&<Tag color={D.textMuted}>{fmtDate(String(row.sale_date))}</Tag>}
+                  {tab==='comps'&&!!(row as Record<string,unknown>).ceiling_height&&<Tag color={'#0891B2'}>{String((row as Record<string,unknown>).ceiling_height)} clg</Tag>}
+                  {tab==='comps'&&!!(row as Record<string,unknown>).buyer&&<Tag color={D.textSec}>🏢 {String((row as Record<string,unknown>).buyer)}</Tag>}
                   {tab==='comps'&&<Tag color={row.status==='Back on Market'?D.gold:D.textMuted}>{String(row.status||'Closed')}</Tag>}
-                  {tab==='avails'&&!!row.asking_price&&<Tag color={D.purple}>${Number(row.asking_price).toLocaleString()}</Tag>}
+                  {/* avails */}
+                  {tab==='avails'&&!!(row as Record<string,unknown>).property_type&&<Tag color={D.purple}>{String((row as Record<string,unknown>).property_type)}</Tag>}
+                  {tab==='avails'&&!!row.asking_price&&<Tag color={'#22c55e'}>${Number(row.asking_price).toLocaleString()}</Tag>}
+                  {tab==='avails'&&!!row.price_per_sf&&<Tag color={D.gold}>${Number(row.price_per_sf).toFixed(2)}/SF</Tag>}
+                  {tab==='avails'&&!!(row as Record<string,unknown>).ceiling_height&&<Tag color={'#0891B2'}>{String((row as Record<string,unknown>).ceiling_height)} clg</Tag>}
+                  {tab==='avails'&&!!(row as Record<string,unknown>).listing_broker&&<Tag color={D.textSec}>🔑 {String((row as Record<string,unknown>).listing_broker)}</Tag>}
                   {tab==='avails'&&<Tag color={row.status==='Available'?D.green:row.status==='Under Contract'?D.gold:row.status==='Sold'?D.red:D.textMuted}>{String(row.status||'Available')}</Tag>}
-                  {tab==='pcre-sales'&&!!row.sale_price_text&&<Tag color={D.gold}>{(()=>{const n=Number(String(row.sale_price_text).replace(/[^0-9.]/g,''));return isNaN(n)||n===0?String(row.sale_price_text):`$${n.toLocaleString()}`})()}</Tag>}
+                  {/* pcre-sales */}
+                  {tab==='pcre-sales'&&!!(row as Record<string,unknown>).property_type&&<Tag color={D.purple}>{String((row as Record<string,unknown>).property_type)}</Tag>}
+                  {tab==='pcre-sales'&&!!row.sale_price_text&&<Tag color={'#22c55e'}>{(()=>{const n=Number(String(row.sale_price_text).replace(/[^0-9.]/g,''));return isNaN(n)||n===0?String(row.sale_price_text):`$${n.toLocaleString()}`})()}</Tag>}
                   {tab==='pcre-sales'&&!!row.sale_date&&<Tag color={D.textMuted}>{fmtDate(String(row.sale_date))}</Tag>}
+                  {tab==='pcre-sales'&&!!(row as Record<string,unknown>).buyer&&<Tag color={D.blue}>🏢 {String((row as Record<string,unknown>).buyer)}</Tag>}
+                  {tab==='pcre-sales'&&!!(row as Record<string,unknown>).seller&&<Tag color={D.textSec}>↗ {String((row as Record<string,unknown>).seller)}</Tag>}
+                  {/* pcre-leases */}
                   {tab==='pcre-leases'&&!!row.lease_price&&<Tag color={D.gold}>{String(row.lease_price)}</Tag>}
                   {tab==='pcre-leases'&&!!row.lease_date&&<Tag color={D.textMuted}>{fmtDate(String(row.lease_date))}</Tag>}
-                  {tab==='lease-comps'&&!!row.deal_rent&&<Tag color={D.gold}>${Number(row.deal_rent).toFixed(2)}/SF/yr</Tag>}
+                  {tab==='pcre-leases'&&!!(row as Record<string,unknown>).lease_term&&<Tag color={'#0891B2'}>⏱ {String((row as Record<string,unknown>).lease_term)}</Tag>}
+                  {tab==='pcre-leases'&&!!(row as Record<string,unknown>).landlord&&<Tag color={D.textSec}>🏠 {String((row as Record<string,unknown>).landlord)}</Tag>}
+                  {/* lease-comps */}
+                  {tab==='lease-comps'&&!!row.deal_rent&&<Tag color={'#22c55e'}>${Number(row.deal_rent).toFixed(2)}/SF/yr deal</Tag>}
                   {tab==='lease-comps'&&!!row.asking_rent&&!row.deal_rent&&<Tag color={D.gold}>Ask: ${Number(row.asking_rent).toFixed(2)}/SF/yr</Tag>}
+                  {tab==='lease-comps'&&!!row.asking_rent&&!!row.deal_rent&&<Tag color={D.textSec}>Ask: ${Number(row.asking_rent).toFixed(2)}</Tag>}
                   {tab==='lease-comps'&&!!row.transaction_date&&<Tag color={D.textMuted}>{fmtDate(String(row.transaction_date))}</Tag>}
-                  {tab==='lease-comps'&&!!row.rent_type&&<Tag color={D.textSec}>{String(row.rent_type)}</Tag>}
+                  {tab==='lease-comps'&&!!row.rent_type&&<Tag color={'#0891B2'}>{String(row.rent_type)}</Tag>}
                   {tab==='lease-comps'&&!!row.lease_term_years&&<Tag color={D.textSec}>{Number(row.lease_term_years)} yr</Tag>}
+                  {tab==='lease-comps'&&!!(row as Record<string,unknown>).ceiling_height&&<Tag color={D.textSec}>{String((row as Record<string,unknown>).ceiling_height)} clg</Tag>}
                   {tab==='lease-comps'&&<Tag color={row.status==='Active'?D.green:row.status==='Confidential'?D.purple:D.textMuted}>{String(row.status||'Active')}</Tag>}
+                  {/* lease-avails */}
                   {tab==='lease-avails'&&!!row.asking_rent&&<Tag color={D.gold}>${Number(row.asking_rent).toFixed(2)}/SF/yr</Tag>}
-                  {tab==='lease-avails'&&!!row.rent_type&&<Tag color={D.textSec}>{String(row.rent_type)}</Tag>}
+                  {tab==='lease-avails'&&!!row.rent_type&&<Tag color={'#0891B2'}>{String(row.rent_type)}</Tag>}
+                  {tab==='lease-avails'&&!!row.lease_term_years&&<Tag color={D.textSec}>{Number(row.lease_term_years)} yr</Tag>}
+                  {tab==='lease-avails'&&!!(row as Record<string,unknown>).landlord&&<Tag color={D.textSec}>🏠 {String((row as Record<string,unknown>).landlord)}</Tag>}
                   {tab==='lease-avails'&&<Tag color={row.status==='Available'?D.green:row.status==='Under Negotiation'?D.gold:row.status==='Leased'?D.blue:D.textMuted}>{String(row.status||'Available')}</Tag>}
                   {tab==='lease-avails'&&row.town&&<Tag color={D.textMuted}>{String(row.town)}</Tag>}
+                  {/* shared */}
                   {!!row.county&&<Tag color={row.county==='Nassau'?D.blue:'#0891B2'}>{String(row.county)}</Tag>}
                 </div>
               </div>
@@ -1844,7 +1870,8 @@ function DatabaseManager() {
                 <Btn variant="danger" size="sm" onClick={()=>deleteRow(String(row.id))} style={{fontSize:10,padding:'5px 10px'}}>Delete</Btn>
               </div>
             </div>
-          ))}
+          )
+          })}
           {!browseLoading&&browseCount>PAGE_SIZE&&(
             <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginTop:16}}>
               <Btn variant="ghost" size="sm" disabled={browseOffset===0} onClick={()=>loadBrowse(Math.max(0,browseOffset-PAGE_SIZE), browseSearch)}>← Prev</Btn>
