@@ -1085,6 +1085,7 @@ function DatabaseManager() {
   const [browseStatusDropdown, setBrowseStatusDropdown] = useState<string|null>(null)
   const [browseSearch, setBrowseSearch] = useState('')
   const [browseStatusFilter, setBrowseStatusFilter] = useState('')
+  const [editingId, setEditingId] = useState<string|null>(null)
   const PAGE_SIZE = 20
   const COMP_STATUSES_DB  = [{value:'Closed',color:D.textMuted,label:'Closed'},{value:'Back on Market',color:D.gold,label:'Back on Market'}]
   const AVAIL_STATUSES_DB = [{value:'Available',color:D.green,label:'Available'},{value:'Under Contract',color:D.gold,label:'Under Contract'},{value:'Sold',color:D.red,label:'Sold'},{value:'Off Market',color:D.textMuted,label:'Off Market'}]
@@ -1106,7 +1107,7 @@ function DatabaseManager() {
   const setPS = (k:string,v:string) => setPcreSaleForm(f=>({...f,[k]:v}))
   const setPL = (k:string,v:string) => setPcreLeaseForm(f=>({...f,[k]:v}))
 
-  const blankLeaseComp = {transaction_date:'',address:'',town:'',county:'Nassau',building_sf:'',lot_size_ac:'',ceiling_height:'',loading_docks:'',drive_ins:'',asking_rent:'',deal_rent:'',rent_type:'NNN',taxes:'',lease_term_years:'',rent_concession_months:'',ti_ll_work:'',mgmt_fee_pct:'',tenant:'',landlord:'',status:'Active',notes:''}
+  const blankLeaseComp = {transaction_date:'',address:'',town:'',county:'Nassau',building_sf:'',lot_size_ac:'',office_sf:'',ceiling_height:'',loading_docks:'',drive_ins:'',power:'',sprinkler:'',parking:'',asking_rent:'',deal_rent:'',rent_type:'NNN',taxes:'',lease_term_years:'',rent_concession_months:'',ti_ll_work:'',mgmt_fee_pct:'',escalations:'',tenant:'',landlord:'',status:'Active',notes:''}
   const [leaseCompForm, setLeaseCompForm] = useState({...blankLeaseComp})
   const setLC = (k:string,v:string) => setLeaseCompForm(f=>({...f,[k]:v}))
 
@@ -1135,11 +1136,11 @@ function DatabaseManager() {
     const nums = ['building_sf','lot_size_ac','real_estate_taxes','sale_price','price_per_sf']
     nums.forEach(k=>{ if(payload[k]) payload[k]=parseFloat(payload[k] as string)||null; else payload[k]=null })
     if (!payload.sale_date) payload.sale_date = null
-    const {error} = await supabase.from('industrial_sale_comps').insert([payload])
+    let error; if (editingId) { ({error}=await supabase.from('industrial_sale_comps').update(payload).eq('id',editingId)) } else { ({error}=await supabase.from('industrial_sale_comps').insert([payload])) }
     setSaving(false)
     if (error) { alert('Error: '+error.message); return }
-    alert('✅ Sale comp saved to Supabase!')
-    setCompForm({...blankComp})
+    alert(editingId?'✅ Sale comp updated!':'✅ Sale comp saved to Supabase!')
+    setEditingId(null); setCompForm({...blankComp})
   }
   const saveComp = async () => {
     if (!compForm.address) { alert('Address is required'); return }
@@ -1151,11 +1152,11 @@ function DatabaseManager() {
     const payload: Record<string,unknown> = {...availForm}
     const nums = ['building_sf','lot_size_ac','real_estate_taxes','asking_price','price_per_sf']
     nums.forEach(k=>{ if(payload[k]) payload[k]=parseFloat(payload[k] as string)||null; else payload[k]=null })
-    const {error} = await supabase.from('market_availabilities').insert([payload])
+    let error; if (editingId) { ({error}=await supabase.from('market_availabilities').update(payload).eq('id',editingId)) } else { ({error}=await supabase.from('market_availabilities').insert([payload])) }
     setSaving(false)
     if (error) { alert('Error: '+error.message); return }
-    alert('✅ Availability saved to Supabase!')
-    setAvailForm({...blankAvail})
+    alert(editingId?'✅ Availability updated!':'✅ Availability saved to Supabase!')
+    setEditingId(null); setAvailForm({...blankAvail})
   }
   const saveAvail = async () => {
     if (!availForm.address) { alert('Address is required'); return }
@@ -1168,11 +1169,11 @@ function DatabaseManager() {
     const payload: Record<string,unknown> = {...pcreSaleForm}
     payload.building_sf = pcreSaleForm.building_sf ? parseFloat(pcreSaleForm.building_sf)||null : null
     if (!pcreSaleForm.sale_date) payload.sale_date = null
-    const {error} = await supabase.from('pcre_sale_transactions').insert([payload])
+    let error; if (editingId) { ({error}=await supabase.from('pcre_sale_transactions').update(payload).eq('id',editingId)) } else { ({error}=await supabase.from('pcre_sale_transactions').insert([payload])) }
     setSaving(false)
     if (error) { alert('Error: '+error.message); return }
-    alert('✅ PCRE sale transaction saved!')
-    setPcreSaleForm({...blankPcreSale})
+    alert(editingId?'✅ PCRE sale updated!':'✅ PCRE sale transaction saved!')
+    setEditingId(null); setPcreSaleForm({...blankPcreSale})
   }
 
   const savePcreLease = async () => {
@@ -1181,11 +1182,11 @@ function DatabaseManager() {
     const payload: Record<string,unknown> = {...pcreLeaseForm}
     payload.building_sf = pcreLeaseForm.building_sf ? parseFloat(pcreLeaseForm.building_sf)||null : null
     if (!pcreLeaseForm.lease_date) payload.lease_date = null
-    const {error} = await supabase.from('pcre_lease_transactions').insert([payload])
+    let error; if (editingId) { ({error}=await supabase.from('pcre_lease_transactions').update(payload).eq('id',editingId)) } else { ({error}=await supabase.from('pcre_lease_transactions').insert([payload])) }
     setSaving(false)
     if (error) { alert('Error: '+error.message); return }
-    alert('✅ PCRE lease transaction saved!')
-    setPcreLeaseForm({...blankPcreLease})
+    alert(editingId?'✅ PCRE lease updated!':'✅ PCRE lease transaction saved!')
+    setEditingId(null); setPcreLeaseForm({...blankPcreLease})
   }
 
   const doSaveLeaseAvail = async () => {
@@ -1194,11 +1195,11 @@ function DatabaseManager() {
     const nums = ['building_sf','lot_size_ac','asking_rent','taxes','lease_term_years']
     nums.forEach(k=>{ if(payload[k]) payload[k]=parseFloat(payload[k] as string)||null; else payload[k]=null })
     payload.status = leaseAvailForm.status || 'Available'
-    const {error} = await supabase.from('lease_market_availabilities').insert([payload])
+    let error; if (editingId) { ({error}=await supabase.from('lease_market_availabilities').update(payload).eq('id',editingId)) } else { ({error}=await supabase.from('lease_market_availabilities').insert([payload])) }
     setSaving(false)
     if (error) { alert('Error: '+error.message); return }
-    alert('✅ Lease availability saved to Supabase!')
-    setLeaseAvailForm({...blankLeaseAvail})
+    alert(editingId?'✅ Lease availability updated!':'✅ Lease availability saved to Supabase!')
+    setEditingId(null); setLeaseAvailForm({...blankLeaseAvail})
   }
   const saveLeaseAvail = async () => {
     if (!leaseAvailForm.address) { alert('Address is required'); return }
@@ -1208,14 +1209,14 @@ function DatabaseManager() {
   const doSaveLeaseComp = async () => {
     setSaving(true)
     const payload: Record<string,unknown> = {...leaseCompForm}
-    const nums = ['building_sf','lot_size_ac','asking_rent','deal_rent','taxes','lease_term_years','rent_concession_months','mgmt_fee_pct']
+    const nums = ['building_sf','lot_size_ac','office_sf','asking_rent','deal_rent','taxes','lease_term_years','rent_concession_months','mgmt_fee_pct']
     nums.forEach(k=>{ if(payload[k]) payload[k]=parseFloat(payload[k] as string)||null; else payload[k]=null })
     if (!payload.transaction_date) payload.transaction_date = null
-    const {error} = await supabase.from('lease_comps').insert([payload])
+    let error; if (editingId) { ({error}=await supabase.from('lease_comps').update(payload).eq('id',editingId)) } else { ({error}=await supabase.from('lease_comps').insert([payload])) }
     setSaving(false)
     if (error) { alert('Error: '+error.message); return }
-    alert('✅ Lease comp saved to Supabase!')
-    setLeaseCompForm({...blankLeaseComp})
+    alert(editingId?'✅ Lease comp updated!':'✅ Lease comp saved to Supabase!')
+    setEditingId(null); setLeaseCompForm({...blankLeaseComp})
   }
   const saveLeaseComp = async () => {
     if (!leaseCompForm.address) { alert('Address is required'); return }
@@ -1335,10 +1336,26 @@ function DatabaseManager() {
     setBrowseData((prev: BrowseRow[])=>prev.filter((r: BrowseRow)=>r.id!==id))
     setBrowseCount(c=>c-1)
   }
+  const str = (v: unknown) => v != null && v !== undefined ? String(v) : ''
+  const cancelEdit = () => {
+    setEditingId(null)
+    setCompForm({...blankComp}); setAvailForm({...blankAvail})
+    setLeaseCompForm({...blankLeaseComp}); setLeaseAvailForm({...blankLeaseAvail})
+    setPcreSaleForm({...blankPcreSale}); setPcreLeaseForm({...blankPcreLease})
+  }
+  const startEdit = (row: BrowseRow) => {
+    const id = str(row.id); setEditingId(id); setSubTab('add')
+    if (tab==='comps') setCompForm({address:str(row.address),city:str(row.city),county:str(row.county)||'Nassau',state:str((row as Record<string,unknown>).state)||'NY',property_type:str((row as Record<string,unknown>).property_type)||'Warehouse',building_sf:str(row.building_sf),lot_size_ac:str((row as Record<string,unknown>).lot_size_ac),ceiling_height:str((row as Record<string,unknown>).ceiling_height),loading_docks:str((row as Record<string,unknown>).loading_docks),drive_ins:str((row as Record<string,unknown>).drive_ins),power:str((row as Record<string,unknown>).power),heat:str((row as Record<string,unknown>).heat),parking:str((row as Record<string,unknown>).parking),sprinkler:str((row as Record<string,unknown>).sprinkler),sewer:str((row as Record<string,unknown>).sewer)||'Municipal',zoning:str((row as Record<string,unknown>).zoning),real_estate_taxes:str((row as Record<string,unknown>).real_estate_taxes),sale_price:str((row as Record<string,unknown>).sale_price),price_per_sf:str(row.price_per_sf),sale_date:str(row.sale_date),sale_type:str((row as Record<string,unknown>).sale_type)||"Arm's Length",buyer:str((row as Record<string,unknown>).buyer),seller:str((row as Record<string,unknown>).seller),listing_broker:str((row as Record<string,unknown>).listing_broker),market:str((row as Record<string,unknown>).market),submarket:str((row as Record<string,unknown>).submarket),zip_code:str((row as Record<string,unknown>).zip_code),notes:str((row as Record<string,unknown>).notes)})
+    else if (tab==='avails') setAvailForm({address:str(row.address),city:str(row.city),county:str(row.county)||'Nassau',state:str((row as Record<string,unknown>).state)||'NY',property_type:str((row as Record<string,unknown>).property_type)||'Warehouse',building_sf:str(row.building_sf),lot_size_ac:str((row as Record<string,unknown>).lot_size_ac),ceiling_height:str((row as Record<string,unknown>).ceiling_height),loading_docks:str((row as Record<string,unknown>).loading_docks),drive_ins:str((row as Record<string,unknown>).drive_ins),power:str((row as Record<string,unknown>).power),heat:str((row as Record<string,unknown>).heat),parking:str((row as Record<string,unknown>).parking),sprinkler:str((row as Record<string,unknown>).sprinkler),sewer:str((row as Record<string,unknown>).sewer)||'Municipal',zoning:str((row as Record<string,unknown>).zoning),real_estate_taxes:str((row as Record<string,unknown>).real_estate_taxes),asking_price:str(row.asking_price),price_per_sf:str(row.price_per_sf),pricing_guidance:str((row as Record<string,unknown>).pricing_guidance),availability_type:str((row as Record<string,unknown>).availability_type)||'For Sale',status:str(row.status)||'Available',listing_broker:str((row as Record<string,unknown>).listing_broker),market:str((row as Record<string,unknown>).market),submarket:str((row as Record<string,unknown>).submarket),zip_code:str((row as Record<string,unknown>).zip_code),loopnet_url:str((row as Record<string,unknown>).loopnet_url),notes:str((row as Record<string,unknown>).notes)})
+    else if (tab==='lease-comps') setLeaseCompForm({transaction_date:str((row as Record<string,unknown>).transaction_date),address:str(row.address),town:str((row as Record<string,unknown>).town),county:str(row.county)||'Nassau',building_sf:str(row.building_sf),lot_size_ac:str((row as Record<string,unknown>).lot_size_ac),ceiling_height:str((row as Record<string,unknown>).ceiling_height),loading_docks:str((row as Record<string,unknown>).loading_docks),drive_ins:str((row as Record<string,unknown>).drive_ins),office_sf:str((row as Record<string,unknown>).office_sf),power:str((row as Record<string,unknown>).power),sprinkler:str((row as Record<string,unknown>).sprinkler),parking:str((row as Record<string,unknown>).parking),asking_rent:str((row as Record<string,unknown>).asking_rent),deal_rent:str((row as Record<string,unknown>).deal_rent),rent_type:str((row as Record<string,unknown>).rent_type)||'NNN',taxes:str((row as Record<string,unknown>).taxes),lease_term_years:str((row as Record<string,unknown>).lease_term_years),rent_concession_months:str((row as Record<string,unknown>).rent_concession_months),ti_ll_work:str((row as Record<string,unknown>).ti_ll_work),mgmt_fee_pct:str((row as Record<string,unknown>).mgmt_fee_pct),escalations:str((row as Record<string,unknown>).escalations),tenant:str((row as Record<string,unknown>).tenant),landlord:str((row as Record<string,unknown>).landlord),status:str(row.status)||'Active',notes:str((row as Record<string,unknown>).notes)})
+    else if (tab==='lease-avails') setLeaseAvailForm({address:str(row.address),town:str((row as Record<string,unknown>).town),county:str(row.county)||'Nassau',building_sf:str(row.building_sf),lot_size_ac:str((row as Record<string,unknown>).lot_size_ac),ceiling_height:str((row as Record<string,unknown>).ceiling_height),loading_docks:str((row as Record<string,unknown>).loading_docks),drive_ins:str((row as Record<string,unknown>).drive_ins),power:str((row as Record<string,unknown>).power),sprinkler:str((row as Record<string,unknown>).sprinkler),parking:str((row as Record<string,unknown>).parking),asking_rent:str((row as Record<string,unknown>).asking_rent),rent_type:str((row as Record<string,unknown>).rent_type)||'NNN',taxes:str((row as Record<string,unknown>).taxes),lease_term_years:str((row as Record<string,unknown>).lease_term_years),escalations:str((row as Record<string,unknown>).escalations),landlord:str((row as Record<string,unknown>).landlord),listing_broker:str((row as Record<string,unknown>).listing_broker),loopnet_url:str((row as Record<string,unknown>).loopnet_url),status:str(row.status)||'Available',notes:str((row as Record<string,unknown>).notes)})
+    else if (tab==='pcre-sales') setPcreSaleForm({address:str(row.address),city:str(row.city),county:str(row.county)||'Nassau',property_type:str((row as Record<string,unknown>).property_type)||'Industrial',building_sf:str(row.building_sf),sale_price_text:str((row as Record<string,unknown>).sale_price_text),sale_date:str(row.sale_date),buyer:str((row as Record<string,unknown>).buyer),seller:str((row as Record<string,unknown>).seller),notes:str((row as Record<string,unknown>).notes)})
+    else if (tab==='pcre-leases') setPcreLeaseForm({address:str(row.address),city:str(row.city),county:str(row.county)||'Nassau',tenant:str((row as Record<string,unknown>).tenant),landlord:str((row as Record<string,unknown>).landlord),building_sf:str(row.building_sf),lease_price:str((row as Record<string,unknown>).lease_price),lease_date:str((row as Record<string,unknown>).lease_date),lease_term:str((row as Record<string,unknown>).lease_term),notes:str((row as Record<string,unknown>).notes)})
+  }
   const G2 = {display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}
   const G3 = {display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:12}
   const tabBtn = (id: 'comps'|'avails'|'pcre-sales'|'pcre-leases'|'lease-comps'|'lease-avails', label: string) => (
-    <div onClick={()=>{setTab(id);setSubTab('add');setBrowseData([]);setBrowseSearch('');setImportPreview([]);setImportResult(null);if(id==='pcre-sales'||id==='pcre-leases')setupPcreTables()}} style={{padding:'8px 20px',borderRadius:7,cursor:'pointer',fontSize:12,fontWeight:700,background:tab===id?D.blue:'transparent',color:tab===id?'#FFFFFF':D.textSec,border:`1px solid ${tab===id?'transparent':D.border}`,transition:'all .2s'}}>{label}</div>
+    <div onClick={()=>{setTab(id);setSubTab('add');setBrowseData([]);setBrowseSearch('');setBrowseStatusFilter('');setImportPreview([]);setImportResult(null);cancelEdit();if(id==='pcre-sales'||id==='pcre-leases')setupPcreTables()}} style={{padding:'8px 20px',borderRadius:7,cursor:'pointer',fontSize:12,fontWeight:700,background:tab===id?D.blue:'transparent',color:tab===id?'#FFFFFF':D.textSec,border:`1px solid ${tab===id?'transparent':D.border}`,transition:'all .2s'}}>{label}</div>
   )
   const subTabBtn = (id: 'add'|'import'|'file'|'browse', label: string, icon: string) => (
     <div onClick={()=>{ setSubTab(id); if(id==='browse') loadBrowse(0,'') }} style={{padding:'7px 16px',borderRadius:7,cursor:'pointer',fontSize:11,fontWeight:600,display:'flex',alignItems:'center',gap:6,background:subTab===id?`rgba(59,130,246,0.15)`:'transparent',color:subTab===id?D.blue:D.textSec,border:`1px solid ${subTab===id?`${D.blue}55`:D.border}`,transition:'all .2s'}}><span>{icon}</span>{label}</div>
@@ -1510,7 +1527,8 @@ function DatabaseManager() {
       )}
       {subTab==='add' && tab==='lease-comps' && (
         <Card>
-          <SL>Add Lease Comp — All fields save directly to Supabase</SL>
+          <SL>{editingId?'✏️ Editing Lease Comp — Make changes and click Update':'Add Lease Comp — All fields save directly to Supabase'}</SL>
+          {editingId&&<div style={{marginBottom:12,padding:'8px 12px',borderRadius:8,background:'rgba(217,119,6,0.1)',border:'1px solid rgba(217,119,6,0.3)',fontSize:11,color:D.gold}}>Editing existing record. Click Update to save changes or Cancel to discard.</div>}
           <Field label="Street Address" full><Input placeholder="85 Davids Drive, Hauppauge, NY 11788" value={leaseCompForm.address} onChange={e=>setLC('address',e.target.value)}/></Field>
           <div style={G3}>
             <Field label="Town"><Input value={leaseCompForm.town} onChange={e=>setLC('town',e.target.value)}/></Field>
@@ -1520,10 +1538,14 @@ function DatabaseManager() {
           <Divider label="Building"/>
           <div style={G3}>
             <Field label="Building Size (SF)"><Input type="number" value={leaseCompForm.building_sf} onChange={e=>setLC('building_sf',e.target.value)}/></Field>
+            <Field label="Office SF (If applicable)"><Input type="number" value={leaseCompForm.office_sf} onChange={e=>setLC('office_sf',e.target.value)}/></Field>
             <Field label="Lot Size (If applicable)"><Input type="number" step="0.01" placeholder="acres" value={leaseCompForm.lot_size_ac} onChange={e=>setLC('lot_size_ac',e.target.value)}/></Field>
             <Field label="Ceiling Height (ft.)"><Input placeholder="22" value={leaseCompForm.ceiling_height} onChange={e=>setLC('ceiling_height',e.target.value)}/></Field>
             <Field label="Loading Docks"><Input value={leaseCompForm.loading_docks} onChange={e=>setLC('loading_docks',e.target.value)}/></Field>
             <Field label="Drive-ins"><Input value={leaseCompForm.drive_ins} onChange={e=>setLC('drive_ins',e.target.value)}/></Field>
+            <Field label="Power"><Input placeholder="200A / 3-Phase" value={leaseCompForm.power} onChange={e=>setLC('power',e.target.value)}/></Field>
+            <Field label="Sprinkler System"><Input placeholder="ESFR / Wet Pipe" value={leaseCompForm.sprinkler} onChange={e=>setLC('sprinkler',e.target.value)}/></Field>
+            <Field label="Parking"><Input placeholder="50 spaces" value={leaseCompForm.parking} onChange={e=>setLC('parking',e.target.value)}/></Field>
           </div>
           <Divider label="Lease Terms"/>
           <div style={G3}>
@@ -1532,6 +1554,7 @@ function DatabaseManager() {
             <Field label="Rent Type"><Sel value={leaseCompForm.rent_type} onChange={e=>setLC('rent_type',e.target.value)}><option>NNN</option><option>Gross</option><option>Modified Gross</option><option>MG</option></Sel></Field>
             <Field label="Taxes (If applicable)"><Input type="number" step="0.01" placeholder="$/SF" value={leaseCompForm.taxes} onChange={e=>setLC('taxes',e.target.value)}/></Field>
             <Field label="Lease Term (Years)"><Input type="number" step="0.5" value={leaseCompForm.lease_term_years} onChange={e=>setLC('lease_term_years',e.target.value)}/></Field>
+            <Field label="Escalations"><Input placeholder="3% annually" value={leaseCompForm.escalations} onChange={e=>setLC('escalations',e.target.value)}/></Field>
             <Field label="Rent Concession (Months)"><Input type="number" value={leaseCompForm.rent_concession_months} onChange={e=>setLC('rent_concession_months',e.target.value)}/></Field>
             <Field label="T.I. (LL Work)"><Input placeholder="$10/SF or TBD" value={leaseCompForm.ti_ll_work} onChange={e=>setLC('ti_ll_work',e.target.value)}/></Field>
             <Field label="% Mgmt Fee"><Input type="number" step="0.1" placeholder="%" value={leaseCompForm.mgmt_fee_pct} onChange={e=>setLC('mgmt_fee_pct',e.target.value)}/></Field>
@@ -1544,14 +1567,15 @@ function DatabaseManager() {
           </div>
           <Field label="Notes" full><textarea value={leaseCompForm.notes} onChange={e=>setLC('notes',e.target.value)} placeholder="Any additional details..." style={{...inputStyle as React.CSSProperties,minHeight:70,resize:'vertical' as const}}/></Field>
           <div style={{display:'flex',gap:10,marginTop:4}}>
-            <Btn onClick={saveLeaseComp} disabled={saving} style={{flex:1,padding:12}}>{saving?'Saving...':'💾 Save to Supabase'}</Btn>
-            <Btn variant="ghost" onClick={()=>setLeaseCompForm({...blankLeaseComp})} style={{padding:'12px 20px'}}>Clear</Btn>
+            <Btn onClick={saveLeaseComp} disabled={saving} style={{flex:1,padding:12}}>{saving?'Saving...':editingId?'✅ Update Record':'💾 Save to Supabase'}</Btn>
+            {editingId?<Btn variant="ghost" onClick={cancelEdit} style={{padding:'12px 20px'}}>✕ Cancel</Btn>:<Btn variant="ghost" onClick={()=>setLeaseCompForm({...blankLeaseComp})} style={{padding:'12px 20px'}}>Clear</Btn>}
           </div>
         </Card>
       )}
       {subTab==='add' && tab==='lease-avails' && (
         <Card>
-          <SL>Add Lease Availability — Saves to lease_comps with status = Available</SL>
+          <SL>{editingId?'✏️ Editing Lease Availability — Make changes and click Update':'Add Lease Availability — Saves to lease_market_availabilities'}</SL>
+          {editingId&&<div style={{marginBottom:12,padding:'8px 12px',borderRadius:8,background:'rgba(217,119,6,0.1)',border:'1px solid rgba(217,119,6,0.3)',fontSize:11,color:D.gold}}>Editing existing record. Click Update to save changes or Cancel to discard.</div>}
           <Field label="Property Address" full><Input placeholder="85 Davids Drive, Hauppauge, NY 11788" value={leaseAvailForm.address} onChange={e=>setLA('address',e.target.value)}/></Field>
           <div style={G3}>
             <Field label="Town"><Input value={leaseAvailForm.town} onChange={e=>setLA('town',e.target.value)}/></Field>
@@ -1585,8 +1609,8 @@ function DatabaseManager() {
           </div>
           <Field label="Notes" full><textarea value={leaseAvailForm.notes} onChange={e=>setLA('notes',e.target.value)} placeholder="Any additional details..." style={{...inputStyle as React.CSSProperties,minHeight:70,resize:'vertical' as const}}/></Field>
           <div style={{display:'flex',gap:10,marginTop:4}}>
-            <Btn onClick={saveLeaseAvail} disabled={saving} style={{flex:1,padding:12}}>{saving?'Saving...':'💾 Save to Supabase'}</Btn>
-            <Btn variant="ghost" onClick={()=>setLeaseAvailForm({...blankLeaseAvail})} style={{padding:'12px 20px'}}>Clear</Btn>
+            <Btn onClick={saveLeaseAvail} disabled={saving} style={{flex:1,padding:12}}>{saving?'Saving...':editingId?'✅ Update Record':'💾 Save to Supabase'}</Btn>
+            {editingId?<Btn variant="ghost" onClick={cancelEdit} style={{padding:'12px 20px'}}>✕ Cancel</Btn>:<Btn variant="ghost" onClick={()=>setLeaseAvailForm({...blankLeaseAvail})} style={{padding:'12px 20px'}}>Clear</Btn>}
           </div>
         </Card>
       )}
@@ -1661,7 +1685,9 @@ function DatabaseManager() {
                 : tab==='avails'
                 ? ['address','city','county','zip_code','property_type','building_sf','lot_size_ac','ceiling_height','loading_docks','drive_ins','power','sprinkler','sewer','zoning','real_estate_taxes','asking_price','price_per_sf','pricing_guidance','availability_type','status','listing_broker','submarket','loopnet_url','notes']
                 : tab==='lease-comps'
-                ? ['transaction_date','address','town','county','building_sf','lot_size_ac','ceiling_height','loading_docks','drive_ins','asking_rent','deal_rent','rent_type','taxes','lease_term_years','rent_concession_months','ti_ll_work','mgmt_fee_pct','tenant','landlord','status','notes']
+                ? ['transaction_date','address','town','county','building_sf','lot_size_ac','office_sf','ceiling_height','loading_docks','drive_ins','power','sprinkler','parking','asking_rent','deal_rent','rent_type','taxes','lease_term_years','escalations','rent_concession_months','ti_ll_work','mgmt_fee_pct','tenant','landlord','status','notes']
+                : tab==='lease-avails'
+                ? ['address','town','county','building_sf','lot_size_ac','ceiling_height','loading_docks','drive_ins','power','sprinkler','parking','asking_rent','rent_type','taxes','lease_term_years','escalations','landlord','listing_broker','loopnet_url','status','notes']
                 : tab==='pcre-sales'
                 ? ['address','city','county','property_type','building_sf','sale_price_text','sale_date','buyer','seller','notes']
                 : ['address','city','county','tenant','landlord','building_sf','lease_price','lease_date','lease_term','notes']
@@ -1695,13 +1721,19 @@ function DatabaseManager() {
             <input
               value={browseSearch}
               onChange={e=>setBrowseSearch(e.target.value)}
-              onKeyDown={e=>{ if(e.key==='Enter') loadBrowse(0, browseSearch) }}
+              onKeyDown={e=>{ if(e.key==='Enter') loadBrowse(0, browseSearch, browseStatusFilter) }}
               placeholder="Search by address..."
               style={{...inputStyle as React.CSSProperties, flex:1, minWidth:180, padding:'6px 12px', fontSize:12}}
             />
-            <Btn variant="ghost" size="sm" onClick={()=>loadBrowse(0, browseSearch)}>🔍 Search</Btn>
-            {browseSearch&&<Btn variant="ghost" size="sm" onClick={()=>{setBrowseSearch('');loadBrowse(0,'')}}>✕ Clear</Btn>}
-            <Btn variant="ghost" size="sm" onClick={()=>loadBrowse(browseOffset, browseSearch)}>↻ Refresh</Btn>
+            {(tab==='comps'||tab==='avails'||tab==='lease-comps'||tab==='lease-avails')&&(
+              <select value={browseStatusFilter} onChange={e=>{setBrowseStatusFilter(e.target.value);loadBrowse(0,browseSearch,e.target.value)}} style={{...inputStyle as React.CSSProperties,padding:'6px 10px',fontSize:12,minWidth:140,cursor:'pointer'}}>
+                <option value="">All Statuses</option>
+                {(tab==='comps'?COMP_STATUSES_DB:tab==='lease-comps'?LEASE_COMP_STATUSES_DB:tab==='lease-avails'?LEASE_AVAIL_STATUSES_DB:AVAIL_STATUSES_DB).map(s=><option key={s.value} value={s.value}>{s.label}</option>)}
+              </select>
+            )}
+            <Btn variant="ghost" size="sm" onClick={()=>loadBrowse(0, browseSearch, browseStatusFilter)}>🔍 Search</Btn>
+            {(browseSearch||browseStatusFilter)&&<Btn variant="ghost" size="sm" onClick={()=>{setBrowseSearch('');setBrowseStatusFilter('');loadBrowse(0,'','')}}>✕ Clear</Btn>}
+            <Btn variant="ghost" size="sm" onClick={()=>loadBrowse(browseOffset, browseSearch, browseStatusFilter)}>↻ Refresh</Btn>
           </div>
           {browseLoading&&<div style={{textAlign:'center' as const,padding:40}}><div className="spin" style={{width:28,height:28,border:`2px solid ${D.border}`,borderTopColor:D.blue,borderRadius:'50%',margin:'0 auto 12px'}}/><p style={{color:D.textSec,fontSize:12}}>Loading...</p></div>}
           {!browseLoading&&browseData.length===0&&<p style={{color:D.textSec,fontSize:12,textAlign:'center' as const,padding:32}}>No records found.</p>}
@@ -1779,6 +1811,7 @@ function DatabaseManager() {
                     </div>
                   )
                 })()}
+                <Btn variant="ghost" size="sm" onClick={()=>startEdit(row)} style={{fontSize:10,padding:'5px 10px',color:D.blue,border:`1px solid ${D.blue}44`}}>✏️ Edit</Btn>
                 <Btn variant="danger" size="sm" onClick={()=>deleteRow(String(row.id))} style={{fontSize:10,padding:'5px 10px'}}>Delete</Btn>
               </div>
             </div>
