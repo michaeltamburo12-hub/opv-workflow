@@ -771,11 +771,11 @@ const DB_FIELD_OPTIONS=[
 ]
 type ParsedFile = {headers:string[], columnTypes:{name:string,type:string}[], totalRows:number, preview:Record<string,string>[], allRows:Record<string,string>[], existingTables:string[], fileName:string}
 
-function FileImport() {
+function FileImport({autoTable}: {autoTable?: string}) {
   const [dragging, setDragging] = useState(false)
   const [parsing, setParsing] = useState(false)
   const [parsed, setParsed] = useState<ParsedFile|null>(null)
-  const [targetTable, setTargetTable] = useState('')
+  const [targetTable, setTargetTable] = useState(autoTable || '')
   const [newTableName, setNewTableName] = useState('')
   const [isNewTable, setIsNewTable] = useState(false)
   const [createSQL, setCreateSQL] = useState('')
@@ -794,12 +794,13 @@ function FileImport() {
       const data = await res.json()
       if (data.tables) {
         setAvailableTables(data.tables)
-        setTargetTable(t => t || data.tables[0] || '')
+        setTargetTable(t => autoTable || t || data.tables[0] || '')
       }
     } catch {}
   }, [])
 
   useEffect(() => { fetchTables() }, [fetchTables])
+  useEffect(() => { if (autoTable) setTargetTable(autoTable) }, [autoTable])
 
   const processFile = async (file: File) => {
     setParsing(true); setParsed(null); setResult(null); setCreateSQL(''); setNewTableName(''); setIsNewTable(false); setColMapping({})
@@ -895,14 +896,20 @@ function FileImport() {
             <div style={{display:'flex',gap:16,alignItems:'flex-end',flexWrap:'wrap' as const}}>
               <div style={{flex:1,minWidth:200}}>
                 <Field label="Import into table">
-                  <Sel value={availableTables.includes(targetTable)?targetTable:''} onChange={e=>setTargetTable(e.target.value)}>
-                    {!availableTables.length&&<option value="">Loading tables...</option>}
-                    {availableTables.map(t=><option key={t} value={t}>{t}</option>)}
-                  </Sel>
+                  {autoTable ? (
+                    <div style={{display:'flex',alignItems:'center',gap:8,padding:'7px 10px',borderRadius:7,background:`rgba(59,130,246,0.08)`,border:`1px solid ${D.blue}33`,fontSize:12,color:D.blue,fontWeight:600}}>
+                      🗃️ {autoTable}
+                    </div>
+                  ) : (
+                    <Sel value={availableTables.includes(targetTable)?targetTable:''} onChange={e=>setTargetTable(e.target.value)}>
+                      {!availableTables.length&&<option value="">Loading tables...</option>}
+                      {availableTables.map(t=><option key={t} value={t}>{t}</option>)}
+                    </Sel>
+                  )}
                 </Field>
               </div>
               <div style={{fontSize:11,color:D.textMuted,paddingBottom:14}}>
-                {availableTables.length} table{availableTables.length!==1?'s':''} found
+                {autoTable ? 'Auto-selected from active tab' : `${availableTables.length} table${availableTables.length!==1?'s':''} found`}
               </div>
             </div>
           </Card>
@@ -933,12 +940,18 @@ function FileImport() {
                 <div onClick={()=>{setIsNewTable(true)}} style={{flex:1,padding:'8px',borderRadius:7,cursor:'pointer',fontSize:11,fontWeight:600,textAlign:'center' as const,background:isNewTable?`rgba(16,185,129,0.12)`:'transparent',color:isNewTable?D.green:D.textMuted,border:`1px solid ${isNewTable?`${D.green}55`:D.border}`}}>New Table</div>
               </div>
               {!isNewTable&&(
-                <Field label="Select table">
-                  <Sel value={availableTables.includes(targetTable)?targetTable:''} onChange={e=>setTargetTable(e.target.value)}>
-                    {!availableTables.length&&<option value="">Loading tables...</option>}
-                    {availableTables.map(t=><option key={t} value={t}>{t}</option>)}
-                  </Sel>
-                </Field>
+                autoTable ? (
+                  <div style={{padding:'8px 10px',borderRadius:7,background:`rgba(59,130,246,0.08)`,border:`1px solid ${D.blue}33`,fontSize:11,color:D.blue,fontWeight:600}}>
+                    🗃️ {autoTable}
+                  </div>
+                ) : (
+                  <Field label="Select table">
+                    <Sel value={availableTables.includes(targetTable)?targetTable:''} onChange={e=>setTargetTable(e.target.value)}>
+                      {!availableTables.length&&<option value="">Loading tables...</option>}
+                      {availableTables.map(t=><option key={t} value={t}>{t}</option>)}
+                    </Sel>
+                  </Field>
+                )
               )}
               {isNewTable&&(
                 <div>
@@ -1086,6 +1099,7 @@ function DatabaseManager() {
   const [browseSearch, setBrowseSearch] = useState('')
   const [browseStatusFilter, setBrowseStatusFilter] = useState('')
   const [editingId, setEditingId] = useState<string|null>(null)
+  const [editPanelOpen, setEditPanelOpen] = useState(false)
   const PAGE_SIZE = 20
   const COMP_STATUSES_DB  = [{value:'Closed',color:D.textMuted,label:'Closed'},{value:'Back on Market',color:D.gold,label:'Back on Market'}]
   const AVAIL_STATUSES_DB = [{value:'Available',color:D.green,label:'Available'},{value:'Under Contract',color:D.gold,label:'Under Contract'},{value:'Sold',color:D.red,label:'Sold'},{value:'Off Market',color:D.textMuted,label:'Off Market'}]
@@ -1140,6 +1154,7 @@ function DatabaseManager() {
     setSaving(false)
     if (error) { alert('Error: '+error.message); return }
     alert(editingId?'✅ Sale comp updated!':'✅ Sale comp saved to Supabase!')
+    if (editingId) { setEditPanelOpen(false); loadBrowse(browseOffset, browseSearch, browseStatusFilter) }
     setEditingId(null); setCompForm({...blankComp})
   }
   const saveComp = async () => {
@@ -1156,6 +1171,7 @@ function DatabaseManager() {
     setSaving(false)
     if (error) { alert('Error: '+error.message); return }
     alert(editingId?'✅ Availability updated!':'✅ Availability saved to Supabase!')
+    if (editingId) { setEditPanelOpen(false); loadBrowse(browseOffset, browseSearch, browseStatusFilter) }
     setEditingId(null); setAvailForm({...blankAvail})
   }
   const saveAvail = async () => {
@@ -1173,6 +1189,7 @@ function DatabaseManager() {
     setSaving(false)
     if (error) { alert('Error: '+error.message); return }
     alert(editingId?'✅ PCRE sale updated!':'✅ PCRE sale transaction saved!')
+    if (editingId) { setEditPanelOpen(false); loadBrowse(browseOffset, browseSearch, browseStatusFilter) }
     setEditingId(null); setPcreSaleForm({...blankPcreSale})
   }
 
@@ -1186,6 +1203,7 @@ function DatabaseManager() {
     setSaving(false)
     if (error) { alert('Error: '+error.message); return }
     alert(editingId?'✅ PCRE lease updated!':'✅ PCRE lease transaction saved!')
+    if (editingId) { setEditPanelOpen(false); loadBrowse(browseOffset, browseSearch, browseStatusFilter) }
     setEditingId(null); setPcreLeaseForm({...blankPcreLease})
   }
 
@@ -1199,6 +1217,7 @@ function DatabaseManager() {
     setSaving(false)
     if (error) { alert('Error: '+error.message); return }
     alert(editingId?'✅ Lease availability updated!':'✅ Lease availability saved to Supabase!')
+    if (editingId) { setEditPanelOpen(false); loadBrowse(browseOffset, browseSearch, browseStatusFilter) }
     setEditingId(null); setLeaseAvailForm({...blankLeaseAvail})
   }
   const saveLeaseAvail = async () => {
@@ -1216,6 +1235,7 @@ function DatabaseManager() {
     setSaving(false)
     if (error) { alert('Error: '+error.message); return }
     alert(editingId?'✅ Lease comp updated!':'✅ Lease comp saved to Supabase!')
+    if (editingId) { setEditPanelOpen(false); loadBrowse(browseOffset, browseSearch, browseStatusFilter) }
     setEditingId(null); setLeaseCompForm({...blankLeaseComp})
   }
   const saveLeaseComp = async () => {
@@ -1339,12 +1359,13 @@ function DatabaseManager() {
   const str = (v: unknown) => v != null && v !== undefined ? String(v) : ''
   const cancelEdit = () => {
     setEditingId(null)
+    setEditPanelOpen(false)
     setCompForm({...blankComp}); setAvailForm({...blankAvail})
     setLeaseCompForm({...blankLeaseComp}); setLeaseAvailForm({...blankLeaseAvail})
     setPcreSaleForm({...blankPcreSale}); setPcreLeaseForm({...blankPcreLease})
   }
   const startEdit = (row: BrowseRow) => {
-    const id = str(row.id); setEditingId(id); setSubTab('add')
+    const id = str(row.id); setEditingId(id); setEditPanelOpen(true)
     if (tab==='comps') setCompForm({address:str(row.address),city:str(row.city),county:str(row.county)||'Nassau',state:str((row as Record<string,unknown>).state)||'NY',property_type:str((row as Record<string,unknown>).property_type)||'Warehouse',building_sf:str(row.building_sf),lot_size_ac:str((row as Record<string,unknown>).lot_size_ac),ceiling_height:str((row as Record<string,unknown>).ceiling_height),loading_docks:str((row as Record<string,unknown>).loading_docks),drive_ins:str((row as Record<string,unknown>).drive_ins),power:str((row as Record<string,unknown>).power),heat:str((row as Record<string,unknown>).heat),parking:str((row as Record<string,unknown>).parking),sprinkler:str((row as Record<string,unknown>).sprinkler),sewer:str((row as Record<string,unknown>).sewer)||'Municipal',zoning:str((row as Record<string,unknown>).zoning),real_estate_taxes:str((row as Record<string,unknown>).real_estate_taxes),sale_price:str((row as Record<string,unknown>).sale_price),price_per_sf:str(row.price_per_sf),sale_date:str(row.sale_date),sale_type:str((row as Record<string,unknown>).sale_type)||"Arm's Length",buyer:str((row as Record<string,unknown>).buyer),seller:str((row as Record<string,unknown>).seller),listing_broker:str((row as Record<string,unknown>).listing_broker),market:str((row as Record<string,unknown>).market),submarket:str((row as Record<string,unknown>).submarket),zip_code:str((row as Record<string,unknown>).zip_code),notes:str((row as Record<string,unknown>).notes)})
     else if (tab==='avails') setAvailForm({address:str(row.address),city:str(row.city),county:str(row.county)||'Nassau',state:str((row as Record<string,unknown>).state)||'NY',property_type:str((row as Record<string,unknown>).property_type)||'Warehouse',building_sf:str(row.building_sf),lot_size_ac:str((row as Record<string,unknown>).lot_size_ac),ceiling_height:str((row as Record<string,unknown>).ceiling_height),loading_docks:str((row as Record<string,unknown>).loading_docks),drive_ins:str((row as Record<string,unknown>).drive_ins),power:str((row as Record<string,unknown>).power),heat:str((row as Record<string,unknown>).heat),parking:str((row as Record<string,unknown>).parking),sprinkler:str((row as Record<string,unknown>).sprinkler),sewer:str((row as Record<string,unknown>).sewer)||'Municipal',zoning:str((row as Record<string,unknown>).zoning),real_estate_taxes:str((row as Record<string,unknown>).real_estate_taxes),asking_price:str(row.asking_price),price_per_sf:str(row.price_per_sf),pricing_guidance:str((row as Record<string,unknown>).pricing_guidance),availability_type:str((row as Record<string,unknown>).availability_type)||'For Sale',status:str(row.status)||'Available',listing_broker:str((row as Record<string,unknown>).listing_broker),market:str((row as Record<string,unknown>).market),submarket:str((row as Record<string,unknown>).submarket),zip_code:str((row as Record<string,unknown>).zip_code),loopnet_url:str((row as Record<string,unknown>).loopnet_url),notes:str((row as Record<string,unknown>).notes)})
     else if (tab==='lease-comps') setLeaseCompForm({transaction_date:str((row as Record<string,unknown>).transaction_date),address:str(row.address),town:str((row as Record<string,unknown>).town),county:str(row.county)||'Nassau',building_sf:str(row.building_sf),lot_size_ac:str((row as Record<string,unknown>).lot_size_ac),ceiling_height:str((row as Record<string,unknown>).ceiling_height),loading_docks:str((row as Record<string,unknown>).loading_docks),drive_ins:str((row as Record<string,unknown>).drive_ins),office_sf:str((row as Record<string,unknown>).office_sf),power:str((row as Record<string,unknown>).power),sprinkler:str((row as Record<string,unknown>).sprinkler),parking:str((row as Record<string,unknown>).parking),asking_rent:str((row as Record<string,unknown>).asking_rent),deal_rent:str((row as Record<string,unknown>).deal_rent),rent_type:str((row as Record<string,unknown>).rent_type)||'NNN',taxes:str((row as Record<string,unknown>).taxes),lease_term_years:str((row as Record<string,unknown>).lease_term_years),rent_concession_months:str((row as Record<string,unknown>).rent_concession_months),ti_ll_work:str((row as Record<string,unknown>).ti_ll_work),mgmt_fee_pct:str((row as Record<string,unknown>).mgmt_fee_pct),escalations:str((row as Record<string,unknown>).escalations),tenant:str((row as Record<string,unknown>).tenant),landlord:str((row as Record<string,unknown>).landlord),status:str(row.status)||'Active',notes:str((row as Record<string,unknown>).notes)})
@@ -1408,7 +1429,7 @@ function DatabaseManager() {
         {subTabBtn('import','Paste CSV','📥')}
         {subTabBtn('browse','Browse & Manage','📋')}
       </div>
-      {subTab==='file' && <FileImport/>}
+      {subTab==='file' && <FileImport autoTable={tableForTab(tab)}/>}
       {subTab==='add' && tab==='comps' && (
         <Card>
           <SL>Add Sale Comp — All fields save directly to Supabase</SL>
@@ -1835,6 +1856,219 @@ function DatabaseManager() {
         </div>
       )}
     </div>
+
+    {/* ── Edit Panel Overlay ───────────────────────────────────────────────── */}
+    {editPanelOpen && editingId && (
+      <>
+        <div onClick={cancelEdit} style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.55)',zIndex:1200}}/>
+        <div style={{position:'fixed',top:0,right:0,width:660,maxWidth:'95vw',height:'100vh',background:D.bg,zIndex:1201,boxShadow:'-8px 0 48px rgba(0,0,0,0.5)',display:'flex',flexDirection:'column',overflow:'hidden'}}>
+          {/* Panel header */}
+          <div style={{padding:'20px 24px',borderBottom:`1px solid ${D.border}`,display:'flex',justifyContent:'space-between',alignItems:'center',flexShrink:0,background:D.surface}}>
+            <div>
+              <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:19,color:D.text,marginBottom:2}}>
+                ✏️ Edit Record
+              </div>
+              <div style={{fontSize:10,color:D.textMuted,fontWeight:600,textTransform:'uppercase' as const,letterSpacing:'.06em'}}>
+                {tab==='comps'?'Sale Comp':tab==='avails'?'Availability':tab==='pcre-sales'?'PCRE Sale':tab==='pcre-leases'?'PCRE Lease':tab==='lease-comps'?'Lease Comp':'Lease Availability'}
+              </div>
+            </div>
+            <button onClick={cancelEdit} style={{background:'transparent',border:`1px solid ${D.border}`,cursor:'pointer',fontSize:18,color:D.textMuted,padding:'6px 12px',borderRadius:7,lineHeight:1}}>✕</button>
+          </div>
+          {/* Scrollable form */}
+          <div style={{flex:1,overflowY:'auto',padding:'20px 24px'}}>
+            {tab==='comps'&&(<>
+              <Field label="Property Address" full><Input placeholder="45 Orville Drive, Bohemia, NY 11716" value={compForm.address} onChange={e=>setC('address',e.target.value)}/></Field>
+              <div style={G3}>
+                <Field label="City"><Input value={compForm.city} onChange={e=>setC('city',e.target.value)}/></Field>
+                <Field label="County"><Sel value={compForm.county} onChange={e=>setC('county',e.target.value)}>{['Nassau','Suffolk'].map(c=><option key={c}>{c}</option>)}</Sel></Field>
+                <Field label="Zip Code"><Input value={compForm.zip_code} onChange={e=>setC('zip_code',e.target.value)}/></Field>
+              </div>
+              <Divider label="Building"/>
+              <div style={G3}>
+                <Field label="Property Type"><Sel value={compForm.property_type} onChange={e=>setC('property_type',e.target.value)}>{PROP_TYPES.map(t=><option key={t}>{t}</option>)}</Sel></Field>
+                <Field label="Building SF"><Input type="number" value={compForm.building_sf} onChange={e=>setC('building_sf',e.target.value)}/></Field>
+                <Field label="Lot Size (acres)"><Input type="number" step="0.01" value={compForm.lot_size_ac} onChange={e=>setC('lot_size_ac',e.target.value)}/></Field>
+                <Field label="Ceiling Height"><Input placeholder='22 ft' value={compForm.ceiling_height} onChange={e=>setC('ceiling_height',e.target.value)}/></Field>
+                <Field label="Loading Docks"><Input value={compForm.loading_docks} onChange={e=>setC('loading_docks',e.target.value)}/></Field>
+                <Field label="Drive-In Doors"><Input value={compForm.drive_ins} onChange={e=>setC('drive_ins',e.target.value)}/></Field>
+                <Field label="Power"><Input placeholder="400A/3ph" value={compForm.power} onChange={e=>setC('power',e.target.value)}/></Field>
+                <Field label="Heat"><Input value={compForm.heat} onChange={e=>setC('heat',e.target.value)}/></Field>
+                <Field label="Sprinkler"><Sel value={compForm.sprinkler} onChange={e=>setC('sprinkler',e.target.value)}><option value="">Select...</option><option>ESFR</option><option>Wet</option><option>Dry</option><option>None</option></Sel></Field>
+                <Field label="Sewer"><Sel value={compForm.sewer} onChange={e=>setC('sewer',e.target.value)}><option>Municipal</option><option>Septic</option></Sel></Field>
+                <Field label="Zoning"><Input value={compForm.zoning} onChange={e=>setC('zoning',e.target.value)}/></Field>
+                <Field label="RE Taxes ($/yr)"><Input type="number" value={compForm.real_estate_taxes} onChange={e=>setC('real_estate_taxes',e.target.value)}/></Field>
+              </div>
+              <Divider label="Sale"/>
+              <div style={G3}>
+                <Field label="Sale Price ($)"><Input type="number" value={compForm.sale_price} onChange={e=>setC('sale_price',e.target.value)}/></Field>
+                <Field label="Price Per SF ($)"><Input type="number" step="0.01" value={compForm.price_per_sf} onChange={e=>setC('price_per_sf',e.target.value)}/></Field>
+                <Field label="Sale Date"><Input type="date" value={compForm.sale_date} onChange={e=>setC('sale_date',e.target.value)}/></Field>
+                <Field label="Sale Type"><Sel value={compForm.sale_type} onChange={e=>setC('sale_type',e.target.value)}><option>{"Arm's Length"}</option><option>Related Party</option><option>Foreclosure</option><option>Auction</option></Sel></Field>
+                <Field label="Buyer"><Input value={compForm.buyer} onChange={e=>setC('buyer',e.target.value)}/></Field>
+                <Field label="Seller"><Input value={compForm.seller} onChange={e=>setC('seller',e.target.value)}/></Field>
+                <Field label="Listing Broker"><Input value={compForm.listing_broker} onChange={e=>setC('listing_broker',e.target.value)}/></Field>
+                <Field label="Submarket"><Input value={compForm.submarket} onChange={e=>setC('submarket',e.target.value)}/></Field>
+              </div>
+              <Field label="Notes" full><textarea value={compForm.notes} onChange={e=>setC('notes',e.target.value)} style={{...inputStyle as React.CSSProperties,minHeight:70,resize:'vertical' as const}}/></Field>
+            </>)}
+            {tab==='avails'&&(<>
+              <Field label="Property Address" full><Input placeholder="85 Davids Drive, Hauppauge, NY 11788" value={availForm.address} onChange={e=>setA('address',e.target.value)}/></Field>
+              <div style={G3}>
+                <Field label="City"><Input value={availForm.city} onChange={e=>setA('city',e.target.value)}/></Field>
+                <Field label="County"><Sel value={availForm.county} onChange={e=>setA('county',e.target.value)}>{['Nassau','Suffolk'].map(c=><option key={c}>{c}</option>)}</Sel></Field>
+                <Field label="Zip Code"><Input value={availForm.zip_code} onChange={e=>setA('zip_code',e.target.value)}/></Field>
+              </div>
+              <Divider label="Building"/>
+              <div style={G3}>
+                <Field label="Property Type"><Sel value={availForm.property_type} onChange={e=>setA('property_type',e.target.value)}>{PROP_TYPES.map(t=><option key={t}>{t}</option>)}</Sel></Field>
+                <Field label="Building SF"><Input type="number" value={availForm.building_sf} onChange={e=>setA('building_sf',e.target.value)}/></Field>
+                <Field label="Lot Size (acres)"><Input type="number" step="0.01" value={availForm.lot_size_ac} onChange={e=>setA('lot_size_ac',e.target.value)}/></Field>
+                <Field label="Ceiling Height"><Input placeholder='24 ft' value={availForm.ceiling_height} onChange={e=>setA('ceiling_height',e.target.value)}/></Field>
+                <Field label="Loading Docks"><Input value={availForm.loading_docks} onChange={e=>setA('loading_docks',e.target.value)}/></Field>
+                <Field label="Drive-In Doors"><Input value={availForm.drive_ins} onChange={e=>setA('drive_ins',e.target.value)}/></Field>
+                <Field label="Power"><Input placeholder="400A/3ph" value={availForm.power} onChange={e=>setA('power',e.target.value)}/></Field>
+                <Field label="Sprinkler"><Sel value={availForm.sprinkler} onChange={e=>setA('sprinkler',e.target.value)}><option value="">Select...</option><option>ESFR</option><option>Wet</option><option>Dry</option><option>None</option></Sel></Field>
+                <Field label="Sewer"><Sel value={availForm.sewer} onChange={e=>setA('sewer',e.target.value)}><option>Municipal</option><option>Septic</option></Sel></Field>
+                <Field label="Zoning"><Input value={availForm.zoning} onChange={e=>setA('zoning',e.target.value)}/></Field>
+                <Field label="RE Taxes ($/yr)"><Input type="number" value={availForm.real_estate_taxes} onChange={e=>setA('real_estate_taxes',e.target.value)}/></Field>
+              </div>
+              <Divider label="Pricing & Listing"/>
+              <div style={G3}>
+                <Field label="Asking Price ($)"><Input type="number" value={availForm.asking_price} onChange={e=>setA('asking_price',e.target.value)}/></Field>
+                <Field label="Price Per SF ($)"><Input type="number" step="0.01" value={availForm.price_per_sf} onChange={e=>setA('price_per_sf',e.target.value)}/></Field>
+                <Field label="Pricing Guidance"><Input placeholder="$180/SF" value={availForm.pricing_guidance} onChange={e=>setA('pricing_guidance',e.target.value)}/></Field>
+                <Field label="Availability Type"><Sel value={availForm.availability_type} onChange={e=>setA('availability_type',e.target.value)}><option>For Sale</option><option>For Lease</option><option>For Sale or Lease</option></Sel></Field>
+                <Field label="Status"><Sel value={availForm.status} onChange={e=>setA('status',e.target.value)}><option>Available</option><option>Under Contract</option><option>Sold</option><option>Leased</option></Sel></Field>
+                <Field label="Listing Broker"><Input value={availForm.listing_broker} onChange={e=>setA('listing_broker',e.target.value)}/></Field>
+                <Field label="Submarket"><Input value={availForm.submarket} onChange={e=>setA('submarket',e.target.value)}/></Field>
+                <Field label="LoopNet URL"><Input placeholder="https://www.loopnet.com/..." value={availForm.loopnet_url} onChange={e=>setA('loopnet_url',e.target.value)}/></Field>
+              </div>
+              <Field label="Notes" full><textarea value={availForm.notes} onChange={e=>setA('notes',e.target.value)} style={{...inputStyle as React.CSSProperties,minHeight:70,resize:'vertical' as const}}/></Field>
+            </>)}
+            {tab==='pcre-sales'&&(<>
+              <Field label="Property Address" full><Input placeholder="128 Spagnoli Rd, Melville, NY" value={pcreSaleForm.address} onChange={e=>setPS('address',e.target.value)}/></Field>
+              <div style={G3}>
+                <Field label="City"><Input value={pcreSaleForm.city} onChange={e=>setPS('city',e.target.value)}/></Field>
+                <Field label="County"><Sel value={pcreSaleForm.county} onChange={e=>setPS('county',e.target.value)}>{['Nassau','Suffolk'].map(c=><option key={c}>{c}</option>)}</Sel></Field>
+                <Field label="Property Type"><Sel value={pcreSaleForm.property_type} onChange={e=>setPS('property_type',e.target.value)}>{PROP_TYPES.map(t=><option key={t}>{t}</option>)}</Sel></Field>
+              </div>
+              <div style={G3}>
+                <Field label="Building SF"><Input type="number" value={pcreSaleForm.building_sf} onChange={e=>setPS('building_sf',e.target.value)}/></Field>
+                <Field label="Sale Price"><Input placeholder="$4,700,000 or Undisclosed" value={pcreSaleForm.sale_price_text} onChange={e=>setPS('sale_price_text',e.target.value)}/></Field>
+                <Field label="Sale Date"><Input type="date" value={pcreSaleForm.sale_date} onChange={e=>setPS('sale_date',e.target.value)}/></Field>
+              </div>
+              <div style={G2}>
+                <Field label="Buyer"><Input value={pcreSaleForm.buyer} onChange={e=>setPS('buyer',e.target.value)}/></Field>
+                <Field label="Seller"><Input value={pcreSaleForm.seller} onChange={e=>setPS('seller',e.target.value)}/></Field>
+              </div>
+              <Field label="Notes" full><textarea value={pcreSaleForm.notes} onChange={e=>setPS('notes',e.target.value)} style={{...inputStyle as React.CSSProperties,minHeight:70,resize:'vertical' as const}}/></Field>
+            </>)}
+            {tab==='pcre-leases'&&(<>
+              <Field label="Property Address" full><Input placeholder="1460 N Clinton Ave, Bay Shore, NY" value={pcreLeaseForm.address} onChange={e=>setPL('address',e.target.value)}/></Field>
+              <div style={G3}>
+                <Field label="City"><Input value={pcreLeaseForm.city} onChange={e=>setPL('city',e.target.value)}/></Field>
+                <Field label="County"><Sel value={pcreLeaseForm.county} onChange={e=>setPL('county',e.target.value)}>{['Nassau','Suffolk'].map(c=><option key={c}>{c}</option>)}</Sel></Field>
+                <Field label="Building SF"><Input type="number" value={pcreLeaseForm.building_sf} onChange={e=>setPL('building_sf',e.target.value)}/></Field>
+              </div>
+              <div style={G3}>
+                <Field label="Tenant"><Input value={pcreLeaseForm.tenant} onChange={e=>setPL('tenant',e.target.value)}/></Field>
+                <Field label="Landlord"><Input value={pcreLeaseForm.landlord} onChange={e=>setPL('landlord',e.target.value)}/></Field>
+                <Field label="Lease Term"><Input placeholder="3 years" value={pcreLeaseForm.lease_term} onChange={e=>setPL('lease_term',e.target.value)}/></Field>
+              </div>
+              <div style={G2}>
+                <Field label="Lease Price"><Input placeholder="$20.00 PSF" value={pcreLeaseForm.lease_price} onChange={e=>setPL('lease_price',e.target.value)}/></Field>
+                <Field label="Lease Date"><Input type="date" value={pcreLeaseForm.lease_date} onChange={e=>setPL('lease_date',e.target.value)}/></Field>
+              </div>
+              <Field label="Notes" full><textarea value={pcreLeaseForm.notes} onChange={e=>setPL('notes',e.target.value)} style={{...inputStyle as React.CSSProperties,minHeight:70,resize:'vertical' as const}}/></Field>
+            </>)}
+            {tab==='lease-comps'&&(<>
+              <Field label="Street Address" full><Input placeholder="85 Davids Drive, Hauppauge, NY 11788" value={leaseCompForm.address} onChange={e=>setLC('address',e.target.value)}/></Field>
+              <div style={G3}>
+                <Field label="Town"><Input value={leaseCompForm.town} onChange={e=>setLC('town',e.target.value)}/></Field>
+                <Field label="County"><Sel value={leaseCompForm.county} onChange={e=>setLC('county',e.target.value)}>{['Nassau','Suffolk'].map(c=><option key={c}>{c}</option>)}</Sel></Field>
+                <Field label="Transaction Date"><Input type="date" value={leaseCompForm.transaction_date} onChange={e=>setLC('transaction_date',e.target.value)}/></Field>
+              </div>
+              <Divider label="Building"/>
+              <div style={G3}>
+                <Field label="Building Size (SF)"><Input type="number" value={leaseCompForm.building_sf} onChange={e=>setLC('building_sf',e.target.value)}/></Field>
+                <Field label="Office SF"><Input type="number" value={leaseCompForm.office_sf} onChange={e=>setLC('office_sf',e.target.value)}/></Field>
+                <Field label="Lot Size (acres)"><Input type="number" step="0.01" value={leaseCompForm.lot_size_ac} onChange={e=>setLC('lot_size_ac',e.target.value)}/></Field>
+                <Field label="Ceiling Height (ft.)"><Input placeholder="22" value={leaseCompForm.ceiling_height} onChange={e=>setLC('ceiling_height',e.target.value)}/></Field>
+                <Field label="Loading Docks"><Input value={leaseCompForm.loading_docks} onChange={e=>setLC('loading_docks',e.target.value)}/></Field>
+                <Field label="Drive-ins"><Input value={leaseCompForm.drive_ins} onChange={e=>setLC('drive_ins',e.target.value)}/></Field>
+                <Field label="Power"><Input placeholder="200A / 3-Phase" value={leaseCompForm.power} onChange={e=>setLC('power',e.target.value)}/></Field>
+                <Field label="Sprinkler System"><Input placeholder="ESFR / Wet Pipe" value={leaseCompForm.sprinkler} onChange={e=>setLC('sprinkler',e.target.value)}/></Field>
+                <Field label="Parking"><Input placeholder="50 spaces" value={leaseCompForm.parking} onChange={e=>setLC('parking',e.target.value)}/></Field>
+              </div>
+              <Divider label="Lease Terms"/>
+              <div style={G3}>
+                <Field label="Asking Rent ($/SF/yr)"><Input type="number" step="0.01" value={leaseCompForm.asking_rent} onChange={e=>setLC('asking_rent',e.target.value)}/></Field>
+                <Field label="Deal Rent ($/SF/yr)"><Input type="number" step="0.01" value={leaseCompForm.deal_rent} onChange={e=>setLC('deal_rent',e.target.value)}/></Field>
+                <Field label="Rent Type"><Sel value={leaseCompForm.rent_type} onChange={e=>setLC('rent_type',e.target.value)}><option>NNN</option><option>Gross</option><option>Modified Gross</option><option>MG</option></Sel></Field>
+                <Field label="Taxes ($/SF)"><Input type="number" step="0.01" value={leaseCompForm.taxes} onChange={e=>setLC('taxes',e.target.value)}/></Field>
+                <Field label="Lease Term (Years)"><Input type="number" step="0.5" value={leaseCompForm.lease_term_years} onChange={e=>setLC('lease_term_years',e.target.value)}/></Field>
+                <Field label="Escalations"><Input placeholder="3% annually" value={leaseCompForm.escalations} onChange={e=>setLC('escalations',e.target.value)}/></Field>
+                <Field label="Rent Concession (Months)"><Input type="number" value={leaseCompForm.rent_concession_months} onChange={e=>setLC('rent_concession_months',e.target.value)}/></Field>
+                <Field label="T.I. (LL Work)"><Input placeholder="$10/SF or TBD" value={leaseCompForm.ti_ll_work} onChange={e=>setLC('ti_ll_work',e.target.value)}/></Field>
+                <Field label="% Mgmt Fee"><Input type="number" step="0.1" value={leaseCompForm.mgmt_fee_pct} onChange={e=>setLC('mgmt_fee_pct',e.target.value)}/></Field>
+                <Field label="Status"><Sel value={leaseCompForm.status} onChange={e=>setLC('status',e.target.value)}><option>Active</option><option>Expired</option><option>Confidential</option></Sel></Field>
+              </div>
+              <Divider label="Parties"/>
+              <div style={G2}>
+                <Field label="Tenant"><Input value={leaseCompForm.tenant} onChange={e=>setLC('tenant',e.target.value)}/></Field>
+                <Field label="Landlord"><Input value={leaseCompForm.landlord} onChange={e=>setLC('landlord',e.target.value)}/></Field>
+              </div>
+              <Field label="Notes" full><textarea value={leaseCompForm.notes} onChange={e=>setLC('notes',e.target.value)} style={{...inputStyle as React.CSSProperties,minHeight:70,resize:'vertical' as const}}/></Field>
+            </>)}
+            {tab==='lease-avails'&&(<>
+              <Field label="Property Address" full><Input placeholder="85 Davids Drive, Hauppauge, NY 11788" value={leaseAvailForm.address} onChange={e=>setLA('address',e.target.value)}/></Field>
+              <div style={G3}>
+                <Field label="Town"><Input value={leaseAvailForm.town} onChange={e=>setLA('town',e.target.value)}/></Field>
+                <Field label="County"><Sel value={leaseAvailForm.county} onChange={e=>setLA('county',e.target.value)}>{['Nassau','Suffolk'].map(c=><option key={c}>{c}</option>)}</Sel></Field>
+                <Field label="Status"><Sel value={leaseAvailForm.status} onChange={e=>setLA('status',e.target.value)}><option>Available</option><option>Under Negotiation</option><option>Leased</option><option>Off Market</option></Sel></Field>
+              </div>
+              <Divider label="Building"/>
+              <div style={G3}>
+                <Field label="Building Size (SF)"><Input type="number" value={leaseAvailForm.building_sf} onChange={e=>setLA('building_sf',e.target.value)}/></Field>
+                <Field label="Lot Size (acres)"><Input type="number" step="0.01" value={leaseAvailForm.lot_size_ac} onChange={e=>setLA('lot_size_ac',e.target.value)}/></Field>
+                <Field label="Ceiling Height (ft.)"><Input placeholder="22" value={leaseAvailForm.ceiling_height} onChange={e=>setLA('ceiling_height',e.target.value)}/></Field>
+                <Field label="Loading Docks"><Input value={leaseAvailForm.loading_docks} onChange={e=>setLA('loading_docks',e.target.value)}/></Field>
+                <Field label="Drive-In Doors"><Input value={leaseAvailForm.drive_ins} onChange={e=>setLA('drive_ins',e.target.value)}/></Field>
+                <Field label="Power"><Input placeholder="200A / 3-Phase" value={leaseAvailForm.power} onChange={e=>setLA('power',e.target.value)}/></Field>
+                <Field label="Sprinkler System"><Input placeholder="ESFR / Wet Pipe" value={leaseAvailForm.sprinkler} onChange={e=>setLA('sprinkler',e.target.value)}/></Field>
+                <Field label="Parking"><Input placeholder="50 spaces" value={leaseAvailForm.parking} onChange={e=>setLA('parking',e.target.value)}/></Field>
+              </div>
+              <Divider label="Lease Terms"/>
+              <div style={G3}>
+                <Field label="Asking Rent ($/SF/yr)"><Input type="number" step="0.01" value={leaseAvailForm.asking_rent} onChange={e=>setLA('asking_rent',e.target.value)}/></Field>
+                <Field label="Rent Type"><Sel value={leaseAvailForm.rent_type} onChange={e=>setLA('rent_type',e.target.value)}><option>NNN</option><option>Gross</option><option>Modified Gross</option><option>MG</option></Sel></Field>
+                <Field label="Taxes ($/SF)"><Input type="number" step="0.01" value={leaseAvailForm.taxes} onChange={e=>setLA('taxes',e.target.value)}/></Field>
+                <Field label="Lease Term (Years)"><Input type="number" step="0.5" value={leaseAvailForm.lease_term_years} onChange={e=>setLA('lease_term_years',e.target.value)}/></Field>
+                <Field label="Escalations"><Input placeholder="3% annually" value={leaseAvailForm.escalations} onChange={e=>setLA('escalations',e.target.value)}/></Field>
+              </div>
+              <Divider label="Parties"/>
+              <div style={G3}>
+                <Field label="Landlord"><Input value={leaseAvailForm.landlord} onChange={e=>setLA('landlord',e.target.value)}/></Field>
+                <Field label="Listing Broker"><Input value={leaseAvailForm.listing_broker} onChange={e=>setLA('listing_broker',e.target.value)}/></Field>
+                <Field label="LoopNet URL"><Input placeholder="https://www.loopnet.com/..." value={leaseAvailForm.loopnet_url} onChange={e=>setLA('loopnet_url',e.target.value)}/></Field>
+              </div>
+              <Field label="Notes" full><textarea value={leaseAvailForm.notes} onChange={e=>setLA('notes',e.target.value)} style={{...inputStyle as React.CSSProperties,minHeight:70,resize:'vertical' as const}}/></Field>
+            </>)}
+          </div>
+          {/* Panel footer */}
+          <div style={{padding:'16px 24px',borderTop:`1px solid ${D.border}`,display:'flex',gap:10,flexShrink:0,background:D.surface}}>
+            <Btn
+              onClick={tab==='comps'?saveComp:tab==='avails'?saveAvail:tab==='pcre-sales'?savePcreSale:tab==='pcre-leases'?savePcreLease:tab==='lease-comps'?saveLeaseComp:saveLeaseAvail}
+              disabled={saving}
+              style={{flex:1,padding:13,fontSize:13}}
+            >
+              {saving?'Saving...':'✅ Update Record'}
+            </Btn>
+            <Btn variant="ghost" onClick={cancelEdit} style={{padding:'13px 20px',fontSize:13}}>✕ Cancel</Btn>
+          </div>
+        </div>
+      </>
+    )}
   </>
   )
 }
