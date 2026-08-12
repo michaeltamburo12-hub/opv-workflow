@@ -3599,11 +3599,31 @@ function OPVReport({subject,comps,leaseComps,leaseAvails=[],avails,analytics,aiT
   })
   const [editingKey, setEditingKey] = useState<string|null>(null)
   const [editMode, setEditMode] = useState(false)
+  const [nothingToUndo, setNothingToUndo] = useState(false)
   const reportRef = useRef<HTMLDivElement>(null)
   const editFrameRef = useRef<HTMLIFrameElement>(null)
   // Track whether iframe has ever been loaded — once loaded we never reload it,
   // so the browser's native undo stack survives across Confirm / re-Edit cycles.
   const iframeLoaded = useRef(false)
+  // Track how many undoable changes have been made so we never call execCommand('undo')
+  // on an empty stack (which causes the browser to navigate back to the login page).
+  const undoCountRef = useRef(0)
+
+  // While in edit mode: count input events (for undo guard) + block browser back-navigation
+  useEffect(() => {
+    if (!editMode) return
+    const doc = editFrameRef.current?.contentDocument
+    const onInput = () => { undoCountRef.current++ }
+    if (doc) doc.addEventListener('input', onInput)
+    // Prevent browser back-navigation while editing (belt-and-suspenders)
+    window.history.pushState(null, '', window.location.href)
+    const blockBack = () => { window.history.pushState(null, '', window.location.href) }
+    window.addEventListener('popstate', blockBack)
+    return () => {
+      if (doc) doc.removeEventListener('input', onInput)
+      window.removeEventListener('popstate', blockBack)
+    }
+  }, [editMode])
 
   const loadIframe = (html: string) => {
     const iframe = editFrameRef.current
@@ -4169,8 +4189,20 @@ function OPVReport({subject,comps,leaseComps,leaseAvails=[],avails,analytics,aiT
         )
         return (
           <div className="no-print" style={{display:'flex',gap:6,flexWrap:'wrap' as const,padding:'10px 14px',background:'#111',border:'1px solid #2a2a2a',borderRadius:'10px 10px 0 0',alignItems:'center',marginBottom:-2}}>
-            <button title="Undo (Ctrl+Z)" onMouseDown={e=>{e.preventDefault();cmd('undo')}}
-              style={{background:'rgba(59,130,246,0.15)',border:'1px solid rgba(59,130,246,0.4)',borderRadius:5,color:D.blue,padding:'5px 11px',fontSize:12,cursor:'pointer',fontFamily:"'Inter',sans-serif",fontWeight:700}}>↩ Undo</button>
+            <div style={{display:'flex',alignItems:'center',gap:6}}>
+              <button title="Undo (Ctrl+Z)" onMouseDown={e=>{
+                e.preventDefault()
+                if (undoCountRef.current <= 0) {
+                  setNothingToUndo(true)
+                  setTimeout(()=>setNothingToUndo(false), 2000)
+                  return
+                }
+                undoCountRef.current = Math.max(0, undoCountRef.current - 1)
+                cmd('undo')
+              }}
+                style={{background:'rgba(59,130,246,0.15)',border:'1px solid rgba(59,130,246,0.4)',borderRadius:5,color:D.blue,padding:'5px 11px',fontSize:12,cursor:'pointer',fontFamily:"'Inter',sans-serif",fontWeight:700}}>↩ Undo</button>
+              {nothingToUndo&&<span style={{fontSize:11,color:D.textMuted,fontStyle:'italic',whiteSpace:'nowrap' as const}}>Nothing to undo</span>}
+            </div>
             <button title="Redo (Ctrl+Y)" onMouseDown={e=>{e.preventDefault();cmd('redo')}}
               style={{background:'rgba(59,130,246,0.1)',border:'1px solid rgba(59,130,246,0.25)',borderRadius:5,color:D.blue,padding:'5px 11px',fontSize:12,cursor:'pointer',fontFamily:"'Inter',sans-serif"}}>↪ Redo</button>
             <div style={{width:1,height:20,background:'#333',margin:'0 2px',flexShrink:0}}/>
