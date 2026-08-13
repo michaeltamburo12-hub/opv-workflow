@@ -52,11 +52,11 @@ const css = `
     body{background:#fff!important;color:#111!important}
     .no-print{display:none!important}
     .print-area{box-shadow:none!important;border-radius:0!important;padding:24px!important;max-width:100%!important;margin:0!important}
+    .prop-card{break-before:page;page-break-before:always}
     .sec-heading-break{break-before:page;page-break-before:always}
     .sec-heading{break-after:avoid;page-break-after:avoid}
     .prop-card-header{break-after:avoid;page-break-after:avoid}
     tr{break-inside:avoid;page-break-inside:avoid}
-    img{break-inside:avoid;page-break-inside:avoid}
   }
 `
 
@@ -4115,14 +4115,17 @@ function OPVReport({subject,comps,leaseComps,leaseAvails=[],avails,analytics,aiT
   td,th{padding:5px 8px;border:1px solid #ccc;font-size:11px;vertical-align:middle;word-wrap:break-word}
   /* Keep individual table rows together */
   tr{break-inside:avoid;page-break-inside:avoid}
-  /* Only the bios/PCRE section starts on a new page */
+  /* Each property card gets its own page — clean, professional */
+  .prop-card{break-before:page;page-break-before:always}
+  /* Only the bios section also gets a fresh page */
   .sec-heading-break{break-before:page;page-break-before:always}
-  /* Section headings stay glued to the content that follows */
+  /* Section headings never orphaned from content below */
   .sec-heading{break-after:avoid;page-break-after:avoid}
-  /* Prop card header (title row) stays with the photo below it */
+  /* Card title stays with the photo */
   .prop-card-header{break-after:avoid;page-break-after:avoid}
-  /* Images don't get orphaned at the bottom of a page */
-  img{break-inside:avoid;page-break-inside:avoid;break-before:auto}
+  /* Table rows don't split mid-row */
+  tr{break-inside:avoid;page-break-inside:avoid}
+  img{max-width:100%;height:auto}
   p,li{orphans:3;widows:3}
   @media print{body{margin:0}}
 </style></head>
