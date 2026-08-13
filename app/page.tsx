@@ -757,9 +757,67 @@ function FolderManager({folders, setFolders, setPage, comps, setComps, avails, s
 
 
 // ── FILE IMPORT ───────────────────────────────────────────────────────────────
-const DB_ALL_FIELDS = new Set(['address','city','town','county','state','zip_code','property_type','building_sf','lot_size_ac','ceiling_height','loading_docks','drive_ins','power','heat','parking','sprinkler','sewer','zoning','real_estate_taxes','sale_price','asking_price','price_per_sf','sale_date','sale_type','buyer','seller','listing_broker','market','submarket','notes','status','pricing_guidance','availability_type','loopnet_url','lease_price','lease_date','lease_term','tenant','landlord','sale_price_text',
+const DB_ALL_FIELDS = new Set(['address','town','county','state','zip_code','property_type','building_sf','lot_size_ac','ceiling_height','loading_docks','drive_ins','power','heat','parking','sprinkler','sewer','zoning','real_estate_taxes','sale_price','asking_price','price_per_sf','sale_date','sale_type','buyer','seller','listing_broker','market','submarket','notes','status','pricing_guidance','availability_type','loopnet_url','lease_price','lease_date','lease_term','tenant','landlord','sale_price_text',
   // Lease comp fields
   'transaction_date','asking_rent','deal_rent','rent_type','taxes','lease_term_years','rent_concession_months','ti_ll_work','mgmt_fee_pct'])
+
+// Normalize a column name: trim, lowercase, collapse spaces/dashes to underscores
+const normalizeColName = (s: string) => s.trim().toLowerCase().replace(/[\s\-]+/g,'_')
+
+// Synonyms: normalized incoming name → canonical DB field
+const COLUMN_ALIASES: Record<string,string> = {
+  // location
+  city:'town', city_town:'town', municipality:'town', hamlet:'town',
+  zip:'zip_code', postal_code:'zip_code', postal:'zip_code',
+  st:'state', state_abbr:'state',
+  // size
+  sq_ft:'building_sf', sqft:'building_sf', building_size:'building_sf', building_sqft:'building_sf',
+  size_sf:'building_sf', square_footage:'building_sf', bldg_sf:'building_sf', bldg_size:'building_sf',
+  gla:'building_sf', rentable_sf:'building_sf', total_sf:'building_sf',
+  lot_acres:'lot_size_ac', lot_ac:'lot_size_ac', land_area:'lot_size_ac', site_size:'lot_size_ac',
+  lot_size:'lot_size_ac', site_area:'lot_size_ac',
+  // physical
+  clear_height:'ceiling_height', clear_ht:'ceiling_height', height:'ceiling_height', ceiling:'ceiling_height',
+  clear:'ceiling_height',
+  docks:'loading_docks', dock_doors:'loading_docks', dock_count:'loading_docks', num_docks:'loading_docks',
+  drive_in:'drive_ins', drive_in_doors:'drive_ins', grade_level:'drive_ins', grade_doors:'drive_ins',
+  drive_in_door:'drive_ins', di_doors:'drive_ins',
+  electrical:'power', electric:'power', amps:'power',
+  heating:'heat', heat_type:'heat',
+  sprinklers:'sprinkler', fire_suppression:'sprinkler', fire_protection:'sprinkler',
+  sewer_connection:'sewer', sewage:'sewer',
+  // financial
+  re_taxes:'real_estate_taxes', property_taxes:'real_estate_taxes', annual_taxes:'real_estate_taxes',
+  tax:'real_estate_taxes', re_tax:'real_estate_taxes', taxes_per_sf:'real_estate_taxes',
+  price:'sale_price', sold_price:'sale_price', transaction_price:'sale_price', sale:'sale_price',
+  list_price:'asking_price', listing_price:'asking_price', ask_price:'asking_price',
+  psf:'price_per_sf', price_psf:'price_per_sf', sale_psf:'price_per_sf',
+  // dates
+  sold_date:'sale_date', closing_date:'sale_date', close_date:'sale_date', deed_date:'sale_date',
+  // parties
+  purchaser:'buyer', grantee:'buyer',
+  vendor:'seller', grantor:'seller',
+  broker:'listing_broker', listing_agent:'listing_broker', agent:'listing_broker',
+  // lease
+  rent:'asking_rent', annual_rent:'asking_rent', base_rent:'asking_rent', asking_rent_psf:'asking_rent',
+  deal_rent_psf:'deal_rent', effective_rent:'deal_rent',
+  lease_type:'rent_type', type_of_lease:'rent_type',
+  term:'lease_term_years', lease_term:'lease_term_years',
+  ti:'ti_ll_work', ti_work:'ti_ll_work', tenant_improvement:'ti_ll_work',
+  concession:'rent_concession_months', free_rent:'rent_concession_months',
+  mgmt_fee:'mgmt_fee_pct',
+  // misc
+  type:'property_type', prop_type:'property_type', use:'property_type', use_type:'property_type',
+}
+
+// Resolve an incoming CSV column name to a canonical DB field (or null)
+const resolveColName = (raw: string): string | null => {
+  if (DB_ALL_FIELDS.has(raw)) return raw
+  const norm = normalizeColName(raw)
+  if (DB_ALL_FIELDS.has(norm)) return norm
+  if (COLUMN_ALIASES[norm]) return COLUMN_ALIASES[norm]
+  return null
+}
 const DB_FIELD_OPTIONS=[
   {value:'__skip__',label:'— Skip this column —'},
   // Common
@@ -810,9 +868,12 @@ function FileImport({autoTable}: {autoTable?: string}) {
       const data = await res.json()
       if (data.error) { alert('Parse error: ' + data.error); setParsing(false); return }
       setParsed(data)
-      // Auto-compute column mapping: recognized fields map to themselves, unknowns flagged for user review
+      // Auto-compute column mapping: exact + alias resolution, unknowns flagged for user review
       const initMap: Record<string,string> = {}
-      ;(data.columnTypes as {name:string,type:string}[]).forEach(c => { initMap[c.name] = DB_ALL_FIELDS.has(c.name) ? c.name : '__skip__' })
+      ;(data.columnTypes as {name:string,type:string}[]).forEach(c => {
+        const resolved = resolveColName(c.name)
+        initMap[c.name] = resolved ?? '__skip__'
+      })
       setColMapping(initMap)
       // Merge any newly discovered tables
       if (data.existingTables?.length) {
@@ -1046,9 +1107,9 @@ function FileImport({autoTable}: {autoTable?: string}) {
                 )
               })}
             </div>
-            {Object.entries(colMapping).filter(([col])=>DB_ALL_FIELDS.has(col)).length>0&&(
+            {Object.entries(colMapping).filter(([col])=>DB_ALL_FIELDS.has(col)&&colMapping[col]!=='__skip__').length>0&&(
               <div style={{marginTop:12,fontSize:11,color:D.textMuted}}>
-                ✅ {Object.entries(colMapping).filter(([col])=>DB_ALL_FIELDS.has(col)).length} column{Object.entries(colMapping).filter(([col])=>DB_ALL_FIELDS.has(col)).length!==1?'s were':' was'} recognized automatically
+                ✅ {Object.entries(colMapping).filter(([col])=>DB_ALL_FIELDS.has(col)&&colMapping[col]!=='__skip__').length} column{Object.entries(colMapping).filter(([col])=>DB_ALL_FIELDS.has(col)&&colMapping[col]!=='__skip__').length!==1?'s were':' was'} recognized automatically
               </div>
             )}
           </Card>
