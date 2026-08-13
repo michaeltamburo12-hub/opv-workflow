@@ -4140,18 +4140,19 @@ function OPVReport({subject,comps,leaseComps,leaseAvails=[],avails,analytics,aiT
 </style></head>
 <body>${clone.innerHTML}</body></html>`
 
-      // Open in a real window at report width so layout is correct before printing
-      const win = window.open('', '_blank', 'width=900,height=800,scrollbars=yes,menubar=yes,toolbar=yes')
-      if (!win) {
-        alert('Please allow pop-ups for this site to generate the PDF, then try again.')
-        setDownloading(false); return
-      }
-      win.document.open(); win.document.write(html); win.document.close()
+      // Render in a full-size visible iframe so layout is correct, then print
+      const iframe = document.createElement('iframe')
+      // Cover the whole viewport so content lays out at real width
+      iframe.style.cssText = 'position:fixed;inset:0;width:100vw;height:100vh;border:none;z-index:99999;background:#fff'
+      document.body.appendChild(iframe)
+      const iDoc = iframe.contentDocument || iframe.contentWindow?.document
+      if (!iDoc) { document.body.removeChild(iframe); setDownloading(false); return }
+      iDoc.open(); iDoc.write(html); iDoc.close()
 
       // Wait for all images to load
       await new Promise<void>(resolve => {
-        const imgs = Array.from(win.document.querySelectorAll('img'))
-        if (!imgs.length) { setTimeout(resolve, 300); return }
+        const imgs = Array.from(iDoc.querySelectorAll('img'))
+        if (!imgs.length) { setTimeout(resolve, 400); return }
         let done = 0
         const tick = () => { if (++done >= imgs.length) resolve() }
         imgs.forEach(img => {
@@ -4161,8 +4162,10 @@ function OPVReport({subject,comps,leaseComps,leaseAvails=[],avails,analytics,aiT
         setTimeout(resolve, 6000) // hard cap
       })
       await new Promise(r => setTimeout(r, 400))
-      win.focus()
-      win.print()
+      iframe.contentWindow?.focus()
+      iframe.contentWindow?.print()
+      // Hide iframe after print dialog closes
+      setTimeout(() => document.body.removeChild(iframe), 2000)
     } catch(e) { alert('PDF export failed: ' + (e as Error).message) }
     setDownloading(false)
   }
