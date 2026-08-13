@@ -82,6 +82,7 @@ export async function POST(req: NextRequest) {
       // Taxes / zoning
       real_estate_taxes:'real_estate_taxes', re_taxes:'real_estate_taxes',
       annual_taxes:'real_estate_taxes', tax_amount:'real_estate_taxes',
+      taxes:'real_estate_taxes', tax:'real_estate_taxes',
       // Sale price (comps) — sale_price_text is remapped to sale_price for all tables
       // except pcre_sale_transactions which overrides it back via TABLE_REMAP
       sale_price_text:'sale_price', for_sale_price:'sale_price',
@@ -123,31 +124,62 @@ export async function POST(req: NextRequest) {
 
     // Table-specific overrides (applied after synonyms)
     const TABLE_REMAP: Record<string, Record<string, string>> = {
+      industrial_sale_comps: {
+        town:              'city',              // this table uses "city" not "town"
+        // taxes→real_estate_taxes handled by SYNONYMS
+      },
       market_availabilities: {
-        sale_price: 'asking_price',   // if sale_price slips through, it's asking_price for avails
-        sale_date:  'notes',          // avails don't have sale dates — preserve in notes
+        sale_price:        'asking_price',      // sale_price = asking_price for avails
+        sale_date:         'notes',             // no sale_date on avails
+        town:              'city',              // this table uses "city" not "town"
+        // taxes→real_estate_taxes handled by SYNONYMS
       },
       pcre_sale_transactions: {
-        sale_price: 'sale_price_text', // PCRE stores formatted text, not numeric
+        sale_price:        'sale_price_text',   // PCRE stores formatted text, not numeric
+        town:              'city',
+      },
+      pcre_lease_transactions: {
+        town:              'city',
+        asking_rent:       'lease_price',
+        deal_rent:         'lease_price',
+        asking_price:      'lease_price',
+        lease_term_years:  'lease_term',
+        transaction_date:  'lease_date',
+        sale_date:         'lease_date',
       },
       lease_comps: {
-        sale_date:         'transaction_date',  // SYNONYMS maps transaction_date → sale_date; undo it
-        city:              'town',              // column is "Town" not "City"
-        lease_price:       'deal_rent',         // SYNONYMS maps lease_rate/rent → lease_price; remap
-        lease_date:        'transaction_date',  // old field name
-        lease_term:        'lease_term_years',  // old field name
-        real_estate_taxes: 'taxes',             // synonym maps to real_estate_taxes; remap
-        price_per_sf:      'deal_rent',         // rent psf variant
+        sale_date:         'transaction_date',  // SYNONYMS maps transaction_date→sale_date; undo it
+        city:              'town',              // this table uses "town" not "city"
+        lease_price:       'deal_rent',         // rent variants
+        asking_price:      'asking_rent',
+        lease_date:        'transaction_date',
+        lease_term:        'lease_term_years',
+        real_estate_taxes: 'taxes',             // this table uses "taxes"
+        price_per_sf:      'deal_rent',
+      },
+      lease_market_availabilities: {
+        city:              'town',              // this table uses "town" not "city"
+        real_estate_taxes: 'taxes',             // this table uses "taxes"
+        asking_price:      'asking_rent',
+        sale_price:        'asking_rent',
+        lease_price:       'asking_rent',
+        deal_rent:         'asking_rent',
+        lease_term:        'lease_term_years',
+        transaction_date:  'notes',
+        sale_date:         'notes',
+        buyer:             'notes',
+        seller:            'notes',
       },
     }
 
-    // Canonical columns for each known table
+    // Canonical columns for each known table — anything not in this list goes to notes
     const TABLE_COLUMNS: Record<string, Set<string>> = {
-      industrial_sale_comps: new Set(['address','city','county','state','zip_code','property_type','building_sf','lot_size_ac','ceiling_height','loading_docks','drive_ins','power','heat','parking','sprinkler','sewer','zoning','real_estate_taxes','sale_price','price_per_sf','sale_date','sale_type','buyer','seller','listing_broker','market','submarket','loopnet_url','notes','status']),
-      market_availabilities: new Set(['address','city','county','state','zip_code','property_type','building_sf','lot_size_ac','ceiling_height','loading_docks','drive_ins','power','heat','parking','sprinkler','sewer','zoning','real_estate_taxes','asking_price','price_per_sf','pricing_guidance','availability_type','status','listing_broker','market','submarket','loopnet_url','notes']),
-      pcre_sale_transactions: new Set(['address','city','county','property_type','building_sf','sale_price_text','sale_date','buyer','seller','notes']),
-      pcre_lease_transactions: new Set(['address','city','county','tenant','landlord','building_sf','lease_price','lease_date','lease_term','notes']),
-      lease_comps: new Set(['address','town','county','building_sf','lot_size_ac','ceiling_height','loading_docks','drive_ins','asking_rent','deal_rent','rent_type','taxes','lease_term_years','rent_concession_months','ti_ll_work','mgmt_fee_pct','tenant','landlord','transaction_date','status','notes']),
+      industrial_sale_comps:      new Set(['address','city','county','state','zip_code','property_type','building_sf','lot_size_ac','ceiling_height','loading_docks','drive_ins','power','heat','parking','sprinkler','sewer','zoning','real_estate_taxes','sale_price','price_per_sf','sale_date','sale_type','buyer','seller','listing_broker','market','submarket','loopnet_url','notes','status']),
+      market_availabilities:      new Set(['address','city','county','state','zip_code','property_type','building_sf','lot_size_ac','ceiling_height','loading_docks','drive_ins','power','heat','parking','sprinkler','sewer','zoning','real_estate_taxes','asking_price','price_per_sf','pricing_guidance','availability_type','status','listing_broker','market','submarket','loopnet_url','notes']),
+      pcre_sale_transactions:     new Set(['address','city','county','property_type','building_sf','sale_price_text','sale_date','buyer','seller','notes']),
+      pcre_lease_transactions:    new Set(['address','city','county','tenant','landlord','building_sf','lease_price','lease_date','lease_term','notes']),
+      lease_comps:                new Set(['address','town','county','building_sf','lot_size_ac','office_sf','ceiling_height','loading_docks','drive_ins','power','sprinkler','parking','asking_rent','deal_rent','rent_type','taxes','lease_term_years','rent_concession_months','ti_ll_work','mgmt_fee_pct','escalations','tenant','landlord','transaction_date','status','notes']),
+      lease_market_availabilities: new Set(['address','town','county','building_sf','lot_size_ac','ceiling_height','loading_docks','drive_ins','power','sprinkler','parking','asking_rent','rent_type','taxes','lease_term_years','escalations','landlord','listing_broker','loopnet_url','status','notes']),
     }
 
     const TABLE_DEFAULTS: Record<string, Record<string, unknown>> = {
