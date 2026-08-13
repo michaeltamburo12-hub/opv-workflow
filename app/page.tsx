@@ -2891,14 +2891,7 @@ function AvailSearch({subject,avails,setAvails,leaseAvails,setLeaseAvails,setPag
                                       <div style={{width:8,height:8,borderRadius:'50%',background:f.color,flexShrink:0}}/>{f.name}
                                     </div>
                                   ))}
-                                  <div onClick={()=>{
-                                    const now=Date.now()
-                                    const color=FOLDER_COLORS[folders.length%FOLDER_COLORS.length]
-                                    const newFolder:Folder={id:now.toString(),name:'Lease Avails',type:'lease-avails',color,items:[r as unknown as Avail],opvAddress:undefined,createdAt:now}
-                                    setFolders([...folders,newFolder])
-                                    setFolderDropdown(null); alert(`Created "Lease Avails" folder and added property.`)
-                                  }} style={{display:'flex',alignItems:'center',gap:6,padding:'8px 10px',borderRadius:6,cursor:'pointer',fontSize:12,color:D.purple,fontWeight:600}}>＋ New Lease Avails Folder</div>
-                                  <div onClick={()=>{setFolderDropdown(null);setPage('folders')}} style={{display:'flex',alignItems:'center',gap:6,padding:'8px 10px',borderRadius:6,cursor:'pointer',fontSize:11,color:D.textMuted,borderTop:`1px solid ${D.border}`,marginTop:2}}>↗ Manage folders</div>
+                                  <div onClick={()=>{setFolderDropdown(null);setPage('folders')}} style={{display:'flex',alignItems:'center',gap:6,padding:'8px 10px',borderRadius:6,cursor:'pointer',fontSize:11,color:D.blue,marginTop:4,borderTop:`1px solid ${D.border}`}}>＋ Create folder</div>
                                 </div>
                               )}
                             </div>
