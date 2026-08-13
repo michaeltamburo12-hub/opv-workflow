@@ -534,7 +534,7 @@ function DataVerification({comps,avails,verificationStatus,setVerificationStatus
 }
 
 // ── FOLDER MANAGER ────────────────────────────────────────────────────────────
-function FolderManager({folders, setFolders, setPage, comps, setComps, avails, setAvails, leaseComps, setLeaseComps}: {folders:Folder[], setFolders:(f:Folder[])=>void, setPage:(p:string)=>void, comps:Comp[], setComps:(c:Comp[])=>void, avails:Avail[], setAvails:(a:Avail[])=>void, leaseComps:LeaseComp[], setLeaseComps:(c:LeaseComp[])=>void}) {
+function FolderManager({folders, setFolders, setPage, comps, setComps, avails, setAvails, leaseComps, setLeaseComps, leaseAvails, setLeaseAvails}: {folders:Folder[], setFolders:(f:Folder[])=>void, setPage:(p:string)=>void, comps:Comp[], setComps:(c:Comp[])=>void, avails:Avail[], setAvails:(a:Avail[])=>void, leaseComps:LeaseComp[], setLeaseComps:(c:LeaseComp[])=>void, leaseAvails:LeaseComp[], setLeaseAvails:(a:LeaseComp[])=>void}) {
   const [activeFolder, setActiveFolder] = useState<string|null>(null)
   const [activeOPV, setActiveOPV] = useState<string|null>(null)
   const [manualName, setManualName] = useState('')
@@ -5367,7 +5367,7 @@ export default function App() {
             {page==='comp-search'&&<CompSearch subject={subject} comps={comps} setComps={setComps} setPage={handleSetPage} folders={folders} setFolders={updateFolders}/>}
             {page==='avail-search'&&<AvailSearch subject={subject} avails={avails} setAvails={setAvails} leaseAvails={leaseAvails} setLeaseAvails={setLeaseAvails} setPage={handleSetPage} folders={folders} setFolders={updateFolders}/>}
             {(page==='lease-comps'||page==='lease-comp-search')&&<LeaseCompSearch subject={subject} leaseComps={leaseComps} setLeaseComps={setLeaseComps} setPage={handleSetPage} folders={folders} setFolders={updateFolders}/>}
-            {page==='folders'&&<FolderManager folders={folders} setFolders={updateFolders} setPage={handleSetPage} comps={comps} setComps={setComps} avails={avails} setAvails={setAvails} leaseComps={leaseComps} setLeaseComps={setLeaseComps}/>}
+            {page==='folders'&&<FolderManager folders={folders} setFolders={updateFolders} setPage={handleSetPage} comps={comps} setComps={setComps} avails={avails} setAvails={setAvails} leaseComps={leaseComps} setLeaseComps={setLeaseComps} leaseAvails={leaseAvails} setLeaseAvails={setLeaseAvails}/>}
             {page==='analytics'&&<Analytics comps={scoredComps.length>0?scoredComps:comps} avails={avails} analytics={analytics} setAnalytics={setAnalytics} setPage={handleSetPage} subject={subject} leaseComps={leaseComps}/>}
             {page==='broker-review'&&<BrokerReview subject={subject} comps={scoredComps.length>0?scoredComps:comps} analytics={analytics} setAnalytics={setAnalytics} aiText={aiText} setAiText={setAiText} setPage={handleSetPage} setSubject={setSubject}/>}
             {page==='opv-report'&&<OPVReport key={savedOPVId||'new'} opvId={savedOPVId} subject={subject} comps={scoredComps.length>0?scoredComps:comps} leaseComps={leaseComps} leaseAvails={leaseAvails} avails={avails} analytics={analytics} aiText={aiText} setPage={handleSetPage} frozenHTML={editedReportHTML} setFrozenHTML={setEditedReportHTML} photoUrls={photoUrls}/>}
