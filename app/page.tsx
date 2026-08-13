@@ -176,7 +176,7 @@ const Divider = ({label}: {label?:string}) => (
 )
 
 type VerifyStatus = 'verified'|'needs-review'|'rejected'
-type Folder = {id:string, name:string, type:'comps'|'avails'|'lease-comps', color:string, items:(Comp|Avail|LeaseComp)[], opvAddress?:string, createdAt:number}
+type Folder = {id:string, name:string, type:'comps'|'avails'|'lease-comps'|'lease-avails', color:string, items:(Comp|Avail|LeaseComp)[], opvAddress?:string, createdAt:number}
 const FOLDER_COLORS = [D.gold, D.blue, D.green, D.purple, '#0891B2', '#DB2777', '#EA580C', D.red]
 
 type SubjectForm = {address:string,city:string,county:string,municipality:string,parcelId:string,type:string,opvType:string,size:string,lot:string,ceiling:string,docks:string,driveIn:string,power:string,heat:string,parking:string,sprinkler:string,sewer:string,zoning:string,taxes:string,yearBuilt:string,officePct:string,construction:string,condition:string,notes:string,highestBestUse:string,capRateLow:string,capRateHigh:string,leasePsfLow:string,leasePsfHigh:string,estimatedValueLow:string,estimatedValueHigh:string,preparedBy:string}
@@ -538,7 +538,7 @@ function FolderManager({folders, setFolders, setPage, comps, setComps, avails, s
   const [activeFolder, setActiveFolder] = useState<string|null>(null)
   const [activeOPV, setActiveOPV] = useState<string|null>(null)
   const [manualName, setManualName] = useState('')
-  const [manualType, setManualType] = useState<'comps'|'avails'|'lease-comps'>('comps')
+  const [manualType, setManualType] = useState<'comps'|'avails'|'lease-comps'|'lease-avails'>('comps')
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [fetchingPhoto, setFetchingPhoto] = useState<string|null>(null)
 
@@ -593,7 +593,7 @@ function FolderManager({folders, setFolders, setPage, comps, setComps, avails, s
             <SL>Add Manual Folder</SL>
             <Field label="Folder Name"><Input placeholder="Custom folder name" value={manualName} onChange={e=>setManualName(e.target.value)} onKeyDown={e=>e.key==='Enter'&&createManual()}/></Field>
             <div style={{display:'flex',gap:8,marginBottom:12,flexWrap:'wrap' as const}}>
-              {([['comps','📊 Sale Comps',D.gold],['avails','🏭 Avails',D.blue],['lease-comps','📋 Lease Comps',D.green]] as [string,string,string][]).map(([t,label,color])=>(
+              {([['comps','📊 Sale Comps',D.gold],['avails','🏭 Avails',D.blue],['lease-comps','📋 Lease Comps',D.green],['lease-avails','🏷️ Lease Avails',D.purple]] as [string,string,string][]).map(([t,label,color])=>(
                 <div key={t} onClick={()=>setManualType(t as 'comps'|'avails'|'lease-comps')} style={{flex:1,padding:'8px',borderRadius:7,cursor:'pointer',fontSize:11,fontWeight:600,textAlign:'center' as const,background:manualType===t?`${color}1A`:'transparent',color:manualType===t?color:D.textMuted,border:`1px solid ${manualType===t?`${color}44`:D.border}`}}>
                   {label}
                 </div>
@@ -625,7 +625,7 @@ function FolderManager({folders, setFolders, setPage, comps, setComps, avails, s
                   <div style={{paddingLeft:8,marginTop:4}}>
                     {grpFolders.map(f=>(
                       <div key={f.id} onClick={()=>{setActiveFolder(activeFolder===f.id?null:f.id);setSelected(new Set())}} style={{display:'flex',alignItems:'center',gap:9,padding:'9px 12px',borderRadius:7,cursor:'pointer',marginBottom:4,border:`1px solid ${activeFolder===f.id?f.color+'66':D.border}`,background:activeFolder===f.id?`${f.color}15`:D.surface,transition:'all .15s'}}>
-                        <div style={{fontSize:14}}>{f.type==='comps'?'📊':f.type==='lease-comps'?'📋':'🏭'}</div>
+                        <div style={{fontSize:14}}>{f.type==='comps'?'📊':f.type==='lease-comps'?'📋':f.type==='lease-avails'?'🏷️':'🏭'}</div>
                         <div style={{flex:1,minWidth:0}}>
                           <div style={{fontSize:11,fontWeight:600,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' as const,color:D.text}}>{f.name}</div>
                           <div style={{fontSize:10,color:D.textMuted}}>{f.items.length} item{f.items.length!==1?'s':''}</div>
@@ -687,7 +687,7 @@ function FolderManager({folders, setFolders, setPage, comps, setComps, avails, s
                   {active.items.map((item,i)=>{
                     const c = item as Comp; const a = item as Avail
                     const isChecked = selected.has(item.id)
-                    const alreadyInOPV = active.type==='comps' ? comps.some(x=>x.id===item.id) : avails.some(x=>x.id===item.id)
+                    const alreadyInOPV = active.type==='comps' ? comps.some(x=>x.id===item.id) : active.type==='lease-comps' ? leaseComps.some(x=>x.id===item.id) : active.type==='lease-avails' ? leaseAvails.some(x=>x.id===item.id) : avails.some(x=>x.id===item.id)
                     return (
                       <div key={item.id} onClick={()=>{const s=new Set(selected);isChecked?s.delete(item.id):s.add(item.id);setSelected(s)}} style={{padding:'11px 8px',borderBottom:i<active.items.length-1?`1px solid ${D.border}`:'none',display:'flex',alignItems:'flex-start',gap:12,cursor:'pointer',borderRadius:7,background:isChecked?`${active.color}0D`:'transparent',transition:'background .12s'}}>
                         <input type="checkbox" checked={isChecked} onChange={()=>{}} onClick={e=>e.stopPropagation()} style={{width:15,height:15,marginTop:2,cursor:'pointer',accentColor:active.color,flexShrink:0}}/>
@@ -731,6 +731,9 @@ function FolderManager({folders, setFolders, setPage, comps, setComps, avails, s
                       } else if(active.type==='lease-comps'){
                         const existing = leaseComps.map(c=>c.id)
                         setLeaseComps([...leaseComps,...items.filter(i=>!existing.includes(i.id)) as LeaseComp[]])
+                      } else if(active.type==='lease-avails'){
+                        const existing = leaseAvails.map(c=>c.id)
+                        setLeaseAvails([...leaseAvails,...items.filter(i=>!existing.includes(i.id)) as LeaseComp[]])
                       } else {
                         const existing = avails.map(a=>a.id)
                         setAvails([...avails,...items.filter(i=>!existing.includes(i.id)) as Avail[]])
@@ -739,9 +742,9 @@ function FolderManager({folders, setFolders, setPage, comps, setComps, avails, s
                     }} style={{flex:1,padding:'11px 16px',fontSize:13}}>
                       {selected.size===0?'Select properties to add':'➕ Add ' + selected.size + ' to OPV Report'}
                     </Btn>
-                    {(active.type==='comps'?comps.length:active.type==='lease-comps'?leaseComps.length:avails.length)>0&&(
-                      <Btn variant="ghost" onClick={()=>setPage(active.type==='comps'?'comp-search':active.type==='lease-comps'?'lease-comp-search':'avail-search')} style={{fontSize:12,padding:'10px 14px',flexShrink:0}}>
-                        View OPV ({active.type==='comps'?comps.length:active.type==='lease-comps'?leaseComps.length:avails.length}) →
+                    {(active.type==='comps'?comps.length:active.type==='lease-comps'?leaseComps.length:active.type==='lease-avails'?leaseAvails.length:avails.length)>0&&(
+                      <Btn variant="ghost" onClick={()=>setPage(active.type==='comps'?'comp-search':active.type==='lease-comps'?'lease-comp-search':active.type==='lease-avails'?'avail-search':'avail-search')} style={{fontSize:12,padding:'10px 14px',flexShrink:0}}>
+                        View OPV ({active.type==='comps'?comps.length:active.type==='lease-comps'?leaseComps.length:active.type==='lease-avails'?leaseAvails.length:avails.length}) →
                       </Btn>
                     )}
                   </div>
@@ -2879,8 +2882,8 @@ function AvailSearch({subject,avails,setAvails,leaseAvails,setLeaseAvails,setPag
                               </button>
                               {folderDropdown===r.id&&(
                                 <div style={{position:'absolute',top:'100%',left:0,marginTop:4,background:D.surface,border:`1px solid ${D.border}`,borderRadius:8,padding:6,zIndex:100,minWidth:220,boxShadow:'0 8px 32px rgba(0,0,0,.5)'}}>
-                                  {folders.filter(f=>f.type==='avails').length===0&&<div style={{fontSize:11,color:D.textMuted,padding:'6px 8px'}}>No availability folders yet.</div>}
-                                  {folders.filter(f=>f.type==='avails').map(f=>(
+                                  {folders.filter(f=>f.type==='lease-avails').length===0&&<div style={{fontSize:11,color:D.textMuted,padding:'6px 8px'}}>No lease availability folders yet.</div>}
+                                  {folders.filter(f=>f.type==='lease-avails').map(f=>(
                                     <div key={f.id} onClick={()=>{
                                       const alreadyIn=f.items.find(i=>i.id===r.id)
                                       if (!alreadyIn) setFolders(folders.map(fl=>fl.id===f.id?{...fl,items:[...fl.items,r as unknown as Avail]}:fl))
