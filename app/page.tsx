@@ -4133,9 +4133,11 @@ function OPVReport({subject,comps,leaseComps,leaseAvails=[],avails,analytics,aiT
   table{border-collapse:collapse;width:100%;table-layout:auto}
   td,th{padding:5px 8px;border:1px solid #ccc;font-size:11px;vertical-align:middle;word-wrap:break-word;overflow-wrap:break-word}
   tr{break-inside:avoid;page-break-inside:avoid}
+  /* Every section gets its own page */
+  .sec-heading{break-before:page;page-break-before:always;break-after:avoid;page-break-after:avoid}
+  /* Every property card gets its own page */
   .prop-card{break-before:page;page-break-before:always}
-  .sec-heading-break{break-before:page;page-break-before:always}
-  .sec-heading,.prop-card-header{break-after:avoid;page-break-after:avoid}
+  .prop-card-header{break-after:avoid;page-break-after:avoid}
   p,li{orphans:2;widows:2}
 </style></head>
 <body>${clone.innerHTML}</body></html>`
