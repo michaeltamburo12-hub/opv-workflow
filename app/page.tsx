@@ -194,8 +194,8 @@ const WORKFLOW_STEPS = [
   {id:'assignment',icon:'📋',label:'Assignment'},
   {id:'subject',icon:'🏢',label:'Subject Property'},
   {id:'comp-search',icon:'📊',label:'Sale Comps'},
-  {id:'avail-search',icon:'🔍',label:'Market Availabilities'},
   {id:'lease-comps',icon:'📄',label:'Lease Comps'},
+  {id:'avail-search',icon:'🔍',label:'Market Availabilities'},
   {id:'folders',icon:'📁',label:'OPV Folders'},
   {id:'analytics',icon:'📈',label:'Analytics'},
   {id:'broker-review',icon:'✍️',label:'Broker Analysis'},
@@ -2601,7 +2601,7 @@ function AvailSearch({subject,avails,setAvails,leaseAvails,setLeaseAvails,setPag
   const [searched,setSearched]=useState(false)
   const [selected,setSelected]=useState<Set<string>>(new Set())
   const [filters,setFilters]=useState({county:'',city:'',min_sf:'',max_sf:'',min_price:'',max_price:''})
-  const [leaseFilters,setLeaseFilters]=useState({county:'',town:'',min_sf:'',max_sf:'',min_rent:'',max_rent:''})
+  const [leaseFilters,setLeaseFilters]=useState({county:'',town:'',min_sf:'',max_sf:'',min_rent:'',max_rent:'',listed_after:''})
   const [statusFilter,setStatusFilter]=useState('Available')
   const [showAdd,setShowAdd]=useState(false)
   const [folderDropdown, setFolderDropdown] = useState<string|null>(null)
@@ -2665,6 +2665,7 @@ function AvailSearch({subject,avails,setAvails,leaseAvails,setLeaseAvails,setPag
     if (leaseFilters.max_sf) q = q.lte('building_sf', Number(leaseFilters.max_sf))
     if (leaseFilters.min_rent) q = q.gte('asking_rent', Number(leaseFilters.min_rent))
     if (leaseFilters.max_rent) q = q.lte('asking_rent', Number(leaseFilters.max_rent))
+    if (leaseFilters.listed_after) q = q.gte('created_at', leaseFilters.listed_after)
     return q.order('created_at', {ascending:false}).limit(200)
   }
 
@@ -2767,6 +2768,7 @@ function AvailSearch({subject,avails,setAvails,leaseAvails,setLeaseAvails,setPag
                   <Field label="Min Rent ($/SF)"><Input type="number" placeholder="0" value={leaseFilters.min_rent} onChange={e=>setLeaseFilters(f=>({...f,min_rent:e.target.value}))}/></Field>
                   <Field label="Max Rent ($/SF)"><Input type="number" placeholder="Any" value={leaseFilters.max_rent} onChange={e=>setLeaseFilters(f=>({...f,max_rent:e.target.value}))}/></Field>
                 </div>
+                <Field label="Listed After"><Input type="text" placeholder="YYYY-MM-DD" value={leaseFilters.listed_after} onChange={e=>setLeaseFilters(f=>({...f,listed_after:e.target.value}))}/></Field>
                 <div style={{fontSize:11,color:D.textMuted,marginBottom:8,fontStyle:'italic'}}>Showing: Available listings only</div>
               </>
             ):(
@@ -2788,16 +2790,6 @@ function AvailSearch({subject,avails,setAvails,leaseAvails,setLeaseAvails,setPag
             <SL>Add New Listing</SL>
             <p style={{fontSize:12,color:D.textSec,marginBottom:12,lineHeight:1.5}}>Add listings from LoopNet, CoStar, or your own research directly to your database.</p>
             <Btn onClick={()=>setShowAdd(v=>!v)} style={{width:'100%',padding:9,fontSize:12}}>＋ Add Listing to Database</Btn>
-          </Card>}
-          {isLease&&leaseAvails.length>0&&<Card style={{marginTop:14}}>
-            <SL>Added to OPV</SL>
-            <div style={{fontSize:12,color:D.textSec,marginBottom:10}}>{leaseAvails.length} listing{leaseAvails.length!==1?'s':''} selected</div>
-            {leaseAvails.map(c=>(
-              <div key={c.id} style={{display:'flex',alignItems:'center',justifyContent:'space-between',fontSize:11,padding:'5px 0',borderBottom:`1px solid ${D.border}`}}>
-                <span style={{flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' as const,color:D.text}}>{c.address}</span>
-                <button onClick={()=>setLeaseAvails(leaseAvails.filter(x=>x.id!==c.id))} style={{background:'transparent',border:'none',color:D.red,cursor:'pointer',fontSize:13,padding:'0 4px',flexShrink:0}}>×</button>
-              </div>
-            ))}
           </Card>}
           <Card style={{marginTop:14}}>
             <Btn onClick={()=>setPage('folders')} style={{width:'100%',padding:10,fontSize:12}}>Go to Folders →</Btn>
@@ -2833,7 +2825,6 @@ function AvailSearch({subject,avails,setAvails,leaseAvails,setLeaseAvails,setPag
             <>
               <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:12}}>
                 <span style={{fontSize:13,color:D.textSec}}>{leaseResults.length} lease listing{leaseResults.length!==1?'s':''} found (Available status)</span>
-                {leaseResults.length>0&&<Btn size="sm" onClick={()=>setLeaseAvails([...leaseAvails,...leaseResults.filter(r=>!leaseAvails.find(a=>a.id===r.id))])}>＋ Add All to OPV</Btn>}
               </div>
               {leaseResults.length===0?<Card style={{textAlign:'center' as const,padding:'48px 20px'}}><p style={{color:D.textSec}}>No available lease listings found.</p></Card>:
               <div style={{display:'flex',flexDirection:'column' as const,gap:10}}>
@@ -2874,11 +2865,28 @@ function AvailSearch({subject,avails,setAvails,leaseAvails,setLeaseAvails,setPag
                             {sc('Lease Term', r.lease_term_years?r.lease_term_years+' yrs':null)}
                             {sc('Taxes', r.taxes?'$'+Number(r.taxes).toFixed(2)+'/SF':null)}
                           </div>
-                          <div style={{paddingTop:10,borderTop:`1px solid ${D.border}`,display:'flex',gap:8}}>
-                            {inOPV
-                              ?<Btn size="sm" onClick={()=>setLeaseAvails(leaseAvails.filter(a=>a.id!==r.id))} style={{background:'rgba(239,68,68,0.1)',borderColor:'rgba(239,68,68,0.3)',color:D.red}}>✕ Remove from OPV</Btn>
-                              :<Btn size="sm" onClick={()=>setLeaseAvails([...leaseAvails,r])}>＋ Add to OPV</Btn>
-                            }
+                          <div style={{paddingTop:10,borderTop:`1px solid ${D.border}`,display:'flex',gap:8,alignItems:'center',flexWrap:'wrap' as const}}>
+                            {r.loopnet_url&&<a href={r.loopnet_url} target="_blank" rel="noopener noreferrer" style={{fontSize:12,color:D.blue,padding:'6px 10px',textDecoration:'none',border:`1px solid ${D.blue}33`,borderRadius:6,fontWeight:600}}>↗ LoopNet</a>}
+                            <div style={{position:'relative'}}>
+                              <button onClick={()=>setFolderDropdown(folderDropdown===r.id?null:r.id)} style={{background:'transparent',border:`1px solid ${D.border}`,borderRadius:6,color:D.textSec,fontSize:12,fontWeight:600,padding:'6px 12px',cursor:'pointer',fontFamily:"'Inter',sans-serif",display:'flex',alignItems:'center',gap:5}}>
+                                📁 Add to Folder
+                              </button>
+                              {folderDropdown===r.id&&(
+                                <div style={{position:'absolute',top:'100%',left:0,marginTop:4,background:D.surface,border:`1px solid ${D.border}`,borderRadius:8,padding:6,zIndex:100,minWidth:220,boxShadow:'0 8px 32px rgba(0,0,0,.5)'}}>
+                                  {folders.filter(f=>f.type==='avails').length===0&&<div style={{fontSize:11,color:D.textMuted,padding:'6px 8px'}}>No availability folders yet.</div>}
+                                  {folders.filter(f=>f.type==='avails').map(f=>(
+                                    <div key={f.id} onClick={()=>{
+                                      const alreadyIn=f.items.find(i=>i.id===r.id)
+                                      if (!alreadyIn) setFolders(folders.map(fl=>fl.id===f.id?{...fl,items:[...fl.items,r as unknown as Avail]}:fl))
+                                      setFolderDropdown(null); alert(alreadyIn?'Already in this folder!':`Added to "${f.name}"`)
+                                    }} style={{display:'flex',alignItems:'center',gap:8,padding:'8px 10px',borderRadius:6,cursor:'pointer',fontSize:12,color:D.text}}>
+                                      <div style={{width:8,height:8,borderRadius:'50%',background:f.color,flexShrink:0}}/>{f.name}
+                                    </div>
+                                  ))}
+                                  <div onClick={()=>{setFolderDropdown(null);setPage('folders')}} style={{display:'flex',alignItems:'center',gap:6,padding:'8px 10px',borderRadius:6,cursor:'pointer',fontSize:11,color:D.blue,marginTop:4,borderTop:`1px solid ${D.border}`}}>＋ Create folder</div>
+                                </div>
+                              )}
+                            </div>
                           </div>
                         </div>
                       </div>
