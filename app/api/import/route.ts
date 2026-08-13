@@ -183,9 +183,10 @@ export async function POST(req: NextRequest) {
     }
 
     const TABLE_DEFAULTS: Record<string, Record<string, unknown>> = {
-      industrial_sale_comps: { status: 'Closed', state: 'NY', sale_type: "Arm's Length" },
-      market_availabilities: { status: 'Available', availability_type: 'For Sale', state: 'NY' },
-      lease_comps: { status: 'Active', county: 'Nassau' },
+      industrial_sale_comps:       { status: 'Closed',    state: 'NY', sale_type: "Arm's Length" },
+      market_availabilities:       { status: 'Available', availability_type: 'For Sale', state: 'NY' },
+      lease_comps:                 { status: 'Active',    county: 'Nassau' },
+      lease_market_availabilities: { status: 'Available', county: 'Nassau' },
     }
 
     const tableRemap  = TABLE_REMAP[tableName]  || {}

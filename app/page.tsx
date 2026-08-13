@@ -1184,6 +1184,7 @@ function DatabaseManager() {
   const [browseStatusDropdown, setBrowseStatusDropdown] = useState<string|null>(null)
   const [browseSearch, setBrowseSearch] = useState('')
   const [browseStatusFilter, setBrowseStatusFilter] = useState('')
+  const [browseError, setBrowseError] = useState('')
   const [editingId, setEditingId] = useState<string|null>(null)
   const [editPanelOpen, setEditPanelOpen] = useState(false)
   const PAGE_SIZE = 20
@@ -1420,19 +1421,26 @@ function DatabaseManager() {
     if (ok>0) { setImportText(''); setImportPreview([]) }
   }
   const loadBrowse = async (offset=0, search='', statusFilter='') => {
-    setBrowseLoading(true)
+    setBrowseLoading(true); setBrowseError('')
     const table = tableForTab(tab)
-    let q = supabase.from(table).select('*',{count:'exact'}).order('created_at',{ascending:false}).range(offset,offset+PAGE_SIZE-1)
-    if (search.trim()) q = q.ilike('address', `%${search.trim()}%`)
-    // For lease-comps: only show deal records (not availability listings)
-    if (tab==='lease-comps') {
-      if (statusFilter) q = q.eq('status', statusFilter)
-      else q = q.in('status',['Active','Expired','Confidential'])
-    } else if (statusFilter) {
-      q = q.eq('status', statusFilter)
+    const buildQ = (orderCol: string) => {
+      let q = supabase.from(table).select('*',{count:'exact'}).order(orderCol,{ascending:false}).range(offset,offset+PAGE_SIZE-1)
+      if (search.trim()) q = q.ilike('address', `%${search.trim()}%`)
+      if (tab==='lease-comps') {
+        if (statusFilter) q = q.eq('status', statusFilter)
+        else q = q.in('status',['Active','Expired','Confidential'])
+      } else if (statusFilter) {
+        q = q.eq('status', statusFilter)
+      }
+      return q
     }
-    const {data, count, error} = await q
+    let {data, count, error} = await buildQ('created_at')
+    // If created_at doesn't exist on this table, fall back to id ordering
+    if (error && error.message?.includes('created_at')) {
+      ;({data, count, error} = await buildQ('id'))
+    }
     if (!error) { setBrowseData((data||[]) as BrowseRow[]); setBrowseCount(count||0); setBrowseOffset(offset) }
+    else setBrowseError(error.message)
     setBrowseLoading(false)
   }
   const deleteRow = async (id: string) => {
@@ -1851,7 +1859,8 @@ function DatabaseManager() {
             <Btn variant="ghost" size="sm" onClick={()=>loadBrowse(browseOffset, browseSearch, browseStatusFilter)}>↻ Refresh</Btn>
           </div>
           {browseLoading&&<div style={{textAlign:'center' as const,padding:40}}><div className="spin" style={{width:28,height:28,border:`2px solid ${D.border}`,borderTopColor:D.blue,borderRadius:'50%',margin:'0 auto 12px'}}/><p style={{color:D.textSec,fontSize:12}}>Loading...</p></div>}
-          {!browseLoading&&browseData.length===0&&<p style={{color:D.textSec,fontSize:12,textAlign:'center' as const,padding:32}}>No records found.</p>}
+          {browseError&&<p style={{color:D.red,fontSize:12,textAlign:'center' as const,padding:16,background:'rgba(239,68,68,0.08)',borderRadius:8,margin:'8px 0'}}>⚠️ Query error: {browseError}</p>}
+          {!browseLoading&&!browseError&&browseData.length===0&&<p style={{color:D.textSec,fontSize:12,textAlign:'center' as const,padding:32}}>No records found.</p>}
           {!browseLoading&&browseData.map((row,i)=>{
             const rowAccent = tab==='comps'?D.blue:tab==='avails'?D.green:tab==='pcre-sales'?D.gold:tab==='pcre-leases'?D.purple:tab==='lease-comps'?'#0891B2':'#16a34a'
             return (
