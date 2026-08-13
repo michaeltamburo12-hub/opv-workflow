@@ -2881,8 +2881,7 @@ function AvailSearch({subject,avails,setAvails,leaseAvails,setLeaseAvails,setPag
                                 📁 Add to Folder
                               </button>
                               {folderDropdown===r.id&&(
-                                <div style={{position:'absolute',top:'100%',left:0,marginTop:4,background:D.surface,border:`1px solid ${D.border}`,borderRadius:8,padding:6,zIndex:100,minWidth:220,boxShadow:'0 8px 32px rgba(0,0,0,.5)'}}>
-                                  {folders.filter(f=>f.type==='lease-avails').length===0&&<div style={{fontSize:11,color:D.textMuted,padding:'6px 8px'}}>No lease availability folders yet.</div>}
+                                <div style={{position:'absolute',top:'100%',left:0,marginTop:4,background:D.surface,border:`1px solid ${D.border}`,borderRadius:8,padding:6,zIndex:100,minWidth:240,boxShadow:'0 8px 32px rgba(0,0,0,.5)'}}>
                                   {folders.filter(f=>f.type==='lease-avails').map(f=>(
                                     <div key={f.id} onClick={()=>{
                                       const alreadyIn=f.items.find(i=>i.id===r.id)
@@ -2892,7 +2891,14 @@ function AvailSearch({subject,avails,setAvails,leaseAvails,setLeaseAvails,setPag
                                       <div style={{width:8,height:8,borderRadius:'50%',background:f.color,flexShrink:0}}/>{f.name}
                                     </div>
                                   ))}
-                                  <div onClick={()=>{setFolderDropdown(null);setPage('folders')}} style={{display:'flex',alignItems:'center',gap:6,padding:'8px 10px',borderRadius:6,cursor:'pointer',fontSize:11,color:D.blue,marginTop:4,borderTop:`1px solid ${D.border}`}}>＋ Create folder</div>
+                                  <div onClick={()=>{
+                                    const now=Date.now()
+                                    const color=FOLDER_COLORS[folders.length%FOLDER_COLORS.length]
+                                    const newFolder:Folder={id:now.toString(),name:'Lease Avails',type:'lease-avails',color,items:[r as unknown as Avail],opvAddress:undefined,createdAt:now}
+                                    setFolders([...folders,newFolder])
+                                    setFolderDropdown(null); alert(`Created "Lease Avails" folder and added property.`)
+                                  }} style={{display:'flex',alignItems:'center',gap:6,padding:'8px 10px',borderRadius:6,cursor:'pointer',fontSize:12,color:D.purple,fontWeight:600}}>＋ New Lease Avails Folder</div>
+                                  <div onClick={()=>{setFolderDropdown(null);setPage('folders')}} style={{display:'flex',alignItems:'center',gap:6,padding:'8px 10px',borderRadius:6,cursor:'pointer',fontSize:11,color:D.textMuted,borderTop:`1px solid ${D.border}`,marginTop:2}}>↗ Manage folders</div>
                                 </div>
                               )}
                             </div>
