@@ -4345,6 +4345,11 @@ function OPVReport({subject,comps,leaseComps,leaseAvails=[],avails,analytics,aiT
         }}
       />
 
+      {/* DEBUG BANNER — remove after confirming lease avails work */}
+      <div style={{background:'#1e3a5f',color:'#7dd3fc',fontSize:11,padding:'8px 16px',borderRadius:6,marginBottom:8,fontFamily:'monospace'}}>
+        DEBUG — OPV type: <b>{subject?.opvType||'not set'}</b> | leaseAvails: <b>{leaseAvails.length}</b> | avails: <b>{avails.length}</b> | frozenHTML: <b>{frozenHTML?'YES (showing cached — click ↩ Reset All to refresh)':'no'}</b>
+      </div>
+
       {!editMode && frozenHTML ? (
         /* Read mode with saved edits */
         <div ref={reportRef} className="print-area"
