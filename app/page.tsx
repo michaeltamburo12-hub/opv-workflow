@@ -4107,43 +4107,48 @@ function OPVReport({subject,comps,leaseComps,leaseAvails=[],avails,analytics,aiT
 <title>OPV_${addr}</title>
 <style>
   @page{size:8.5in 11in;margin:0.75in 0.85in;}
-  *{box-sizing:border-box}
-  html,body{background:#fff;color:#1a1a1a;font-family:Arial,sans-serif;font-size:12px;line-height:1.6;margin:0;padding:0}
-  img{max-width:100%;height:auto;display:block}
-  /* Tables: collapse borders, let rows break naturally */
-  table{border-collapse:collapse;width:100%}
-  td,th{padding:5px 8px;border:1px solid #ccc;font-size:11px;vertical-align:middle;word-wrap:break-word}
-  /* Keep individual table rows together */
+  *{box-sizing:border-box;max-width:100%}
+  html,body{background:#fff;color:#1a1a1a;font-family:Arial,sans-serif;font-size:12px;line-height:1.6;margin:0;padding:0;width:100%}
+  /* Reset any fixed screen widths */
+  .print-area{max-width:100%!important;width:100%!important;box-shadow:none!important;border-radius:0!important;padding:0!important;margin:0!important}
+  img{max-width:100%!important;height:auto!important;display:block}
+  table{border-collapse:collapse;width:100%!important}
+  td,th{padding:5px 8px;border:1px solid #ccc;font-size:11px;vertical-align:middle;word-break:break-word;max-width:300px}
   tr{break-inside:avoid;page-break-inside:avoid}
-  /* Each property card gets its own page — clean, professional */
+  /* Each property detail card starts fresh */
   .prop-card{break-before:page;page-break-before:always}
-  /* Only the bios section also gets a fresh page */
+  /* PCRE bios also start fresh */
   .sec-heading-break{break-before:page;page-break-before:always}
-  /* Section headings never orphaned from content below */
-  .sec-heading{break-after:avoid;page-break-after:avoid}
-  /* Card title stays with the photo */
-  .prop-card-header{break-after:avoid;page-break-after:avoid}
-  /* Table rows don't split mid-row */
-  tr{break-inside:avoid;page-break-inside:avoid}
-  img{max-width:100%;height:auto}
-  p,li{orphans:3;widows:3}
-  @media print{body{margin:0}}
+  /* Headings stay with what follows */
+  .sec-heading,.prop-card-header,h1,h2,h3,h4{break-after:avoid;page-break-after:avoid}
+  p,li{orphans:2;widows:2}
 </style></head>
 <body>${clone.innerHTML}</body></html>`
 
-      // Use a hidden iframe — avoids popup blocker entirely
+      // Give iframe real width so layout renders correctly before printing
       const iframe = document.createElement('iframe')
-      iframe.style.cssText = 'position:fixed;top:-9999px;left:-9999px;width:0;height:0;border:none'
+      iframe.style.cssText = 'position:fixed;top:0;left:-9999px;width:960px;height:1100px;border:none;visibility:hidden'
       document.body.appendChild(iframe)
       const iDoc = iframe.contentDocument || iframe.contentWindow?.document
       if (!iDoc) { document.body.removeChild(iframe); setDownloading(false); return }
       iDoc.open(); iDoc.write(html); iDoc.close()
-      // Wait for images to fully render, then print
-      setTimeout(() => {
-        iframe.contentWindow?.focus()
-        iframe.contentWindow?.print()
-        setTimeout(() => document.body.removeChild(iframe), 1000)
-      }, 800)
+
+      // Wait for all images to load, then print
+      const imgs = Array.from(iDoc.querySelectorAll('img'))
+      const allLoaded = imgs.length === 0
+        ? Promise.resolve()
+        : Promise.all(imgs.map(img => new Promise<void>(res => {
+            if (img.complete) { res(); return }
+            img.onload = () => res()
+            img.onerror = () => res()
+            setTimeout(res, 4000) // cap wait at 4s per image
+          })))
+      await allLoaded
+      // Small extra settle time for layout
+      await new Promise(res => setTimeout(res, 400))
+      iframe.contentWindow?.focus()
+      iframe.contentWindow?.print()
+      setTimeout(() => document.body.removeChild(iframe), 2000)
     } catch(e) { alert('PDF export failed: ' + (e as Error).message) }
     setDownloading(false)
   }
