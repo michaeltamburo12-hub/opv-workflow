@@ -2254,7 +2254,8 @@ function SubjectProperty({subject,setSubject,setPage,folders,setFolders,assignme
     setFolders((prev: Folder[]) => [...prev,
       {id:`${now}-comps`, name:`${shortAddr} — Sale Comps`, type:'comps', color, items:[], opvAddress:address, createdAt:now},
       {id:`${now}-avails`, name:`${shortAddr} — Availabilities`, type:'avails', color, items:[], opvAddress:address, createdAt:now+1},
-      {id:`${now}-lease`, name:`${shortAddr} — Lease Comps`, type:'lease-comps', color, items:[], opvAddress:address, createdAt:now+2}
+      {id:`${now}-lease`, name:`${shortAddr} — Lease Comps`, type:'lease-comps', color, items:[], opvAddress:address, createdAt:now+2},
+      {id:`${now}-lease-avails`, name:`${shortAddr} — Lease Avails`, type:'lease-avails', color, items:[], opvAddress:address, createdAt:now+3}
     ])
   }
   const G2={display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}
