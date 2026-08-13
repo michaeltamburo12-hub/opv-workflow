@@ -61,6 +61,10 @@ const css = `
     tr{break-inside:avoid!important;page-break-inside:avoid!important}
     /* Photo containers: never split across pages */
     .photo-slot-wrap{break-inside:avoid!important;page-break-inside:avoid!important}
+    /* Shrink cover photo so it fits on page 1 (was 320px) */
+    .photo-slot-wrap > div{height:220px!important}
+    /* Shrink prop-card photos so full card fits on one page (was 280px) */
+    .prop-card .photo-slot-wrap > div{height:180px!important}
     img{max-width:100%!important;height:auto!important}
     /* Broker headshots: pin size — higher specificity than img rule above */
     .broker-photo{width:140px!important;height:175px!important;object-fit:cover!important;flex-shrink:0!important}
@@ -4129,6 +4133,12 @@ function OPVReport({subject,comps,leaseComps,leaseAvails=[],avails,analytics,aiT
     })
     clone.querySelectorAll<HTMLElement>('.sec-heading, .prop-card-header').forEach(el => {
       el.style.breakAfter = 'avoid'; el.style.pageBreakAfter = 'avoid'
+    })
+    // Force page break before "ABOUT THE BROKERS" section
+    clone.querySelectorAll<HTMLElement>('div').forEach(el => {
+      if (el.childNodes.length === 1 && el.textContent?.trim() === 'ABOUT THE BROKERS') {
+        el.style.breakBefore = 'page'; el.style.pageBreakBefore = 'always'
+      }
     })
 
     document.body.appendChild(clone)
