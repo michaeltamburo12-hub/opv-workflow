@@ -998,37 +998,62 @@ function FileImport({autoTable}: {autoTable?: string}) {
             </div>
           </Card>
         </div>
-        {/* Column mapping — only shown when some columns weren't auto-recognized */}
-        {parsed&&Object.values(colMapping).some(v=>v==='__skip__')&&(
-          <Card style={{marginTop:16,border:`1px solid rgba(217,119,6,0.35)`}}>
+        {/* Column mapping — shown whenever any column wasn't auto-recognized */}
+        {parsed&&Object.entries(colMapping).some(([col])=>!DB_ALL_FIELDS.has(col))&&(()=>{
+          const unrecogCols = Object.entries(colMapping).filter(([col])=>!DB_ALL_FIELDS.has(col))
+          const unmappedCount = unrecogCols.filter(([,v])=>v==='__skip__').length
+          const allDone = unmappedCount === 0
+          return (
+          <Card style={{marginTop:16,border:`1px solid ${allDone?'rgba(16,185,129,0.4)':'rgba(217,119,6,0.35)'}`}}>
             <div style={{display:'flex',alignItems:'center',gap:12,marginBottom:16}}>
-              <div style={{width:34,height:34,borderRadius:9,background:`rgba(217,119,6,0.12)`,border:`1px solid rgba(217,119,6,0.3)`,display:'flex',alignItems:'center',justifyContent:'center',fontSize:16,flexShrink:0}}>⚠️</div>
+              <div style={{width:34,height:34,borderRadius:9,background:allDone?`rgba(16,185,129,0.12)`:`rgba(217,119,6,0.12)`,border:`1px solid ${allDone?'rgba(16,185,129,0.35)':'rgba(217,119,6,0.3)'}`,display:'flex',alignItems:'center',justifyContent:'center',fontSize:16,flexShrink:0}}>{allDone?'✅':'⚠️'}</div>
               <div>
-                <div style={{fontSize:13,fontWeight:700,color:D.gold}}>Column Mapping Required</div>
-                <div style={{fontSize:11,color:D.textSec,marginTop:2}}>{Object.values(colMapping).filter(v=>v==='__skip__').length} column{Object.values(colMapping).filter(v=>v==='__skip__').length!==1?'s weren\'t':' wasn\'t'} recognized — select what each one contains before importing.</div>
+                <div style={{fontSize:13,fontWeight:700,color:allDone?D.green:D.gold}}>{allDone?'All Columns Mapped':'Column Mapping Required'}</div>
+                <div style={{fontSize:11,color:D.textSec,marginTop:2}}>
+                  {allDone
+                    ?`All ${unrecogCols.length} unrecognized column${unrecogCols.length!==1?'s have':' has'} been mapped — ready to import.`
+                    :`${unmappedCount} column${unmappedCount!==1?" weren't":" wasn't"} recognized — select what each one contains before importing.`
+                  }
+                </div>
               </div>
             </div>
             <div style={{display:'grid',gap:8}}>
-              {Object.entries(colMapping).filter(([,v])=>v==='__skip__').map(([col])=>(
-                <div key={col} style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12,alignItems:'center',padding:'10px 14px',borderRadius:8,background:D.surface2,border:`1px solid rgba(217,119,6,0.2)`}}>
-                  <div>
-                    <div style={{fontSize:9,color:D.textMuted,letterSpacing:'.1em',textTransform:'uppercase' as const,marginBottom:3}}>Column in your file</div>
-                    <div style={{fontSize:12,fontWeight:600,color:D.text,fontFamily:"'JetBrains Mono',monospace"}}>{col}</div>
+              {unrecogCols.map(([col, dest])=>{
+                const isMapped = dest !== '__skip__'
+                return (
+                  <div key={col} style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12,alignItems:'center',padding:'10px 14px',borderRadius:8,background:isMapped?`rgba(16,185,129,0.06)`:D.surface2,border:`1px solid ${isMapped?'rgba(16,185,129,0.3)':'rgba(217,119,6,0.2)'}`}}>
+                    <div style={{display:'flex',alignItems:'center',gap:8}}>
+                      {isMapped&&<span style={{fontSize:15,flexShrink:0}}>✅</span>}
+                      <div>
+                        <div style={{fontSize:9,color:D.textMuted,letterSpacing:'.1em',textTransform:'uppercase' as const,marginBottom:3}}>Column in your file</div>
+                        <div style={{fontSize:12,fontWeight:600,color:D.text,fontFamily:"'JetBrains Mono',monospace"}}>{col}</div>
+                      </div>
+                    </div>
+                    <div>
+                      <div style={{fontSize:9,color:D.textMuted,letterSpacing:'.1em',textTransform:'uppercase' as const,marginBottom:3}}>Maps to database field</div>
+                      {isMapped?(
+                        <div style={{display:'flex',alignItems:'center',gap:8}}>
+                          <span style={{fontSize:12,fontWeight:700,color:D.green,fontFamily:"'JetBrains Mono',monospace"}}>{dest}</span>
+                          <button onClick={()=>setColMapping(m=>({...m,[col]:'__skip__'}))} title="Change mapping" style={{fontSize:11,color:D.textMuted,background:'transparent',border:`1px solid ${D.border}`,borderRadius:4,cursor:'pointer',padding:'1px 6px',lineHeight:1.4}}>✕</button>
+                        </div>
+                      ):(
+                        <Sel value={colMapping[col]} onChange={e=>setColMapping(m=>({...m,[col]:e.target.value}))}>
+                          {DB_FIELD_OPTIONS.map(o=><option key={o.value} value={o.value}>{o.label}</option>)}
+                        </Sel>
+                      )}
+                    </div>
                   </div>
-                  <div>
-                    <div style={{fontSize:9,color:D.textMuted,letterSpacing:'.1em',textTransform:'uppercase' as const,marginBottom:3}}>Maps to database field</div>
-                    <Sel value={colMapping[col]} onChange={e=>setColMapping(m=>({...m,[col]:e.target.value}))}>
-                      {DB_FIELD_OPTIONS.map(o=><option key={o.value} value={o.value}>{o.label}</option>)}
-                    </Sel>
-                  </div>
-                </div>
-              ))}
+                )
+              })}
             </div>
-            {Object.values(colMapping).filter(v=>v!=='__skip__').length>0&&(
-              <div style={{marginTop:12,fontSize:11,color:D.textMuted}}>✅ {Object.values(colMapping).filter(v=>v!=='__skip__').length} other column{Object.values(colMapping).filter(v=>v!=='__skip__').length!==1?'s were':' was'} recognized automatically</div>
+            {Object.entries(colMapping).filter(([col])=>DB_ALL_FIELDS.has(col)).length>0&&(
+              <div style={{marginTop:12,fontSize:11,color:D.textMuted}}>
+                ✅ {Object.entries(colMapping).filter(([col])=>DB_ALL_FIELDS.has(col)).length} column{Object.entries(colMapping).filter(([col])=>DB_ALL_FIELDS.has(col)).length!==1?'s were':' was'} recognized automatically
+              </div>
             )}
           </Card>
-        )}
+          )
+        })()}
         </>
       )}
       {result&&(
