@@ -2857,13 +2857,19 @@ function AvailSearch({subject,avails,setAvails,leaseAvails,setLeaseAvails,setPag
                           </div>
                           <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:'10px 16px',marginBottom:12}}>
                             {sc('Building SF', r.building_sf?Number(r.building_sf).toLocaleString()+' SF':null)}
+                            {sc('Lot Size', r.lot_size_ac?r.lot_size_ac+' AC':null)}
                             {sc('Ceiling Height', r.ceiling_height?r.ceiling_height+' ft':null)}
                             {sc('Loading Docks', r.loading_docks)}
                             {sc('Drive-In Doors', r.drive_ins)}
-                            {sc('Lot Size', r.lot_size_ac?r.lot_size_ac+' AC':null)}
-                            {sc('Landlord', r.landlord)}
+                            {sc('Power', (r as Record<string,unknown>).power as string)}
+                            {sc('Sprinkler', (r as Record<string,unknown>).sprinkler as string)}
+                            {sc('Parking', (r as Record<string,unknown>).parking as string)}
                             {sc('Lease Term', r.lease_term_years?r.lease_term_years+' yrs':null)}
+                            {sc('Rent Escalations', (r as Record<string,unknown>).escalations as string)}
                             {sc('Taxes', r.taxes?'$'+Number(r.taxes).toFixed(2)+'/SF':null)}
+                            {sc('Landlord', r.landlord)}
+                            {sc('Listing Broker', (r as Record<string,unknown>).listing_broker as string)}
+                            {sc('Notes', (r as Record<string,unknown>).notes as string)}
                           </div>
                           <div style={{paddingTop:10,borderTop:`1px solid ${D.border}`,display:'flex',gap:8,alignItems:'center',flexWrap:'wrap' as const}}>
                             {r.loopnet_url&&<a href={r.loopnet_url} target="_blank" rel="noopener noreferrer" style={{fontSize:12,color:D.blue,padding:'6px 10px',textDecoration:'none',border:`1px solid ${D.blue}33`,borderRadius:6,fontWeight:600}}>↗ LoopNet</a>}
