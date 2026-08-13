@@ -52,10 +52,11 @@ const css = `
     body{background:#fff!important;color:#111!important}
     .no-print{display:none!important}
     .print-area{box-shadow:none!important;border-radius:0!important;padding:24px!important;max-width:100%!important;margin:0!important}
-    .sec-heading{break-before:page;page-break-before:always;break-after:avoid;page-break-after:avoid}
-    .sec-heading:first-of-type{break-before:avoid;page-break-before:avoid}
-    .prop-card{break-inside:avoid;page-break-inside:avoid}
-    img,table{break-inside:avoid;page-break-inside:avoid}
+    .sec-heading-break{break-before:page;page-break-before:always}
+    .sec-heading{break-after:avoid;page-break-after:avoid}
+    .prop-card-header{break-after:avoid;page-break-after:avoid}
+    tr{break-inside:avoid;page-break-inside:avoid}
+    img{break-inside:avoid;page-break-inside:avoid}
   }
 `
 
@@ -4105,20 +4106,23 @@ function OPVReport({subject,comps,leaseComps,leaseAvails=[],avails,analytics,aiT
       const html = `<!DOCTYPE html><html><head><meta charset="utf-8">
 <title>OPV_${addr}</title>
 <style>
-  @page{size:8.5in 11in;margin:0.9in 1in;}
+  @page{size:8.5in 11in;margin:0.75in 0.85in;}
   *{box-sizing:border-box}
-  html,body{background:#fff;color:#1a1a1a;font-family:Arial,sans-serif;font-size:13px;line-height:1.7;margin:0;padding:0}
-  img{max-width:100%;height:auto;break-inside:avoid;page-break-inside:avoid}
-  table{border-collapse:collapse;width:100%;break-inside:avoid;page-break-inside:avoid}
-  td,th{padding:6px 10px;border:1px solid #ccc;font-size:11px;vertical-align:middle}
-  td:first-child{font-weight:bold;width:200px;background:#f5f5f5}
-  /* Section headings: always start on a new page (except the first one) */
-  .sec-heading{break-before:page;page-break-before:always;break-after:avoid;page-break-after:avoid}
-  .sec-heading:first-of-type{break-before:avoid;page-break-before:avoid}
-  /* Property detail cards: never split across pages */
-  .prop-card{break-inside:avoid;page-break-inside:avoid}
-  /* Keep headings with the content below them */
-  h1,h2,h3,h4{break-after:avoid;page-break-after:avoid;orphans:3;widows:3}
+  html,body{background:#fff;color:#1a1a1a;font-family:Arial,sans-serif;font-size:12px;line-height:1.6;margin:0;padding:0}
+  img{max-width:100%;height:auto;display:block}
+  /* Tables: collapse borders, let rows break naturally */
+  table{border-collapse:collapse;width:100%}
+  td,th{padding:5px 8px;border:1px solid #ccc;font-size:11px;vertical-align:middle;word-wrap:break-word}
+  /* Keep individual table rows together */
+  tr{break-inside:avoid;page-break-inside:avoid}
+  /* Only the bios/PCRE section starts on a new page */
+  .sec-heading-break{break-before:page;page-break-before:always}
+  /* Section headings stay glued to the content that follows */
+  .sec-heading{break-after:avoid;page-break-after:avoid}
+  /* Prop card header (title row) stays with the photo below it */
+  .prop-card-header{break-after:avoid;page-break-after:avoid}
+  /* Images don't get orphaned at the bottom of a page */
+  img{break-inside:avoid;page-break-inside:avoid;break-before:auto}
   p,li{orphans:3;widows:3}
   @media print{body{margin:0}}
 </style></head>
@@ -4152,8 +4156,8 @@ function OPVReport({subject,comps,leaseComps,leaseAvails=[],avails,analytics,aiT
   const gold = '#C9A227'
   const darkBg = '#2D2D2D'
 
-  const SecHeading = ({num,title}:{num:string,title:string}) => (
-    <div className="sec-heading" style={{marginBottom:20,marginTop:32,paddingBottom:8,borderBottom:`3px solid ${gold}`}}>
+  const SecHeading = ({num,title,pageBreak}:{num:string,title:string,pageBreak?:boolean}) => (
+    <div className={pageBreak?'sec-heading sec-heading-break':'sec-heading'} style={{marginBottom:20,marginTop:32,paddingBottom:8,borderBottom:`3px solid ${gold}`}}>
       <span style={{color:gold,fontWeight:700,fontSize:16,marginRight:8}}>{num}.</span>
       <span style={{fontWeight:700,fontSize:16,color:'#1a1a1a'}}>{title}</span>
     </div>
@@ -4581,7 +4585,7 @@ function OPVReport({subject,comps,leaseComps,leaseAvails=[],avails,analytics,aiT
             const psf = c.price_per_sf||(c.sale_price&&c.building_sf?Number(c.sale_price)/Number(c.building_sf):0)
             return (
               <div key={c.id} className="prop-card" style={{marginBottom:48,paddingBottom:48,borderBottom:'2px dashed #ddd'}}>
-                <div style={{fontWeight:700,fontSize:14,paddingBottom:8,borderBottom:`2px solid ${gold}`,marginBottom:16,display:'flex',justifyContent:'space-between',alignItems:'baseline'}}>
+                <div className="prop-card-header" style={{fontWeight:700,fontSize:14,paddingBottom:8,borderBottom:`2px solid ${gold}`,marginBottom:16,display:'flex',justifyContent:'space-between',alignItems:'baseline'}}>
                   <span>COMPARABLE {i+1}  —  {(c.address||'').toUpperCase()}{c.city?', '+c.city.toUpperCase():''}</span>
                   {psf>0&&<span style={{color:gold,fontSize:16}}>${Number(psf).toFixed(2)}/SF</span>}
                 </div>
@@ -4622,7 +4626,7 @@ function OPVReport({subject,comps,leaseComps,leaseAvails=[],avails,analytics,aiT
           <p style={{fontSize:12,color:'#555',marginBottom:24,fontStyle:'italic'}}>Each lease comparable is detailed on the following pages.</p>
           {leaseComps.map((c,i)=>(
             <div key={c.id} className="prop-card" style={{marginBottom:48,paddingBottom:48,borderBottom:'2px dashed #ddd'}}>
-              <div style={{fontWeight:700,fontSize:14,paddingBottom:8,borderBottom:`2px solid ${gold}`,marginBottom:16,display:'flex',justifyContent:'space-between',alignItems:'baseline'}}>
+              <div className="prop-card-header" style={{fontWeight:700,fontSize:14,paddingBottom:8,borderBottom:`2px solid ${gold}`,marginBottom:16,display:'flex',justifyContent:'space-between',alignItems:'baseline'}}>
                 <span>LEASE COMPARABLE {i+1}  —  {(c.address||'').toUpperCase()}{c.town?', '+c.town.toUpperCase():''}</span>
                 {c.deal_rent>0&&<span style={{color:gold,fontSize:16}}>${Number(c.deal_rent).toFixed(2)}/SF/yr</span>}
               </div>
@@ -4670,7 +4674,7 @@ function OPVReport({subject,comps,leaseComps,leaseAvails=[],avails,analytics,aiT
             const psf = c.price_per_sf||(c.sale_price&&c.building_sf?Number(c.sale_price)/Number(c.building_sf):0)
             return (
               <div key={c.id} className="prop-card" style={{marginBottom:48,paddingBottom:48,borderBottom:'2px dashed #ddd'}}>
-                <div style={{fontWeight:700,fontSize:14,paddingBottom:8,borderBottom:`2px solid #aaa`,marginBottom:16,display:'flex',justifyContent:'space-between',alignItems:'baseline'}}>
+                <div className="prop-card-header" style={{fontWeight:700,fontSize:14,paddingBottom:8,borderBottom:`2px solid #aaa`,marginBottom:16,display:'flex',justifyContent:'space-between',alignItems:'baseline'}}>
                   <span>SALE COMP {i+1}  —  {(c.address||'').toUpperCase()}{c.city?', '+c.city.toUpperCase():''}</span>
                   {psf>0&&<span style={{color:'#555',fontSize:16}}>${Number(psf).toFixed(2)}/SF</span>}
                 </div>
@@ -4708,7 +4712,7 @@ function OPVReport({subject,comps,leaseComps,leaseAvails=[],avails,analytics,aiT
           </div>
           {leaseComps.map((c,i)=>(
             <div key={c.id} className="prop-card" style={{marginBottom:48,paddingBottom:48,borderBottom:'2px dashed #ddd'}}>
-              <div style={{fontWeight:700,fontSize:14,paddingBottom:8,borderBottom:`2px solid ${gold}`,marginBottom:16}}>
+              <div className="prop-card-header" style={{fontWeight:700,fontSize:14,paddingBottom:8,borderBottom:`2px solid ${gold}`,marginBottom:16}}>
                 LEASE COMPARABLE {i+1}  —  {(c.address||'').toUpperCase()}{c.town?', '+c.town.toUpperCase():''}
               </div>
               {Photo(`lease_${c.id}`, `/api/street-view?address=${encodeURIComponent(c.address+(c.town?', '+c.town:'')+', NY')}`)}
@@ -4753,7 +4757,7 @@ function OPVReport({subject,comps,leaseComps,leaseAvails=[],avails,analytics,aiT
             <p style={{fontSize:12,color:'#555',marginBottom:24,fontStyle:'italic'}}>Each availability is detailed on the following pages.</p>
             {leaseAvails.map((a,i)=>(
               <div key={a.id} className="prop-card" style={{marginBottom:48,paddingBottom:48,borderBottom:'2px dashed #ddd'}}>
-                <div style={{fontWeight:700,fontSize:14,paddingBottom:8,borderBottom:`2px solid ${gold}`,marginBottom:16,display:'flex',justifyContent:'space-between',alignItems:'baseline'}}>
+                <div className="prop-card-header" style={{fontWeight:700,fontSize:14,paddingBottom:8,borderBottom:`2px solid ${gold}`,marginBottom:16,display:'flex',justifyContent:'space-between',alignItems:'baseline'}}>
                   <span>AVAILABILITY {i+1}  —  {(a.address||'').toUpperCase()}{a.town?', '+a.town.toUpperCase():''}</span>
                   {a.asking_rent>0&&<span style={{color:'#3b82f6',fontSize:16}}>${Number(a.asking_rent).toFixed(2)}/SF/yr</span>}
                 </div>
@@ -4795,7 +4799,7 @@ function OPVReport({subject,comps,leaseComps,leaseAvails=[],avails,analytics,aiT
               const psf = a.price_per_sf||(a.asking_price&&a.building_sf?Number(a.asking_price)/Number(a.building_sf):0)
               return (
                 <div key={a.id} className="prop-card" style={{marginBottom:48,paddingBottom:48,borderBottom:'2px dashed #ddd'}}>
-                  <div style={{fontWeight:700,fontSize:14,paddingBottom:8,borderBottom:`2px solid ${gold}`,marginBottom:16,display:'flex',justifyContent:'space-between',alignItems:'baseline'}}>
+                  <div className="prop-card-header" style={{fontWeight:700,fontSize:14,paddingBottom:8,borderBottom:`2px solid ${gold}`,marginBottom:16,display:'flex',justifyContent:'space-between',alignItems:'baseline'}}>
                     <span>AVAILABILITY {i+1}  —  {(a.address||'').toUpperCase()}{a.city?', '+a.city.toUpperCase():''}</span>
                     {psf>0&&<span style={{color:'#3b82f6',fontSize:16}}>${Number(psf).toFixed(2)}/SF</span>}
                   </div>
@@ -4848,7 +4852,7 @@ function OPVReport({subject,comps,leaseComps,leaseAvails=[],avails,analytics,aiT
 
         {/* ── SECTION VIII: PCRE PROFILE ── */}
         {includePcreProfile&&<>
-          <SecHeading num="VIII" title="PREMIER COMMERCIAL REAL ESTATE PROFILE"/>
+          <SecHeading num="VIII" title="PREMIER COMMERCIAL REAL ESTATE PROFILE" pageBreak/>
           <p style={{fontSize:13,lineHeight:1.8,marginBottom:12}}><E k="pcre_p1" d="Premier Commercial Real Estate, LLC is a full-service commercial real estate service provider offering personalized and strategic solutions for investors, property owners, tenants and diverse businesses. With a laser-sharp focus on, and in-depth knowledge of the Long Island market, Premier's seasoned professionals work together as a team to identify the best real estate opportunities for its clients." multi style={{width:'100%'}}/></p>
           <p style={{fontSize:13,lineHeight:1.8,marginBottom:24}}><E k="pcre_p2" d="From property sales and leasing to tax-advantaged 1031 exchanges and portfolio development, Premier applies the full force of its experience, know-how and network to effectively achieve the real estate goals of its clients." multi style={{width:'100%'}}/></p>
           <SubHead>PCRE'S SAMPLE OF OUR RECENTLY COMPLETED SALES TRANSACTIONS</SubHead>
