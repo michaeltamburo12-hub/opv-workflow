@@ -4856,15 +4856,15 @@ function OPVReport({subject,comps,leaseComps,leaseAvails=[],avails,analytics,aiT
           <p style={{fontSize:13,lineHeight:1.8,marginBottom:12}}><E k="pcre_p1" d="Premier Commercial Real Estate, LLC is a full-service commercial real estate service provider offering personalized and strategic solutions for investors, property owners, tenants and diverse businesses. With a laser-sharp focus on, and in-depth knowledge of the Long Island market, Premier's seasoned professionals work together as a team to identify the best real estate opportunities for its clients." multi style={{width:'100%'}}/></p>
           <p style={{fontSize:13,lineHeight:1.8,marginBottom:24}}><E k="pcre_p2" d="From property sales and leasing to tax-advantaged 1031 exchanges and portfolio development, Premier applies the full force of its experience, know-how and network to effectively achieve the real estate goals of its clients." multi style={{width:'100%'}}/></p>
           <SubHead>PCRE'S SAMPLE OF OUR RECENTLY COMPLETED SALES TRANSACTIONS</SubHead>
-          <div style={{border:'1px solid #ccc',marginBottom:24}}>
-            <TblHeader cols={['Property Address','City','Property Type','Building Size (SF)','Sale Price','Transaction Date']}/>
-            {RECENT_SALES.map((row,i)=><TblRow key={i} shade={i%2===1} cells={row}/>)}
-          </div>
+          <table style={{width:'100%',borderCollapse:'collapse',marginBottom:24}}>
+            <thead><tr>{['Property Address','City','Property Type','Building Size (SF)','Sale Price','Transaction Date'].map(h=><th key={h} style={{background:darkBg,color:'#fff',padding:'8px',fontSize:10,fontWeight:700,textAlign:'center' as const,border:'1px solid #444'}}>{h}</th>)}</tr></thead>
+            <tbody>{RECENT_SALES.map((row,i)=><tr key={i} style={{background:i%2===1?'#F2F2F2':'#fff'}}>{row.map((c,j)=><td key={j} style={{padding:'7px 8px',fontSize:11,border:'1px solid #ddd',textAlign:'center' as const}}>{c||'—'}</td>)}</tr>)}</tbody>
+          </table>
           <SubHead>PCRE'S SAMPLE OF OUR RECENTLY COMPLETED LEASE TRANSACTIONS</SubHead>
-          <div style={{border:'1px solid #ccc',marginBottom:32}}>
-            <TblHeader cols={['Property Address','City','Tenant','Leased SF','Lease Price (PSF)','Transaction Date']}/>
-            {RECENT_LEASES.map((row,i)=><TblRow key={i} shade={i%2===1} cells={row}/>)}
-          </div>
+          <table style={{width:'100%',borderCollapse:'collapse',marginBottom:32}}>
+            <thead><tr>{['Property Address','City','Tenant','Leased SF','Lease Price (PSF)','Transaction Date'].map(h=><th key={h} style={{background:darkBg,color:'#fff',padding:'8px',fontSize:10,fontWeight:700,textAlign:'center' as const,border:'1px solid #444'}}>{h}</th>)}</tr></thead>
+            <tbody>{RECENT_LEASES.map((row,i)=><tr key={i} style={{background:i%2===1?'#F2F2F2':'#fff'}}>{row.map((c,j)=><td key={j} style={{padding:'7px 8px',fontSize:11,border:'1px solid #ddd',textAlign:'center' as const}}>{c||'—'}</td>)}</tr>)}</tbody>
+          </table>
         </>}
 
         {/* ── BROKER BIOS — always shown ── */}
@@ -4885,7 +4885,7 @@ function OPVReport({subject,comps,leaseComps,leaseAvails=[],avails,analytics,aiT
 
           {/* Jeff Schwartzberg */}
           <div style={{display:'flex',gap:24,alignItems:'flex-start',marginBottom:36,paddingBottom:36,borderBottom:'1px solid #eee'}}>
-            <img src="/team/jeff.jpg" alt="Jeff Schwartzberg" className="broker-photo" style={{width:140,height:175,objectFit:'cover',objectPosition:'center',flexShrink:0,border:'1px solid #ddd'}}/>
+            <img src="/team/jeff.jpg" alt="Jeff Schwartzberg" className="broker-photo" style={{width:140,height:175,objectFit:'cover',objectPosition:'50% 25%',flexShrink:0,border:'1px solid #ddd'}}/>
             <div style={{flex:1}}>
               <div style={{fontWeight:900,fontSize:18,paddingBottom:5,borderBottom:`2px solid ${gold}`,marginBottom:6}}>JEFFREY B. SCHWARTZBERG</div>
               <div style={{fontWeight:600,fontSize:12,color:'#555',fontStyle:'italic',marginBottom:12}}>Managing Principal</div>
