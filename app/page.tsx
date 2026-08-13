@@ -2247,16 +2247,15 @@ function SubjectProperty({subject,setSubject,setPage,folders,setFolders,assignme
   const [form,setForm]=useState<SubjectForm>(subject||{address:assignmentData.propertyAddress||'',city:'',county:'Nassau',municipality:'',parcelId:'',type:'Warehouse',opvType:defaultOpvType,size:'',lot:'',ceiling:'',docks:'',driveIn:'',power:'',heat:'Gas FHA',parking:'',sprinkler:'ESFR',sewer:'Municipal',zoning:'',taxes:'',yearBuilt:'',officePct:'',construction:'Masonry/Steel',condition:'Good',notes:'',highestBestUse:'',capRateLow:'',capRateHigh:'',leasePsfLow:'',leasePsfHigh:'',estimatedValueLow:'',estimatedValueHigh:'',preparedBy:assignmentData.preparedBy||''})
   const set=(k:string,v:string)=>setForm((f:SubjectForm)=>{const next={...f,[k]:v};setSubject(next);return next})
   const autoCreateFolders = (address: string) => {
-    const already = folders.some(f=>f.opvAddress===address)
-    if (already) return
     const color = FOLDER_COLORS[folders.length % FOLDER_COLORS.length]
     const now = Date.now(); const shortAddr = address.split(',')[0]
-    setFolders((prev: Folder[]) => [...prev,
-      {id:`${now}-comps`, name:`${shortAddr} — Sale Comps`, type:'comps', color, items:[], opvAddress:address, createdAt:now},
-      {id:`${now}-avails`, name:`${shortAddr} — Availabilities`, type:'avails', color, items:[], opvAddress:address, createdAt:now+1},
-      {id:`${now}-lease`, name:`${shortAddr} — Lease Comps`, type:'lease-comps', color, items:[], opvAddress:address, createdAt:now+2},
-      {id:`${now}-lease-avails`, name:`${shortAddr} — Lease Avails`, type:'lease-avails', color, items:[], opvAddress:address, createdAt:now+3}
-    ])
+    const existing = folders.filter(f=>f.opvAddress===address).map(f=>f.type)
+    const toCreate: Folder[] = []
+    if (!existing.includes('comps'))        toCreate.push({id:`${now}-comps`,        name:`${shortAddr} — Sale Comps`,    type:'comps',        color, items:[], opvAddress:address, createdAt:now})
+    if (!existing.includes('avails'))       toCreate.push({id:`${now}-avails`,       name:`${shortAddr} — Availabilities`, type:'avails',       color, items:[], opvAddress:address, createdAt:now+1})
+    if (!existing.includes('lease-comps'))  toCreate.push({id:`${now}-lease`,        name:`${shortAddr} — Lease Comps`,   type:'lease-comps',  color, items:[], opvAddress:address, createdAt:now+2})
+    if (!existing.includes('lease-avails')) toCreate.push({id:`${now}-lease-avails`, name:`${shortAddr} — Lease Avails`,  type:'lease-avails', color, items:[], opvAddress:address, createdAt:now+3})
+    if (toCreate.length > 0) setFolders((prev: Folder[]) => [...prev, ...toCreate])
   }
   const G2={display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}
   return (
