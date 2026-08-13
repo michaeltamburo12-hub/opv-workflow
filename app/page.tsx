@@ -4102,53 +4102,67 @@ function OPVReport({subject,comps,leaseComps,leaseAvails=[],avails,analytics,aiT
       await embedImages(clone)
       convertGrids(clone)
 
+      // Strip outer container styles that break print layout
+      clone.style.cssText = 'width:100%;max-width:100%;padding:32px 48px;margin:0;box-shadow:none;border-radius:0;background:#fff'
+
+      // Make every image fully responsive
+      clone.querySelectorAll<HTMLImageElement>('img').forEach(img => {
+        img.style.maxWidth = '100%'
+        img.style.width = ''
+        img.style.height = 'auto'
+      })
+
+      // Strip fixed pixel widths from wrapper divs so they reflow correctly
+      clone.querySelectorAll<HTMLElement>('[style]').forEach(el => {
+        const tag = el.tagName
+        if (tag === 'IMG' || tag === 'TD' || tag === 'TH') return
+        if (el.style.maxWidth && el.style.maxWidth !== '100%') el.style.maxWidth = '100%'
+        if (el.style.width && el.style.width.endsWith('px') && parseInt(el.style.width) > 700) el.style.width = '100%'
+        el.style.boxShadow = 'none'
+        el.style.borderRadius = '0'
+      })
+
       const addr = (subject?.address || 'OPV').replace(/[^a-zA-Z0-9\s]/g,'').trim().replace(/\s+/g,'_')
       const html = `<!DOCTYPE html><html><head><meta charset="utf-8">
 <title>OPV_${addr}</title>
 <style>
-  @page{size:8.5in 11in;margin:0.75in 0.85in;}
-  *{box-sizing:border-box;max-width:100%}
-  html,body{background:#fff;color:#1a1a1a;font-family:Arial,sans-serif;font-size:12px;line-height:1.6;margin:0;padding:0;width:100%}
-  /* Reset any fixed screen widths */
-  .print-area{max-width:100%!important;width:100%!important;box-shadow:none!important;border-radius:0!important;padding:0!important;margin:0!important}
+  @page{size:letter;margin:0.65in 0.75in}
+  *,*:before,*:after{box-sizing:border-box}
+  html,body{margin:0;padding:0;background:#fff;color:#1a1a1a;font-family:Arial,sans-serif;font-size:12px;line-height:1.55}
   img{max-width:100%!important;height:auto!important;display:block}
-  table{border-collapse:collapse;width:100%!important}
-  td,th{padding:5px 8px;border:1px solid #ccc;font-size:11px;vertical-align:middle;word-break:break-word;max-width:300px}
+  table{border-collapse:collapse;width:100%;table-layout:auto}
+  td,th{padding:5px 8px;border:1px solid #ccc;font-size:11px;vertical-align:middle;word-wrap:break-word;overflow-wrap:break-word}
   tr{break-inside:avoid;page-break-inside:avoid}
-  /* Each property detail card starts fresh */
   .prop-card{break-before:page;page-break-before:always}
-  /* PCRE bios also start fresh */
   .sec-heading-break{break-before:page;page-break-before:always}
-  /* Headings stay with what follows */
-  .sec-heading,.prop-card-header,h1,h2,h3,h4{break-after:avoid;page-break-after:avoid}
+  .sec-heading,.prop-card-header{break-after:avoid;page-break-after:avoid}
   p,li{orphans:2;widows:2}
 </style></head>
 <body>${clone.innerHTML}</body></html>`
 
-      // Give iframe real width so layout renders correctly before printing
-      const iframe = document.createElement('iframe')
-      iframe.style.cssText = 'position:fixed;top:0;left:-9999px;width:960px;height:1100px;border:none;visibility:hidden'
-      document.body.appendChild(iframe)
-      const iDoc = iframe.contentDocument || iframe.contentWindow?.document
-      if (!iDoc) { document.body.removeChild(iframe); setDownloading(false); return }
-      iDoc.open(); iDoc.write(html); iDoc.close()
+      // Open in a real window at report width so layout is correct before printing
+      const win = window.open('', '_blank', 'width=900,height=800,scrollbars=yes,menubar=yes,toolbar=yes')
+      if (!win) {
+        alert('Please allow pop-ups for this site to generate the PDF, then try again.')
+        setDownloading(false); return
+      }
+      win.document.open(); win.document.write(html); win.document.close()
 
-      // Wait for all images to load, then print
-      const imgs = Array.from(iDoc.querySelectorAll('img'))
-      const allLoaded = imgs.length === 0
-        ? Promise.resolve()
-        : Promise.all(imgs.map(img => new Promise<void>(res => {
-            if (img.complete) { res(); return }
-            img.onload = () => res()
-            img.onerror = () => res()
-            setTimeout(res, 4000) // cap wait at 4s per image
-          })))
-      await allLoaded
-      // Small extra settle time for layout
-      await new Promise(res => setTimeout(res, 400))
-      iframe.contentWindow?.focus()
-      iframe.contentWindow?.print()
-      setTimeout(() => document.body.removeChild(iframe), 2000)
+      // Wait for all images to load
+      await new Promise<void>(resolve => {
+        const imgs = Array.from(win.document.querySelectorAll('img'))
+        if (!imgs.length) { setTimeout(resolve, 300); return }
+        let done = 0
+        const tick = () => { if (++done >= imgs.length) resolve() }
+        imgs.forEach(img => {
+          if (img.complete) tick()
+          else { img.onload = tick; img.onerror = tick }
+        })
+        setTimeout(resolve, 6000) // hard cap
+      })
+      await new Promise(r => setTimeout(r, 400))
+      win.focus()
+      win.print()
     } catch(e) { alert('PDF export failed: ' + (e as Error).message) }
     setDownloading(false)
   }
