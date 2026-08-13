@@ -52,6 +52,10 @@ const css = `
     body{background:#fff!important;color:#111!important}
     .no-print{display:none!important}
     .print-area{box-shadow:none!important;border-radius:0!important;padding:24px!important;max-width:100%!important;margin:0!important}
+    .sec-heading{break-before:page;page-break-before:always;break-after:avoid;page-break-after:avoid}
+    .sec-heading:first-of-type{break-before:avoid;page-break-before:avoid}
+    .prop-card{break-inside:avoid;page-break-inside:avoid}
+    img,table{break-inside:avoid;page-break-inside:avoid}
   }
 `
 
@@ -4104,10 +4108,18 @@ function OPVReport({subject,comps,leaseComps,leaseAvails=[],avails,analytics,aiT
   @page{size:8.5in 11in;margin:0.9in 1in;}
   *{box-sizing:border-box}
   html,body{background:#fff;color:#1a1a1a;font-family:Arial,sans-serif;font-size:13px;line-height:1.7;margin:0;padding:0}
-  img{max-width:100%;height:auto}
-  table{border-collapse:collapse;width:100%}
+  img{max-width:100%;height:auto;break-inside:avoid;page-break-inside:avoid}
+  table{border-collapse:collapse;width:100%;break-inside:avoid;page-break-inside:avoid}
   td,th{padding:6px 10px;border:1px solid #ccc;font-size:11px;vertical-align:middle}
   td:first-child{font-weight:bold;width:200px;background:#f5f5f5}
+  /* Section headings: always start on a new page (except the first one) */
+  .sec-heading{break-before:page;page-break-before:always;break-after:avoid;page-break-after:avoid}
+  .sec-heading:first-of-type{break-before:avoid;page-break-before:avoid}
+  /* Property detail cards: never split across pages */
+  .prop-card{break-inside:avoid;page-break-inside:avoid}
+  /* Keep headings with the content below them */
+  h1,h2,h3,h4{break-after:avoid;page-break-after:avoid;orphans:3;widows:3}
+  p,li{orphans:3;widows:3}
   @media print{body{margin:0}}
 </style></head>
 <body>${clone.innerHTML}</body></html>`
@@ -4141,7 +4153,7 @@ function OPVReport({subject,comps,leaseComps,leaseAvails=[],avails,analytics,aiT
   const darkBg = '#2D2D2D'
 
   const SecHeading = ({num,title}:{num:string,title:string}) => (
-    <div style={{marginBottom:20,marginTop:32,paddingBottom:8,borderBottom:`3px solid ${gold}`}}>
+    <div className="sec-heading" style={{marginBottom:20,marginTop:32,paddingBottom:8,borderBottom:`3px solid ${gold}`}}>
       <span style={{color:gold,fontWeight:700,fontSize:16,marginRight:8}}>{num}.</span>
       <span style={{fontWeight:700,fontSize:16,color:'#1a1a1a'}}>{title}</span>
     </div>
@@ -4568,7 +4580,7 @@ function OPVReport({subject,comps,leaseComps,leaseAvails=[],avails,analytics,aiT
           {comps.map((c,i)=>{
             const psf = c.price_per_sf||(c.sale_price&&c.building_sf?Number(c.sale_price)/Number(c.building_sf):0)
             return (
-              <div key={c.id} style={{marginBottom:48,paddingBottom:48,borderBottom:'2px dashed #ddd'}}>
+              <div key={c.id} className="prop-card" style={{marginBottom:48,paddingBottom:48,borderBottom:'2px dashed #ddd'}}>
                 <div style={{fontWeight:700,fontSize:14,paddingBottom:8,borderBottom:`2px solid ${gold}`,marginBottom:16,display:'flex',justifyContent:'space-between',alignItems:'baseline'}}>
                   <span>COMPARABLE {i+1}  —  {(c.address||'').toUpperCase()}{c.city?', '+c.city.toUpperCase():''}</span>
                   {psf>0&&<span style={{color:gold,fontSize:16}}>${Number(psf).toFixed(2)}/SF</span>}
@@ -4609,7 +4621,7 @@ function OPVReport({subject,comps,leaseComps,leaseAvails=[],avails,analytics,aiT
           </div>
           <p style={{fontSize:12,color:'#555',marginBottom:24,fontStyle:'italic'}}>Each lease comparable is detailed on the following pages.</p>
           {leaseComps.map((c,i)=>(
-            <div key={c.id} style={{marginBottom:48,paddingBottom:48,borderBottom:'2px dashed #ddd'}}>
+            <div key={c.id} className="prop-card" style={{marginBottom:48,paddingBottom:48,borderBottom:'2px dashed #ddd'}}>
               <div style={{fontWeight:700,fontSize:14,paddingBottom:8,borderBottom:`2px solid ${gold}`,marginBottom:16,display:'flex',justifyContent:'space-between',alignItems:'baseline'}}>
                 <span>LEASE COMPARABLE {i+1}  —  {(c.address||'').toUpperCase()}{c.town?', '+c.town.toUpperCase():''}</span>
                 {c.deal_rent>0&&<span style={{color:gold,fontSize:16}}>${Number(c.deal_rent).toFixed(2)}/SF/yr</span>}
@@ -4657,7 +4669,7 @@ function OPVReport({subject,comps,leaseComps,leaseAvails=[],avails,analytics,aiT
           {comps.map((c,i)=>{
             const psf = c.price_per_sf||(c.sale_price&&c.building_sf?Number(c.sale_price)/Number(c.building_sf):0)
             return (
-              <div key={c.id} style={{marginBottom:48,paddingBottom:48,borderBottom:'2px dashed #ddd'}}>
+              <div key={c.id} className="prop-card" style={{marginBottom:48,paddingBottom:48,borderBottom:'2px dashed #ddd'}}>
                 <div style={{fontWeight:700,fontSize:14,paddingBottom:8,borderBottom:`2px solid #aaa`,marginBottom:16,display:'flex',justifyContent:'space-between',alignItems:'baseline'}}>
                   <span>SALE COMP {i+1}  —  {(c.address||'').toUpperCase()}{c.city?', '+c.city.toUpperCase():''}</span>
                   {psf>0&&<span style={{color:'#555',fontSize:16}}>${Number(psf).toFixed(2)}/SF</span>}
@@ -4695,7 +4707,7 @@ function OPVReport({subject,comps,leaseComps,leaseAvails=[],avails,analytics,aiT
             ]}/>)}
           </div>
           {leaseComps.map((c,i)=>(
-            <div key={c.id} style={{marginBottom:48,paddingBottom:48,borderBottom:'2px dashed #ddd'}}>
+            <div key={c.id} className="prop-card" style={{marginBottom:48,paddingBottom:48,borderBottom:'2px dashed #ddd'}}>
               <div style={{fontWeight:700,fontSize:14,paddingBottom:8,borderBottom:`2px solid ${gold}`,marginBottom:16}}>
                 LEASE COMPARABLE {i+1}  —  {(c.address||'').toUpperCase()}{c.town?', '+c.town.toUpperCase():''}
               </div>
@@ -4740,7 +4752,7 @@ function OPVReport({subject,comps,leaseComps,leaseAvails=[],avails,analytics,aiT
             </div>
             <p style={{fontSize:12,color:'#555',marginBottom:24,fontStyle:'italic'}}>Each availability is detailed on the following pages.</p>
             {leaseAvails.map((a,i)=>(
-              <div key={a.id} style={{marginBottom:48,paddingBottom:48,borderBottom:'2px dashed #ddd'}}>
+              <div key={a.id} className="prop-card" style={{marginBottom:48,paddingBottom:48,borderBottom:'2px dashed #ddd'}}>
                 <div style={{fontWeight:700,fontSize:14,paddingBottom:8,borderBottom:`2px solid ${gold}`,marginBottom:16,display:'flex',justifyContent:'space-between',alignItems:'baseline'}}>
                   <span>AVAILABILITY {i+1}  —  {(a.address||'').toUpperCase()}{a.town?', '+a.town.toUpperCase():''}</span>
                   {a.asking_rent>0&&<span style={{color:'#3b82f6',fontSize:16}}>${Number(a.asking_rent).toFixed(2)}/SF/yr</span>}
@@ -4782,7 +4794,7 @@ function OPVReport({subject,comps,leaseComps,leaseAvails=[],avails,analytics,aiT
             {avails.map((a,i)=>{
               const psf = a.price_per_sf||(a.asking_price&&a.building_sf?Number(a.asking_price)/Number(a.building_sf):0)
               return (
-                <div key={a.id} style={{marginBottom:48,paddingBottom:48,borderBottom:'2px dashed #ddd'}}>
+                <div key={a.id} className="prop-card" style={{marginBottom:48,paddingBottom:48,borderBottom:'2px dashed #ddd'}}>
                   <div style={{fontWeight:700,fontSize:14,paddingBottom:8,borderBottom:`2px solid ${gold}`,marginBottom:16,display:'flex',justifyContent:'space-between',alignItems:'baseline'}}>
                     <span>AVAILABILITY {i+1}  —  {(a.address||'').toUpperCase()}{a.city?', '+a.city.toUpperCase():''}</span>
                     {psf>0&&<span style={{color:'#3b82f6',fontSize:16}}>${Number(psf).toFixed(2)}/SF</span>}
