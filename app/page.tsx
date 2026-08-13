@@ -5014,6 +5014,23 @@ export default function App() {
     })
   }, [])
 
+  // Auto-backfill missing folder types whenever subject or folders change
+  useEffect(()=>{
+    if (!subject?.address) return
+    const address = subject.address
+    const shortAddr = address.split(',')[0]
+    const existing = folders.filter(f=>f.opvAddress===address).map(f=>f.type)
+    const color = FOLDER_COLORS[folders.length % FOLDER_COLORS.length]
+    const now = Date.now()
+    const toCreate: Folder[] = []
+    if (!existing.includes('comps'))        toCreate.push({id:`${now}-comps`,        name:`${shortAddr} — Sale Comps`,     type:'comps',        color, items:[], opvAddress:address, createdAt:now})
+    if (!existing.includes('avails'))       toCreate.push({id:`${now}-avails`,       name:`${shortAddr} — Availabilities`, type:'avails',       color, items:[], opvAddress:address, createdAt:now+1})
+    if (!existing.includes('lease-comps'))  toCreate.push({id:`${now}-lease`,        name:`${shortAddr} — Lease Comps`,    type:'lease-comps',  color, items:[], opvAddress:address, createdAt:now+2})
+    if (!existing.includes('lease-avails')) toCreate.push({id:`${now}-lease-avails`, name:`${shortAddr} — Lease Avails`,   type:'lease-avails', color, items:[], opvAddress:address, createdAt:now+3})
+    if (toCreate.length > 0) updateFolders((prev: Folder[]) => [...prev, ...toCreate])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [subject?.address])
+
   // Autosave effects
   useEffect(()=>{try{localStorage.setItem('opv_assignment',JSON.stringify(assignmentData))}catch{}},[assignmentData])
   useEffect(()=>{try{localStorage.setItem('opv_subject',JSON.stringify(subject))}catch{}},[subject])
