@@ -4872,7 +4872,7 @@ function OPVReport({subject,comps,leaseComps,leaseAvails=[],avails,analytics,aiT
 
           {/* Jason Miller */}
           <div style={{display:'flex',gap:24,alignItems:'flex-start',marginBottom:36,paddingBottom:36,borderBottom:'1px solid #eee'}}>
-            <img src="/team/jason.jpg" alt="Jason Miller" className="broker-photo" style={{width:140,height:175,objectFit:'cover',objectPosition:'top',flexShrink:0,border:'1px solid #ddd'}}/>
+            <img src="/team/jason.jpg" alt="Jason Miller" className="broker-photo" style={{width:140,height:175,objectFit:'cover',objectPosition:'center',flexShrink:0,border:'1px solid #ddd'}}/>
             <div style={{flex:1}}>
               <div style={{fontWeight:900,fontSize:18,paddingBottom:5,borderBottom:`2px solid ${gold}`,marginBottom:6}}>JASON D. MILLER</div>
               <div style={{fontWeight:600,fontSize:12,color:'#555',fontStyle:'italic',marginBottom:12}}>Managing Principal</div>
@@ -4885,7 +4885,7 @@ function OPVReport({subject,comps,leaseComps,leaseAvails=[],avails,analytics,aiT
 
           {/* Jeff Schwartzberg */}
           <div style={{display:'flex',gap:24,alignItems:'flex-start',marginBottom:36,paddingBottom:36,borderBottom:'1px solid #eee'}}>
-            <img src="/team/jeff.jpg" alt="Jeff Schwartzberg" className="broker-photo" style={{width:140,height:175,objectFit:'cover',objectPosition:'top',flexShrink:0,border:'1px solid #ddd'}}/>
+            <img src="/team/jeff.jpg" alt="Jeff Schwartzberg" className="broker-photo" style={{width:140,height:175,objectFit:'cover',objectPosition:'center',flexShrink:0,border:'1px solid #ddd'}}/>
             <div style={{flex:1}}>
               <div style={{fontWeight:900,fontSize:18,paddingBottom:5,borderBottom:`2px solid ${gold}`,marginBottom:6}}>JEFFREY B. SCHWARTZBERG</div>
               <div style={{fontWeight:600,fontSize:12,color:'#555',fontStyle:'italic',marginBottom:12}}>Managing Principal</div>
@@ -4900,7 +4900,7 @@ function OPVReport({subject,comps,leaseComps,leaseAvails=[],avails,analytics,aiT
 
           {/* Desmond Mullins */}
           <div style={{display:'flex',gap:24,alignItems:'flex-start',marginBottom:32}}>
-            <img src="/team/desmond.jpg" alt="Desmond Mullins" className="broker-photo" style={{width:140,height:175,objectFit:'cover',objectPosition:'top',flexShrink:0,border:'1px solid #ddd'}}/>
+            <img src="/team/desmond.jpg" alt="Desmond Mullins" className="broker-photo" style={{width:140,height:175,objectFit:'cover',objectPosition:'center',flexShrink:0,border:'1px solid #ddd'}}/>
             <div style={{flex:1}}>
               <div style={{fontWeight:900,fontSize:18,paddingBottom:5,borderBottom:`2px solid ${gold}`,marginBottom:6}}>DESMOND MULLINS</div>
               <div style={{fontWeight:600,fontSize:12,color:'#555',fontStyle:'italic',marginBottom:12}}>Partner, Executive Director</div>
