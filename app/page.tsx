@@ -49,14 +49,22 @@ const css = `
   button:not(:disabled):hover{opacity:.92}
   button:not(:disabled):active{transform:scale(.98)}
   @media print{
-    body{background:#fff!important;color:#111!important}
+    @page{size:letter;margin:0.65in 0.75in}
+    /* Hide everything except the cloned print target appended to <body> */
+    body.printing-opv > *:not(#__print_target__){display:none!important}
+    #__print_target__{display:block!important;background:#fff!important;color:#111!important;box-shadow:none!important;border-radius:0!important;padding:40px!important;width:100%!important}
+    /* Also hide no-print when using browser's own Ctrl+P */
     .no-print{display:none!important}
-    .print-area{box-shadow:none!important;border-radius:0!important;padding:24px!important;max-width:100%!important;margin:0!important}
-    .prop-card{break-before:page;page-break-before:always}
-    .sec-heading-break{break-before:page;page-break-before:always}
-    .sec-heading{break-after:avoid;page-break-after:avoid}
-    .prop-card-header{break-after:avoid;page-break-after:avoid}
-    tr{break-inside:avoid;page-break-inside:avoid}
+    /* Page breaks — applied inline by JS, these are fallbacks */
+    .sec-heading{break-after:avoid!important;page-break-after:avoid!important}
+    .prop-card-header{break-after:avoid!important;page-break-after:avoid!important}
+    tr{break-inside:avoid!important;page-break-inside:avoid!important}
+    /* Photo containers: never split across pages */
+    .photo-slot-wrap{break-inside:avoid!important;page-break-inside:avoid!important}
+    img{max-width:100%!important;height:auto!important}
+    /* Broker headshots: pin size — higher specificity than img rule above */
+    .broker-photo{width:140px!important;height:175px!important;object-fit:cover!important;flex-shrink:0!important}
+    table{width:100%!important;border-collapse:collapse!important}
   }
 `
 
@@ -3604,7 +3612,7 @@ function PhotoSlot({photoKey,defaultSrc,height=280,override,isEditing,canEdit=fa
   }
 
   return (
-    <div style={{width:'100%',alignSelf:'stretch' as const,marginBottom:20}}>
+    <div className="photo-slot-wrap" style={{width:'100%',alignSelf:'stretch' as const,marginBottom:20}}>
       <div style={{width:'100%',height,borderRadius:6,overflow:'hidden' as const,background:'#f0ede6',border:'1px solid #ddd',position:'relative' as const,display:'flex',alignItems:'center',justifyContent:'center'}}>
         {/* Always render img with data-photo-key so it's present in frozenHTML and can be patched later */}
         <img src={src} alt="" data-photo-key={photoKey}
@@ -3704,7 +3712,7 @@ function RichEditor({initialValue, onSave, onEscape, editorStyle={}}: {initialVa
 // ── OPV REPORT ────────────────────────────────────────────────────────────────
 function OPVReport({subject,comps,leaseComps,leaseAvails=[],avails,analytics,aiText,setPage,frozenHTML,setFrozenHTML,photoUrls={},opvId}: {subject:SubjectForm|null,comps:Comp[],leaseComps:LeaseComp[],leaseAvails?:LeaseComp[],avails:Avail[],analytics:AnalyticsData|null,aiText:string,setPage:(p:string)=>void,frozenHTML:string|null,setFrozenHTML:React.Dispatch<React.SetStateAction<string|null>>,photoUrls?:Record<string,string>,opvId?:string|null}) {
   const today = new Date().toLocaleDateString('en-US',{month:'long',year:'numeric'}).toUpperCase()
-  const [downloading, setDownloading] = useState(false)
+  // downloading state removed — print now uses window.print() directly
   const [includeLeaseComps, setIncludeLeaseComps] = useState(leaseComps.length>0)
   const [includeAvails, setIncludeAvails] = useState(true)
   const [includeMarketingStrategy, setIncludeMarketingStrategy] = useState(true)
@@ -4094,96 +4102,42 @@ function OPVReport({subject,comps,leaseComps,leaseAvails=[],avails,analytics,aiT
   }
   // ─────────────────────────────────────────────────────────────────────────────
 
-  const downloadPDF = async () => {
-    setDownloading(true)
-    try {
-      const clone = cloneReport()
-      if (!clone) { setDownloading(false); return }
-      await embedImages(clone)
-      convertGrids(clone)
+  const downloadPDF = () => {
+    // Clone the live report and append as a direct <body> child.
+    // This keeps all global CSS / fonts / colors intact (unlike iframe which loses them)
+    // and lets CSS page-break work in normal document flow (unlike position:absolute).
+    const area = reportRef.current || document.querySelector<HTMLElement>('.print-area')
+    if (!area) { alert('Please view the OPV report before printing.'); return }
 
-      // Reset outer container
-      clone.style.cssText = 'width:100%;max-width:100%;padding:32px 48px;margin:0;box-shadow:none;border-radius:0;background:#fff'
+    const clone = area.cloneNode(true) as HTMLElement
+    clone.id = '__print_target__'
+    clone.style.cssText = 'margin:0;padding:40px;background:#fff;box-shadow:none;border-radius:0'
 
-      // Images: fully responsive
-      clone.querySelectorAll<HTMLImageElement>('img').forEach(img => {
-        img.style.maxWidth = '100%'; img.style.width = ''; img.style.height = 'auto'
-      })
+    // Remove toolbar / interactive elements from the clone
+    clone.querySelectorAll('.no-print, button, input, textarea, select').forEach(el => el.remove())
 
-      // Strip fixed px widths from containers, remove decoration
-      clone.querySelectorAll<HTMLElement>('[style]').forEach(el => {
-        if (['IMG','TD','TH'].includes(el.tagName)) return
-        if (el.style.maxWidth) el.style.maxWidth = '100%'
-        if (el.style.width?.endsWith('px') && parseInt(el.style.width) > 700) el.style.width = '100%'
-        el.style.boxShadow = 'none'; el.style.borderRadius = '0'
-      })
+    // Apply page breaks inline so they work regardless of CSS cascade order
+    clone.querySelectorAll<HTMLElement>('.sec-heading').forEach((el, i) => {
+      if (i === 0) return // no break before the very first section
+      el.style.breakBefore = 'page'; el.style.pageBreakBefore = 'always'
+    })
+    clone.querySelectorAll<HTMLElement>('.prop-card').forEach(el => {
+      el.style.breakBefore = 'page'; el.style.pageBreakBefore = 'always'
+    })
+    clone.querySelectorAll<HTMLElement>('tr, .photo-slot-wrap').forEach(el => {
+      el.style.breakInside = 'avoid'; el.style.pageBreakInside = 'avoid'
+    })
+    clone.querySelectorAll<HTMLElement>('.sec-heading, .prop-card-header').forEach(el => {
+      el.style.breakAfter = 'avoid'; el.style.pageBreakAfter = 'avoid'
+    })
 
-      // Apply page breaks directly via inline styles — works on any HTML regardless of CSS class state
-      let firstSection = true
-      clone.querySelectorAll<HTMLElement>('.sec-heading').forEach(el => {
-        if (firstSection) { firstSection = false; return } // don't break before first section
-        el.style.pageBreakBefore = 'always'; el.style.breakBefore = 'page'
-      })
-      clone.querySelectorAll<HTMLElement>('.prop-card').forEach(el => {
-        el.style.pageBreakBefore = 'always'; el.style.breakBefore = 'page'
-      })
-      // Keep table rows together, prevent mid-row splits
-      clone.querySelectorAll<HTMLElement>('tr').forEach(el => {
-        el.style.pageBreakInside = 'avoid'; el.style.breakInside = 'avoid'
-      })
-      // Keep card headers with content below
-      clone.querySelectorAll<HTMLElement>('.prop-card-header,.sec-heading').forEach(el => {
-        el.style.pageBreakAfter = 'avoid'; el.style.breakAfter = 'avoid'
-      })
-
-      const addr = (subject?.address || 'OPV').replace(/[^a-zA-Z0-9\s]/g,'').trim().replace(/\s+/g,'_')
-      const html = `<!DOCTYPE html><html><head><meta charset="utf-8">
-<title>OPV_${addr}</title>
-<style>
-  @page{size:letter;margin:0.65in 0.75in}
-  *,*:before,*:after{box-sizing:border-box}
-  html,body{margin:0;padding:0;background:#fff;color:#1a1a1a;font-family:Arial,sans-serif;font-size:12px;line-height:1.55}
-  img{max-width:100%!important;height:auto!important;display:block}
-  table{border-collapse:collapse;width:100%;table-layout:auto}
-  td,th{padding:5px 8px;border:1px solid #ccc;font-size:11px;vertical-align:middle;word-wrap:break-word;overflow-wrap:break-word}
-  tr{break-inside:avoid;page-break-inside:avoid}
-  /* Every section gets its own page */
-  .sec-heading{break-before:page;page-break-before:always;break-after:avoid;page-break-after:avoid}
-  /* Every property card gets its own page */
-  .prop-card{break-before:page;page-break-before:always}
-  .prop-card-header{break-after:avoid;page-break-after:avoid}
-  p,li{orphans:2;widows:2}
-</style></head>
-<body>${clone.innerHTML}</body></html>`
-
-      // Render in a full-size visible iframe so layout is correct, then print
-      const iframe = document.createElement('iframe')
-      // Cover the whole viewport so content lays out at real width
-      iframe.style.cssText = 'position:fixed;inset:0;width:100vw;height:100vh;border:none;z-index:99999;background:#fff'
-      document.body.appendChild(iframe)
-      const iDoc = iframe.contentDocument || iframe.contentWindow?.document
-      if (!iDoc) { document.body.removeChild(iframe); setDownloading(false); return }
-      iDoc.open(); iDoc.write(html); iDoc.close()
-
-      // Wait for all images to load
-      await new Promise<void>(resolve => {
-        const imgs = Array.from(iDoc.querySelectorAll('img'))
-        if (!imgs.length) { setTimeout(resolve, 400); return }
-        let done = 0
-        const tick = () => { if (++done >= imgs.length) resolve() }
-        imgs.forEach(img => {
-          if (img.complete) tick()
-          else { img.onload = tick; img.onerror = tick }
-        })
-        setTimeout(resolve, 6000) // hard cap
-      })
-      await new Promise(r => setTimeout(r, 400))
-      iframe.contentWindow?.focus()
-      iframe.contentWindow?.print()
-      // Hide iframe after print dialog closes
-      setTimeout(() => document.body.removeChild(iframe), 2000)
-    } catch(e) { alert('PDF export failed: ' + (e as Error).message) }
-    setDownloading(false)
+    document.body.appendChild(clone)
+    document.body.classList.add('printing-opv')
+    window.print()
+    setTimeout(() => {
+      document.body.removeChild(clone)
+      document.body.classList.remove('printing-opv')
+    }, 2000)
   }
 
   if (!subject) return (
@@ -4283,8 +4237,8 @@ function OPVReport({subject,comps,leaseComps,leaseAvails=[],avails,analytics,aiT
               {editMode ? '✏️ Still Editing…' : frozenHTML ? '✏️ Edit Text (saved)' : '✏️ Edit Text'}
             </Btn>
             <Btn variant="ghost" onClick={hardResetIframe} style={{padding:'9px 12px',fontSize:11,color:frozenHTML?D.gold:D.textMuted}} title={frozenHTML?'Cached version shown — click to refresh':'Refresh report'}>↩ Refresh Report</Btn>
-            <Btn onClick={downloadPDF} disabled={downloading} style={{padding:'9px 20px',fontSize:12,background:`rgba(239,68,68,0.10)`,color:'#EF4444',border:`1px solid rgba(239,68,68,0.3)`}}>
-              {downloading ? 'Generating...' : '📕 Download PDF'}
+            <Btn onClick={downloadPDF} style={{padding:'9px 20px',fontSize:12,background:`rgba(239,68,68,0.10)`,color:'#EF4444',border:`1px solid rgba(239,68,68,0.3)`}}>
+              📕 Print / Save PDF
             </Btn>
           </div>
         </div>
@@ -4907,8 +4861,8 @@ function OPVReport({subject,comps,leaseComps,leaseAvails=[],avails,analytics,aiT
         <SubHead>ABOUT THE BROKERS</SubHead>
 
           {/* Jason Miller */}
-          <div style={{display:'flex',gap:24,marginBottom:36,paddingBottom:36,borderBottom:'1px solid #eee'}}>
-            <img src="/team/jason.jpg" alt="Jason Miller" style={{width:140,height:175,objectFit:'cover',objectPosition:'top',flexShrink:0,border:'1px solid #ddd'}}/>
+          <div style={{display:'flex',gap:24,alignItems:'flex-start',marginBottom:36,paddingBottom:36,borderBottom:'1px solid #eee'}}>
+            <img src="/team/jason.jpg" alt="Jason Miller" className="broker-photo" style={{width:140,height:175,objectFit:'cover',objectPosition:'top',flexShrink:0,border:'1px solid #ddd'}}/>
             <div style={{flex:1}}>
               <div style={{fontWeight:900,fontSize:18,paddingBottom:5,borderBottom:`2px solid ${gold}`,marginBottom:6}}>JASON D. MILLER</div>
               <div style={{fontWeight:600,fontSize:12,color:'#555',fontStyle:'italic',marginBottom:12}}>Managing Principal</div>
@@ -4920,8 +4874,8 @@ function OPVReport({subject,comps,leaseComps,leaseAvails=[],avails,analytics,aiT
           </div>
 
           {/* Jeff Schwartzberg */}
-          <div style={{display:'flex',gap:24,marginBottom:36,paddingBottom:36,borderBottom:'1px solid #eee'}}>
-            <img src="/team/jeff.jpg" alt="Jeff Schwartzberg" style={{width:140,height:175,objectFit:'cover',objectPosition:'top',flexShrink:0,border:'1px solid #ddd'}}/>
+          <div style={{display:'flex',gap:24,alignItems:'flex-start',marginBottom:36,paddingBottom:36,borderBottom:'1px solid #eee'}}>
+            <img src="/team/jeff.jpg" alt="Jeff Schwartzberg" className="broker-photo" style={{width:140,height:175,objectFit:'cover',objectPosition:'top',flexShrink:0,border:'1px solid #ddd'}}/>
             <div style={{flex:1}}>
               <div style={{fontWeight:900,fontSize:18,paddingBottom:5,borderBottom:`2px solid ${gold}`,marginBottom:6}}>JEFFREY B. SCHWARTZBERG</div>
               <div style={{fontWeight:600,fontSize:12,color:'#555',fontStyle:'italic',marginBottom:12}}>Managing Principal</div>
@@ -4935,8 +4889,8 @@ function OPVReport({subject,comps,leaseComps,leaseAvails=[],avails,analytics,aiT
           </div>
 
           {/* Desmond Mullins */}
-          <div style={{display:'flex',gap:24,marginBottom:32}}>
-            <img src="/team/desmond.jpg" alt="Desmond Mullins" style={{width:140,height:175,objectFit:'cover',objectPosition:'top',flexShrink:0,border:'1px solid #ddd'}}/>
+          <div style={{display:'flex',gap:24,alignItems:'flex-start',marginBottom:32}}>
+            <img src="/team/desmond.jpg" alt="Desmond Mullins" className="broker-photo" style={{width:140,height:175,objectFit:'cover',objectPosition:'top',flexShrink:0,border:'1px solid #ddd'}}/>
             <div style={{flex:1}}>
               <div style={{fontWeight:900,fontSize:18,paddingBottom:5,borderBottom:`2px solid ${gold}`,marginBottom:6}}>DESMOND MULLINS</div>
               <div style={{fontWeight:600,fontSize:12,color:'#555',fontStyle:'italic',marginBottom:12}}>Partner, Executive Director</div>
