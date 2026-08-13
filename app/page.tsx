@@ -4102,24 +4102,38 @@ function OPVReport({subject,comps,leaseComps,leaseAvails=[],avails,analytics,aiT
       await embedImages(clone)
       convertGrids(clone)
 
-      // Strip outer container styles that break print layout
+      // Reset outer container
       clone.style.cssText = 'width:100%;max-width:100%;padding:32px 48px;margin:0;box-shadow:none;border-radius:0;background:#fff'
 
-      // Make every image fully responsive
+      // Images: fully responsive
       clone.querySelectorAll<HTMLImageElement>('img').forEach(img => {
-        img.style.maxWidth = '100%'
-        img.style.width = ''
-        img.style.height = 'auto'
+        img.style.maxWidth = '100%'; img.style.width = ''; img.style.height = 'auto'
       })
 
-      // Strip fixed pixel widths from wrapper divs so they reflow correctly
+      // Strip fixed px widths from containers, remove decoration
       clone.querySelectorAll<HTMLElement>('[style]').forEach(el => {
-        const tag = el.tagName
-        if (tag === 'IMG' || tag === 'TD' || tag === 'TH') return
-        if (el.style.maxWidth && el.style.maxWidth !== '100%') el.style.maxWidth = '100%'
-        if (el.style.width && el.style.width.endsWith('px') && parseInt(el.style.width) > 700) el.style.width = '100%'
-        el.style.boxShadow = 'none'
-        el.style.borderRadius = '0'
+        if (['IMG','TD','TH'].includes(el.tagName)) return
+        if (el.style.maxWidth) el.style.maxWidth = '100%'
+        if (el.style.width?.endsWith('px') && parseInt(el.style.width) > 700) el.style.width = '100%'
+        el.style.boxShadow = 'none'; el.style.borderRadius = '0'
+      })
+
+      // Apply page breaks directly via inline styles — works on any HTML regardless of CSS class state
+      let firstSection = true
+      clone.querySelectorAll<HTMLElement>('.sec-heading').forEach(el => {
+        if (firstSection) { firstSection = false; return } // don't break before first section
+        el.style.pageBreakBefore = 'always'; el.style.breakBefore = 'page'
+      })
+      clone.querySelectorAll<HTMLElement>('.prop-card').forEach(el => {
+        el.style.pageBreakBefore = 'always'; el.style.breakBefore = 'page'
+      })
+      // Keep table rows together, prevent mid-row splits
+      clone.querySelectorAll<HTMLElement>('tr').forEach(el => {
+        el.style.pageBreakInside = 'avoid'; el.style.breakInside = 'avoid'
+      })
+      // Keep card headers with content below
+      clone.querySelectorAll<HTMLElement>('.prop-card-header,.sec-heading').forEach(el => {
+        el.style.pageBreakAfter = 'avoid'; el.style.breakAfter = 'avoid'
       })
 
       const addr = (subject?.address || 'OPV').replace(/[^a-zA-Z0-9\s]/g,'').trim().replace(/\s+/g,'_')
@@ -4268,7 +4282,7 @@ function OPVReport({subject,comps,leaseComps,leaseAvails=[],avails,analytics,aiT
             <Btn onClick={toggleEditMode} style={{padding:'9px 16px',fontSize:12,background:editMode?'rgba(16,185,129,0.15)':frozenHTML?'rgba(217,119,6,0.1)':'rgba(59,130,246,0.1)',color:editMode?D.green:frozenHTML?D.gold:D.blue,border:`1px solid ${editMode?'rgba(16,185,129,0.4)':frozenHTML?'rgba(217,119,6,0.3)':'rgba(59,130,246,0.3)'}`}}>
               {editMode ? '✏️ Still Editing…' : frozenHTML ? '✏️ Edit Text (saved)' : '✏️ Edit Text'}
             </Btn>
-            {frozenHTML&&!editMode&&<Btn variant="ghost" onClick={hardResetIframe} style={{padding:'9px 12px',fontSize:11,color:D.textMuted}}>↩ Reset All</Btn>}
+            <Btn variant="ghost" onClick={hardResetIframe} style={{padding:'9px 12px',fontSize:11,color:frozenHTML?D.gold:D.textMuted}} title={frozenHTML?'Cached version shown — click to refresh':'Refresh report'}>↩ Refresh Report</Btn>
             <Btn onClick={downloadPDF} disabled={downloading} style={{padding:'9px 20px',fontSize:12,background:`rgba(239,68,68,0.10)`,color:'#EF4444',border:`1px solid rgba(239,68,68,0.3)`}}>
               {downloading ? 'Generating...' : '📕 Download PDF'}
             </Btn>
@@ -4387,12 +4401,7 @@ function OPVReport({subject,comps,leaseComps,leaseAvails=[],avails,analytics,aiT
         }}
       />
 
-      {/* DEBUG BANNER — remove after confirming lease avails work */}
-      <div style={{background:'#1e3a5f',color:'#7dd3fc',fontSize:11,padding:'8px 16px',borderRadius:6,marginBottom:8,fontFamily:'monospace'}}>
-        DEBUG — OPV type: <b>{subject?.opvType||'not set'}</b> | leaseAvails: <b>{leaseAvails.length}</b> | avails: <b>{avails.length}</b> | frozenHTML: <b>{frozenHTML?'YES (showing cached — click ↩ Reset All to refresh)':'no'}</b>
-      </div>
-
-      {!editMode && frozenHTML ? (
+{!editMode && frozenHTML ? (
         /* Read mode with saved edits */
         <div ref={reportRef} className="print-area"
           dangerouslySetInnerHTML={{__html: frozenHTML}}
