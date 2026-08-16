@@ -69,6 +69,7 @@ const css = `
     /* Broker headshots: pin size — higher specificity than img rule above */
     .broker-photo{width:140px!important;height:175px!important;object-fit:cover!important;flex-shrink:0!important}
     table{width:100%!important;border-collapse:collapse!important}
+    *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}
   }
 `
 
@@ -4885,7 +4886,7 @@ function OPVReport({subject,comps,leaseComps,leaseAvails=[],avails,analytics,aiT
 
           {/* Jeff Schwartzberg */}
           <div style={{display:'flex',gap:24,alignItems:'flex-start',marginBottom:36,paddingBottom:36,borderBottom:'1px solid #eee'}}>
-            <img src="/team/jeff.jpg" alt="Jeff Schwartzberg" className="broker-photo" style={{width:140,height:175,objectFit:'cover',objectPosition:'50% 25%',flexShrink:0,border:'1px solid #ddd'}}/>
+            <img src="/team/jeff.jpg" alt="Jeff Schwartzberg" className="broker-photo" style={{width:140,height:175,objectFit:'cover',objectPosition:'top',flexShrink:0,border:'1px solid #ddd'}}/>
             <div style={{flex:1}}>
               <div style={{fontWeight:900,fontSize:18,paddingBottom:5,borderBottom:`2px solid ${gold}`,marginBottom:6}}>JEFFREY B. SCHWARTZBERG</div>
               <div style={{fontWeight:600,fontSize:12,color:'#555',fontStyle:'italic',marginBottom:12}}>Managing Principal</div>
