@@ -67,7 +67,7 @@ const css = `
     .prop-card .photo-slot-wrap > div{height:180px!important}
     img{max-width:100%!important;height:auto!important}
     /* Broker headshots: pin size — higher specificity than img rule above */
-    .broker-photo{width:140px!important;height:175px!important;object-fit:cover!important;flex-shrink:0!important}
+    .broker-photo{width:140px!important;height:175px!important;object-fit:cover!important;object-position:top!important;flex-shrink:0!important}
     table{width:100%!important;border-collapse:collapse!important}
     *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}
   }
