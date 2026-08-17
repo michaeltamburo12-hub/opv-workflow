@@ -1337,7 +1337,6 @@ function DatabaseManager() {
   const doSaveLeaseComp = async () => {
     setSaving(true)
     const payload: Record<string,unknown> = {...leaseCompForm}
-    delete payload.escalations // column not yet in DB schema
     const nums = ['building_sf','lot_size_ac','office_sf','asking_rent','deal_rent','taxes','lease_term_years','rent_concession_months','mgmt_fee_pct']
     nums.forEach(k=>{ if(payload[k]) payload[k]=parseFloat(payload[k] as string)||null; else payload[k]=null })
     if (!payload.transaction_date) payload.transaction_date = null
