@@ -2459,13 +2459,12 @@ function CompSearch({subject,comps,setComps,setPage,folders,setFolders}: {subjec
     let q = supabase.from('industrial_sale_comps').select('*')
     if (filters.county) q = q.eq('county', filters.county)
     if (filters.city) q = q.ilike('city', `%${filters.city}%`)
-    if (filters.min_sf) q = q.gte('building_sf', Number(filters.min_sf))
-    if (filters.max_sf) q = q.lte('building_sf', Number(filters.max_sf))
+    // SF filters handled client-side only (building_sf may be stored as text — DB numeric comparison unreliable)
     if (filters.min_price) q = q.gte('sale_price', Number(filters.min_price))
     if (filters.max_price) q = q.lte('sale_price', Number(filters.max_price))
     if (filters.min_date) q = q.gte('sale_date', filters.min_date)
     if (filters.max_date) q = q.lte('sale_date', filters.max_date)
-    q = q.order('sale_date', {ascending:false}).limit(200)
+    q = q.order('sale_date', {ascending:false}).limit(2000)
     const {data,error} = await q
     if (error) { alert('Search error: ' + error.message); setLoading(false); return }
     // Client-side SF filter fallback in case building_sf is stored as text in DB
@@ -2678,24 +2677,22 @@ function AvailSearch({subject,avails,setAvails,leaseAvails,setLeaseAvails,setPag
     let q = supabase.from('market_availabilities').select('*')
     if (filters.county) q = q.eq('county', filters.county)
     if (filters.city) q = q.ilike('city', `%${filters.city}%`)
-    if (filters.min_sf) q = q.gte('building_sf', Number(filters.min_sf))
-    if (filters.max_sf) q = q.lte('building_sf', Number(filters.max_sf))
+    // SF filters handled client-side only (building_sf may be stored as text — DB numeric comparison unreliable)
     if (filters.min_price) q = q.gte('asking_price', Number(filters.min_price))
     if (filters.max_price) q = q.lte('asking_price', Number(filters.max_price))
     if (withStatus && statusFilter) q = q.eq('status', statusFilter)
-    return q.order('created_at', {ascending:false}).limit(200)
+    return q.order('created_at', {ascending:false}).limit(2000)
   }
 
   const buildLeaseAvailQuery = () => {
     let q = supabase.from('lease_market_availabilities').select('*').eq('status','Available')
     if (leaseFilters.county) q = q.eq('county', leaseFilters.county)
     if (leaseFilters.town) q = q.ilike('town', `%${leaseFilters.town}%`)
-    if (leaseFilters.min_sf) q = q.gte('building_sf', Number(leaseFilters.min_sf))
-    if (leaseFilters.max_sf) q = q.lte('building_sf', Number(leaseFilters.max_sf))
+    // SF filters handled client-side only
     if (leaseFilters.min_rent) q = q.gte('asking_rent', Number(leaseFilters.min_rent))
     if (leaseFilters.max_rent) q = q.lte('asking_rent', Number(leaseFilters.max_rent))
     if (leaseFilters.listed_after) q = q.gte('created_at', leaseFilters.listed_after)
-    return q.order('created_at', {ascending:false}).limit(200)
+    return q.order('created_at', {ascending:false}).limit(2000)
   }
 
   const search = async () => {
@@ -5010,6 +5007,7 @@ export default function App() {
     try{return JSON.parse(localStorage.getItem('opv_verification')||'{}')}catch{return {}}
   })
   const [reports,setReports]=useState<OPVReportData[]>([])
+  const [viewerMode,setViewerMode]=useState(false) // true = loaded someone else's session; suppress auto-save
   const [savedOPVId,setSavedOPVId]=useState<string|null>(()=>{
     if(typeof window==='undefined') return null
     return localStorage.getItem('opv_saved_id')||null
@@ -5153,6 +5151,7 @@ export default function App() {
 
   const saveReport=async(silent=false)=>{
     if(!subject){if(!silent)alert('Enter a subject property address first.');return}
+    if(!silent) setViewerMode(false) // manual save takes ownership; re-enable auto-save
     setSaving(true)
     try {
       const res = await fetch('/api/opv-history',{
@@ -5170,11 +5169,14 @@ export default function App() {
     setSaving(false)
   }
 
-  // Auto-save every 30 seconds when a subject property exists
+  // Auto-save every 30 seconds — skip in viewerMode so viewer doesn't overwrite editor's changes
+  const viewerModeRef = useRef(viewerMode)
+  useEffect(() => { viewerModeRef.current = viewerMode }, [viewerMode])
   const saveReportRef = useRef(saveReport)
   useEffect(() => { saveReportRef.current = saveReport })
   useEffect(() => {
     const id = setInterval(() => {
+      if (viewerModeRef.current) return
       if (saveReportRef.current) saveReportRef.current(true)
     }, 30000)
     return () => clearInterval(id)
@@ -5395,7 +5397,7 @@ export default function App() {
                 <div style={{fontSize:11,color:D.textSec,fontWeight:600,marginBottom:6}}>🔗 Load Shared Session</div>
                 <div style={{display:'flex',gap:6}}>
                   <input id="shared-session-input" placeholder="Paste Session ID…" style={{flex:1,background:'rgba(255,255,255,0.06)',border:`1px solid ${D.border}`,borderRadius:6,padding:'6px 10px',fontSize:11,color:D.text,fontFamily:'monospace',outline:'none'}}/>
-                  <button onClick={async()=>{const input=document.getElementById('shared-session-input') as HTMLInputElement;const id=input?.value?.trim();if(!id){alert('Paste a Session ID first');return}await restoreOPV(id);setShowSavedPanel(false)}} style={{background:D.blue,border:'none',color:'#fff',fontSize:11,fontWeight:700,padding:'6px 14px',borderRadius:6,cursor:'pointer',flexShrink:0}}>Load</button>
+                  <button onClick={async()=>{const input=document.getElementById('shared-session-input') as HTMLInputElement;const id=input?.value?.trim();if(!id){alert('Paste a Session ID first');return}setViewerMode(true);await restoreOPV(id);setShowSavedPanel(false)}} style={{background:D.blue,border:'none',color:'#fff',fontSize:11,fontWeight:700,padding:'6px 14px',borderRadius:6,cursor:'pointer',flexShrink:0}}>Load</button>
                 </div>
               </div>
               <div style={{padding:'16px 24px',flex:1}}>
