@@ -4606,22 +4606,22 @@ function OPVReport({subject,comps,leaseComps,leaseAvails=[],avails,analytics,aiT
                 {Photo(`comp_${c.id}`, `/api/street-view?address=${encodeURIComponent(c.address+(c.city?', '+c.city:'')+', NY')}`)}
                 <div style={{border:'1px solid #ccc'}}>
                   <LabelRow label="PROPERTY ADDRESS" value={`${c.address||'—'}${c.city?', '+c.city:''}`}/>
-                  <LabelRow label="BUILDING SIZE" value={fmt(c.building_sf,'',c.building_sf?' SF':'')} shade/>
-                  {c.lot_size_ac&&<LabelRow label="LOT SIZE" value={`${c.lot_size_ac} Acres`}/>}
-                  <LabelRow label="CEILING HEIGHT" value={c.ceiling_height?`${c.ceiling_height} ft`:'—'} shade={!!c.lot_size_ac}/>
-                  <LabelRow label="LOADING DOCKS" value={c.loading_docks||'—'} shade={!c.lot_size_ac}/>
-                  <LabelRow label="DRIVE INS" value={c.drive_ins||'—'} shade={!!c.lot_size_ac}/>
-                  {c.power&&<LabelRow label="POWER" value={c.power as string} shade={!c.lot_size_ac}/>}
-                  {c.sewer&&<LabelRow label="SEWERS" value={c.sewer} shade={!!c.power}/>}
-                  {(c as any).heat&&<LabelRow label="HEAT" value={(c as any).heat}/>}
-                  {c.zoning&&<LabelRow label="ZONING" value={c.zoning} shade/>}
-                  <LabelRow label="SALE PRICE" value={`${fmt(c.sale_price,'$')}${psf?` ($${Number(psf).toFixed(2)} PSF)`:''}`}/>
-                  <LabelRow label="TRANSACTION DATE" value={c.sale_date?new Date(c.sale_date).toLocaleDateString('en-US',{month:'long',year:'numeric'}):'—'} shade/>
-                  {c.buyer&&<LabelRow label="BUYER" value={c.buyer}/>}
-                  {c.seller&&<LabelRow label="SELLER" value={c.seller} shade/>}
-                  {(c as any).sprinkler&&<LabelRow label="SPRINKLERS" value={(c as any).sprinkler}/>}
-                  {(c as any).parking&&<LabelRow label="PARKING" value={(c as any).parking} shade/>}
-                  {(c as any).re_taxes&&<LabelRow label="REAL ESTATE TAXES" value={(c as any).re_taxes}/>}
+                  <LabelRow label="BUILDING SIZE" value={fmt(c.building_sf,'',c.building_sf?' SF':'')||'—'} shade/>
+                  <LabelRow label="LOT SIZE" value={c.lot_size_ac?`${c.lot_size_ac} Acres`:'—'}/>
+                  <LabelRow label="CEILING HEIGHT" value={c.ceiling_height?`${c.ceiling_height} ft`:'—'} shade/>
+                  <LabelRow label="LOADING DOCKS" value={c.loading_docks||'—'}/>
+                  <LabelRow label="DRIVE INS" value={c.drive_ins||'—'} shade/>
+                  <LabelRow label="POWER" value={(c as any).power?String((c as any).power):'—'}/>
+                  <LabelRow label="SEWERS" value={c.sewer||'—'} shade/>
+                  <LabelRow label="HEAT" value={(c as any).heat?String((c as any).heat):'—'}/>
+                  <LabelRow label="ZONING" value={c.zoning||'—'} shade/>
+                  <LabelRow label="SPRINKLERS" value={(c as any).sprinkler?String((c as any).sprinkler):'—'}/>
+                  <LabelRow label="PARKING" value={(c as any).parking?String((c as any).parking):'—'} shade/>
+                  <LabelRow label="REAL ESTATE TAXES" value={(c as any).re_taxes?String((c as any).re_taxes):'—'}/>
+                  <LabelRow label="SALE PRICE" value={`${fmt(c.sale_price,'$')||'—'}${psf?` ($${Number(psf).toFixed(2)} PSF)`:''}`} shade/>
+                  <LabelRow label="TRANSACTION DATE" value={c.sale_date?new Date(c.sale_date).toLocaleDateString('en-US',{month:'long',year:'numeric'}):'—'}/>
+                  <LabelRow label="BUYER" value={c.buyer||'—'} shade/>
+                  <LabelRow label="SELLER" value={c.seller||'—'}/>
                 </div>
               </div>
             )
@@ -4823,21 +4823,21 @@ function OPVReport({subject,comps,leaseComps,leaseAvails=[],avails,analytics,aiT
                   {Photo(`avail_${a.id}`, `/api/street-view?address=${encodeURIComponent(a.address+(a.city?', '+a.city:'')+', NY')}`)}
                   <div style={{border:'1px solid #ccc'}}>
                     <LabelRow label="PROPERTY ADDRESS" value={`${a.address||'—'}${a.city?', '+a.city:''}`}/>
-                    <LabelRow label="BUILDING SIZE" value={fmt(a.building_sf,'',a.building_sf?' SF':'')} shade/>
-                    {a.lot_size_ac&&<LabelRow label="LOT SIZE" value={`${a.lot_size_ac} Acres`}/>}
-                    <LabelRow label="CEILING HEIGHT" value={a.ceiling_height?`${a.ceiling_height} ft`:'—'} shade={!!a.lot_size_ac}/>
-                    <LabelRow label="LOADING DOCKS" value={a.loading_docks||'—'} shade={!a.lot_size_ac}/>
-                    <LabelRow label="DRIVE INS" value={a.drive_ins||'—'} shade={!!a.lot_size_ac}/>
-                    {a.power&&<LabelRow label="POWER" value={a.power}/>}
-                    {a.sewer&&<LabelRow label="SEWERS" value={a.sewer} shade/>}
-                    {(a as any).heat&&<LabelRow label="HEAT" value={(a as any).heat}/>}
-                    {a.zoning&&<LabelRow label="ZONING" value={a.zoning} shade={!!(a as any).heat}/>}
-                    {(a as any).sprinkler&&<LabelRow label="SPRINKLERS" value={(a as any).sprinkler}/>}
-                    {(a as any).parking&&<LabelRow label="PARKING" value={(a as any).parking} shade/>}
-                    <LabelRow label="ASKING PRICE" value={a.asking_price?`$${Number(a.asking_price).toLocaleString()}`:'—'} shade={!!(a as any).parking}/>
+                    <LabelRow label="BUILDING SIZE" value={fmt(a.building_sf,'',a.building_sf?' SF':'')||'—'} shade/>
+                    <LabelRow label="LOT SIZE" value={a.lot_size_ac?`${a.lot_size_ac} Acres`:'—'}/>
+                    <LabelRow label="CEILING HEIGHT" value={a.ceiling_height?`${a.ceiling_height} ft`:'—'} shade/>
+                    <LabelRow label="LOADING DOCKS" value={a.loading_docks||'—'}/>
+                    <LabelRow label="DRIVE INS" value={a.drive_ins||'—'} shade/>
+                    <LabelRow label="POWER" value={a.power||'—'}/>
+                    <LabelRow label="SEWERS" value={a.sewer||'—'} shade/>
+                    <LabelRow label="HEAT" value={(a as any).heat?String((a as any).heat):'—'}/>
+                    <LabelRow label="ZONING" value={a.zoning||'—'} shade/>
+                    <LabelRow label="SPRINKLERS" value={(a as any).sprinkler?String((a as any).sprinkler):'—'}/>
+                    <LabelRow label="PARKING" value={(a as any).parking?String((a as any).parking):'—'} shade/>
+                    <LabelRow label="ASKING PRICE" value={a.asking_price?`$${Number(a.asking_price).toLocaleString()}`:'—'}/>
                     <LabelRow label="ASKING $/SF" value={psf?`$${Number(psf).toFixed(2)} PSF`:'—'} shade/>
-                    {a.pricing_guidance&&<LabelRow label="PRICING GUIDANCE" value={a.pricing_guidance}/>}
-                    {(a as any).re_taxes&&<LabelRow label="REAL ESTATE TAXES" value={(a as any).re_taxes} shade/>}
+                    <LabelRow label="PRICING GUIDANCE" value={a.pricing_guidance||'—'}/>
+                    <LabelRow label="REAL ESTATE TAXES" value={(a as any).re_taxes?String((a as any).re_taxes):'—'} shade/>
                   </div>
                 </div>
               )
@@ -5236,7 +5236,23 @@ export default function App() {
       // Restore edited report HTML — prefer DB, fall back to localStorage
       const dbHTML = data.editedReportHTML || null
       const localHTML = (() => { try { return localStorage.getItem(`opv_edited_html_${id}`) } catch { return null } })()
-      setEditedReportHTML(dbHTML || localHTML)
+      const rawHTML = dbHTML || localHTML
+      // Strip LISTING BROKER rows from past frozen reports
+      const cleanHTML = rawHTML ? (() => {
+        try {
+          const parser = new DOMParser()
+          const doc = parser.parseFromString(`<!DOCTYPE html><html><body>${rawHTML}</body></html>`,'text/html')
+          doc.querySelectorAll('div').forEach(el => {
+            if (el.textContent?.trim().toUpperCase() === 'LISTING BROKER') {
+              // Remove the whole row (parent that contains both label and value cells)
+              const row = el.closest('[style]') || el.parentElement
+              if (row && row !== doc.body) row.remove()
+            }
+          })
+          return doc.body.innerHTML
+        } catch { return rawHTML }
+      })() : null
+      setEditedReportHTML(cleanHTML)
 
       setSavedOPVId(id)
       setLastSaved(new Date(data.updatedAt||data.createdAt))
