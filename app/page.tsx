@@ -66,6 +66,8 @@ const css = `
     /* Shrink prop-card photos so full card fits on one page (was 280px) */
     .prop-card .photo-slot-wrap > div{height:180px!important}
     img{max-width:100%!important;height:auto!important}
+    /* Photo slot images: fill their fixed-height container */
+    .photo-slot-wrap > div > img{object-fit:cover!important;width:100%!important;height:100%!important;display:block!important}
     /* Broker headshots: pin size — higher specificity than img rule above */
     .broker-photo{width:140px!important;height:175px!important;object-fit:cover!important;object-position:top!important;flex-shrink:0!important}
     table{width:100%!important;border-collapse:collapse!important}
@@ -2465,7 +2467,11 @@ function CompSearch({subject,comps,setComps,setPage,folders,setFolders}: {subjec
     q = q.order('sale_date', {ascending:false}).limit(200)
     const {data,error} = await q
     if (error) { alert('Search error: ' + error.message); setLoading(false); return }
-    const scored = (data||[]).map((c: Comp) => ({...c, score: subject ? scoreComp(c, subject) : 75}))
+    // Client-side SF filter fallback in case building_sf is stored as text in DB
+    let filtered = data || []
+    if (filters.min_sf) filtered = filtered.filter((c: Comp) => Number(c.building_sf) >= Number(filters.min_sf))
+    if (filters.max_sf) filtered = filtered.filter((c: Comp) => Number(c.building_sf) <= Number(filters.max_sf))
+    const scored = filtered.map((c: Comp) => ({...c, score: subject ? scoreComp(c, subject) : 75}))
     if (subject) scored.sort((a: Comp,b: Comp) => (b.score||0)-(a.score||0))
     setResults(scored); setSearched(true); setLoading(false)
   }
@@ -2697,7 +2703,11 @@ function AvailSearch({subject,avails,setAvails,leaseAvails,setLeaseAvails,setPag
       // Lease mode: query lease_comps where status=Available
       const {data,error} = await buildLeaseAvailQuery()
       if (error) { alert('Search error: ' + error.message); setLoading(false); return }
-      setLeaseResults(data||[]); setSearched(true); setLoading(false)
+      // Client-side SF filter fallback
+      let filtered = data || []
+      if (leaseFilters.min_sf) filtered = filtered.filter((r: any) => Number(r.building_sf) >= Number(leaseFilters.min_sf))
+      if (leaseFilters.max_sf) filtered = filtered.filter((r: any) => Number(r.building_sf) <= Number(leaseFilters.max_sf))
+      setLeaseResults(filtered); setSearched(true); setLoading(false)
     } else {
       // Sale mode: query market_availabilities
       if (!statusColReady) await fetch('/api/status').catch(()=>{})
@@ -2707,7 +2717,11 @@ function AvailSearch({subject,avails,setAvails,leaseAvails,setLeaseAvails,setPag
         data = result.data; error = result.error
       }
       if (error) { alert('Search error: ' + error.message); setLoading(false); return }
-      setResults(data||[]); setSearched(true); setLoading(false)
+      // Client-side SF filter fallback
+      let filtered = data || []
+      if (filters.min_sf) filtered = filtered.filter((r: any) => Number(r.building_sf) >= Number(filters.min_sf))
+      if (filters.max_sf) filtered = filtered.filter((r: any) => Number(r.building_sf) <= Number(filters.max_sf))
+      setResults(filtered); setSearched(true); setLoading(false)
     }
   }
 
@@ -4589,7 +4603,10 @@ function OPVReport({subject,comps,leaseComps,leaseAvails=[],avails,analytics,aiT
               <div key={c.id} className="prop-card" style={{marginBottom:48,paddingBottom:48,borderBottom:'2px dashed #ddd'}}>
                 <div className="prop-card-header" style={{fontWeight:700,fontSize:14,paddingBottom:8,borderBottom:`2px solid ${gold}`,marginBottom:16,display:'flex',justifyContent:'space-between',alignItems:'baseline'}}>
                   <span>COMPARABLE {i+1}  —  {(c.address||'').toUpperCase()}{c.city?', '+c.city.toUpperCase():''}</span>
-                  {psf>0&&<span style={{color:gold,fontSize:16}}>${Number(psf).toFixed(2)}/SF</span>}
+                  <div style={{display:'flex',alignItems:'center',gap:12}}>
+                    {psf>0&&<span style={{color:gold,fontSize:16}}>${Number(psf).toFixed(2)}/SF</span>}
+                    <button className="no-print" onClick={()=>setComps(prev=>prev.filter(x=>x.id!==c.id))} style={{background:'rgba(239,68,68,0.1)',border:'1px solid rgba(239,68,68,0.3)',color:'#ef4444',fontSize:10,fontWeight:600,padding:'3px 8px',borderRadius:4,cursor:'pointer',lineHeight:1.4}}>✕ Remove</button>
+                  </div>
                 </div>
                 {Photo(`comp_${c.id}`, `/api/street-view?address=${encodeURIComponent(c.address+(c.city?', '+c.city:'')+', NY')}`)}
                 <div style={{border:'1px solid #ccc'}}>
@@ -4607,6 +4624,9 @@ function OPVReport({subject,comps,leaseComps,leaseAvails=[],avails,analytics,aiT
                   <LabelRow label="TRANSACTION DATE" value={c.sale_date?new Date(c.sale_date).toLocaleDateString('en-US',{month:'long',year:'numeric'}):'—'} shade/>
                   {c.buyer&&<LabelRow label="BUYER" value={c.buyer}/>}
                   {c.seller&&<LabelRow label="SELLER" value={c.seller} shade/>}
+                  {(c as any).sprinkler&&<LabelRow label="SPRINKLERS" value={(c as any).sprinkler}/>}
+                  {(c as any).parking&&<LabelRow label="PARKING" value={(c as any).parking} shade/>}
+                  {(c as any).re_taxes&&<LabelRow label="REAL ESTATE TAXES" value={(c as any).re_taxes}/>}
                 </div>
               </div>
             )
@@ -4803,7 +4823,10 @@ function OPVReport({subject,comps,leaseComps,leaseAvails=[],avails,analytics,aiT
                 <div key={a.id} className="prop-card" style={{marginBottom:48,paddingBottom:48,borderBottom:'2px dashed #ddd'}}>
                   <div className="prop-card-header" style={{fontWeight:700,fontSize:14,paddingBottom:8,borderBottom:`2px solid ${gold}`,marginBottom:16,display:'flex',justifyContent:'space-between',alignItems:'baseline'}}>
                     <span>AVAILABILITY {i+1}  —  {(a.address||'').toUpperCase()}{a.city?', '+a.city.toUpperCase():''}</span>
-                    {psf>0&&<span style={{color:'#3b82f6',fontSize:16}}>${Number(psf).toFixed(2)}/SF</span>}
+                    <div style={{display:'flex',alignItems:'center',gap:12}}>
+                      {psf>0&&<span style={{color:'#3b82f6',fontSize:16}}>${Number(psf).toFixed(2)}/SF</span>}
+                      <button className="no-print" onClick={()=>setAvails(prev=>prev.filter(x=>x.id!==a.id))} style={{background:'rgba(239,68,68,0.1)',border:'1px solid rgba(239,68,68,0.3)',color:'#ef4444',fontSize:10,fontWeight:600,padding:'3px 8px',borderRadius:4,cursor:'pointer',lineHeight:1.4}}>✕ Remove</button>
+                    </div>
                   </div>
                   {Photo(`avail_${a.id}`, `/api/street-view?address=${encodeURIComponent(a.address+(a.city?', '+a.city:'')+', NY')}`)}
                   <div style={{border:'1px solid #ccc'}}>
@@ -4815,10 +4838,14 @@ function OPVReport({subject,comps,leaseComps,leaseAvails=[],avails,analytics,aiT
                     <LabelRow label="DRIVE INS" value={a.drive_ins||'—'} shade={!!a.lot_size_ac}/>
                     {a.power&&<LabelRow label="POWER" value={a.power}/>}
                     {a.sewer&&<LabelRow label="SEWERS" value={a.sewer} shade/>}
-                    <LabelRow label="ASKING PRICE" value={a.asking_price?`$${Number(a.asking_price).toLocaleString()}`:'—'} shade={!a.sewer}/>
+                    {(a as any).heat&&<LabelRow label="HEAT" value={(a as any).heat}/>}
+                    {a.zoning&&<LabelRow label="ZONING" value={a.zoning} shade={!!(a as any).heat}/>}
+                    {(a as any).sprinkler&&<LabelRow label="SPRINKLERS" value={(a as any).sprinkler}/>}
+                    {(a as any).parking&&<LabelRow label="PARKING" value={(a as any).parking} shade/>}
+                    <LabelRow label="ASKING PRICE" value={a.asking_price?`$${Number(a.asking_price).toLocaleString()}`:'—'} shade={!!(a as any).parking}/>
                     <LabelRow label="ASKING $/SF" value={psf?`$${Number(psf).toFixed(2)} PSF`:'—'} shade/>
                     {a.pricing_guidance&&<LabelRow label="PRICING GUIDANCE" value={a.pricing_guidance}/>}
-                    {a.listing_broker&&<LabelRow label="LISTING BROKER" value={a.listing_broker} shade/>}
+                    {(a as any).re_taxes&&<LabelRow label="REAL ESTATE TAXES" value={(a as any).re_taxes} shade/>}
                   </div>
                 </div>
               )
@@ -5148,14 +5175,43 @@ export default function App() {
     setSaving(false)
   }
 
-  // Auto-save every 2 minutes when a subject property exists
+  // Auto-save every 30 seconds when a subject property exists
   const saveReportRef = useRef(saveReport)
   useEffect(() => { saveReportRef.current = saveReport })
   useEffect(() => {
     const id = setInterval(() => {
       if (saveReportRef.current) saveReportRef.current(true)
-    }, 120000)
+    }, 30000)
     return () => clearInterval(id)
+  }, [])
+
+  // Real-time sync: poll every 30s; if DB updated_at is newer than our lastSaved, reload
+  const lastSavedRef = useRef(lastSaved)
+  const savedOPVIdRef = useRef(savedOPVId)
+  useEffect(() => { lastSavedRef.current = lastSaved }, [lastSaved])
+  useEffect(() => { savedOPVIdRef.current = savedOPVId }, [savedOPVId])
+  const isSyncingRef = useRef(false)
+  useEffect(() => {
+    const id = setInterval(async () => {
+      const currentId = savedOPVIdRef.current
+      if (!currentId || isSyncingRef.current) return
+      try {
+        const res = await fetch('/api/opv-history')
+        const data = await res.json()
+        const record = (data.reports || []).find((r: any) => r.id === currentId)
+        if (!record) return
+        const dbUpdated = new Date(record.updated_at)
+        const ourSaved = lastSavedRef.current
+        // Only reload if DB is more than 5s newer (avoids reloading our own just-saved changes)
+        if (ourSaved && dbUpdated.getTime() > ourSaved.getTime() + 5000) {
+          isSyncingRef.current = true
+          await restoreOPV(currentId)
+          isSyncingRef.current = false
+        }
+      } catch { /* network error — ignore */ }
+    }, 30000)
+    return () => clearInterval(id)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const restoreOPV=async(id:string)=>{
@@ -5332,8 +5388,21 @@ export default function App() {
               </div>
               {savedOPVId&&<div style={{padding:'12px 24px',background:`rgba(16,185,129,0.08)`,borderBottom:`1px solid ${D.border}`}}>
                 <div style={{fontSize:11,color:D.green,fontWeight:600,marginBottom:2}}>✓ Current session is saved</div>
-                <div style={{fontSize:11,color:D.textSec}}>{lastSaved?`Last saved ${lastSaved.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'})}`:'Saved'} · ID: {savedOPVId.slice(0,8)}…</div>
+                <div style={{fontSize:11,color:D.textSec,marginBottom:8}}>{lastSaved?`Last saved ${lastSaved.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'})}`:'Saved'} · auto-syncs every 30s</div>
+                <div style={{display:'flex',alignItems:'center',gap:6,background:'rgba(0,0,0,0.15)',borderRadius:6,padding:'6px 8px'}}>
+                  <span style={{fontSize:10,color:D.textMuted,flexShrink:0}}>Session ID:</span>
+                  <span style={{fontSize:10,fontFamily:'monospace',color:D.text,flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{savedOPVId}</span>
+                  <button onClick={()=>{navigator.clipboard.writeText(savedOPVId);alert('Session ID copied! Share it so others can load this OPV.')}} style={{background:D.blue,border:'none',color:'#fff',fontSize:9,fontWeight:700,padding:'3px 7px',borderRadius:4,cursor:'pointer',flexShrink:0}}>COPY</button>
+                </div>
               </div>}
+              {/* Load by Session ID */}
+              <div style={{padding:'12px 24px',borderBottom:`1px solid ${D.border}`}}>
+                <div style={{fontSize:11,color:D.textSec,fontWeight:600,marginBottom:6}}>🔗 Load Shared Session</div>
+                <div style={{display:'flex',gap:6}}>
+                  <input id="shared-session-input" placeholder="Paste Session ID…" style={{flex:1,background:'rgba(255,255,255,0.06)',border:`1px solid ${D.border}`,borderRadius:6,padding:'6px 10px',fontSize:11,color:D.text,fontFamily:'monospace',outline:'none'}}/>
+                  <button onClick={async()=>{const input=document.getElementById('shared-session-input') as HTMLInputElement;const id=input?.value?.trim();if(!id){alert('Paste a Session ID first');return}await restoreOPV(id);setShowSavedPanel(false)}} style={{background:D.blue,border:'none',color:'#fff',fontSize:11,fontWeight:700,padding:'6px 14px',borderRadius:6,cursor:'pointer',flexShrink:0}}>Load</button>
+                </div>
+              </div>
               <div style={{padding:'16px 24px',flex:1}}>
                 {savedOPVs.length===0&&<div style={{textAlign:'center' as const,padding:'48px 20px',color:D.textSec,fontSize:13}}>
                   <div style={{fontSize:36,opacity:.2,marginBottom:12}}>📂</div>
