@@ -4781,18 +4781,18 @@ function OPVReport({subject,comps,leaseComps,leaseAvails=[],avails,analytics,aiT
                 {Photo(`lease_avail_${a.id}`, `/api/street-view?address=${encodeURIComponent(a.address+(a.town?', '+a.town:'')+', NY')}`)}
                 <div style={{border:'1px solid #ccc'}}>
                   <LabelRow label="PROPERTY ADDRESS" value={`${a.address||'—'}${a.town?', '+a.town:''}`}/>
-                  <LabelRow label="BUILDING SIZE" value={fmt(a.building_sf,'',a.building_sf?' SF':'')} shade/>
-                  {a.lot_size_ac&&<LabelRow label="LOT SIZE" value={`${a.lot_size_ac} Acres`}/>}
-                  <LabelRow label="CEILING HEIGHT" value={a.ceiling_height?`${a.ceiling_height} ft`:'—'} shade={!!a.lot_size_ac}/>
-                  <LabelRow label="LOADING DOCKS" value={a.loading_docks||'—'} shade={!a.lot_size_ac}/>
-                  <LabelRow label="DRIVE-INS" value={a.drive_ins||'—'} shade={!!a.lot_size_ac}/>
-                  {(a as any).power&&<LabelRow label="POWER" value={String((a as any).power)}/>}
-                  {(a as any).sprinkler&&<LabelRow label="SPRINKLERS" value={String((a as any).sprinkler)} shade/>}
-                  {(a as any).parking&&<LabelRow label="PARKING" value={String((a as any).parking)}/>}
+                  <LabelRow label="BUILDING SIZE" value={fmt(a.building_sf,'',a.building_sf?' SF':'')||'—'} shade/>
+                  <LabelRow label="LOT SIZE" value={a.lot_size_ac?`${a.lot_size_ac} Acres`:'—'}/>
+                  <LabelRow label="CEILING HEIGHT" value={a.ceiling_height?`${a.ceiling_height} ft`:'—'} shade/>
+                  <LabelRow label="LOADING DOCKS" value={a.loading_docks||'—'}/>
+                  <LabelRow label="DRIVE-INS" value={a.drive_ins||'—'} shade/>
+                  <LabelRow label="POWER" value={(a as any).power?String((a as any).power):'—'}/>
+                  <LabelRow label="SPRINKLERS" value={(a as any).sprinkler?String((a as any).sprinkler):'—'} shade/>
+                  <LabelRow label="PARKING" value={(a as any).parking?String((a as any).parking):'—'}/>
                   <LabelRow label="ASKING RENT" value={a.asking_rent?`$${Number(a.asking_rent).toFixed(2)}/SF/yr`:'—'} shade/>
-                  {a.rent_type&&<LabelRow label="RENT TYPE" value={String(a.rent_type)}/>}
-                  {a.taxes&&<LabelRow label="TAXES" value={`$${Number(a.taxes).toFixed(2)}/SF`} shade/>}
-                  {a.landlord&&<LabelRow label="LANDLORD" value={String(a.landlord)}/>}
+                  <LabelRow label="RENT TYPE" value={a.rent_type?String(a.rent_type):'—'}/>
+                  <LabelRow label="TAXES" value={a.taxes?`$${Number(a.taxes).toFixed(2)}/SF`:'—'} shade/>
+                  <LabelRow label="LANDLORD" value={a.landlord?String(a.landlord):'—'}/>
                   {a.notes&&<LabelRow label="NOTES" value={String(a.notes)} shade/>}
                 </div>
               </div>
