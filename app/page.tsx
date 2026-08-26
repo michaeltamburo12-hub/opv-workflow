@@ -715,6 +715,7 @@ function FolderManager({folders, setFolders, setPage, comps, setComps, avails, s
                           <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:5}}>
                             <div style={{fontSize:13,fontWeight:600,color:D.text}}>{item.address}{(item as Comp).city?`, ${(item as Comp).city}`:''}</div>
                             {alreadyInOPV&&<Tag color={D.green}>✓ In OPV</Tag>}
+                            {alreadyInOPV&&<button onClick={e=>{e.stopPropagation();if(active.type==='comps')setComps(comps.filter(x=>x.id!==item.id));else if(active.type==='lease-comps')setLeaseComps(leaseComps.filter(x=>x.id!==item.id));else if(active.type==='lease-avails')setLeaseAvails(leaseAvails.filter(x=>x.id!==item.id));else setAvails(avails.filter(x=>x.id!==item.id))}} style={{background:'rgba(239,68,68,0.12)',border:'1px solid rgba(239,68,68,0.35)',color:'#ef4444',fontSize:9,fontWeight:700,padding:'2px 7px',borderRadius:4,cursor:'pointer',lineHeight:1.5,flexShrink:0}}>✕ Remove from OPV</button>}
                           </div>
                           <div style={{display:'flex',gap:6,flexWrap:'wrap' as const,marginBottom:6}}>
                             {item.building_sf&&<Tag color={D.blue}>{Number(item.building_sf).toLocaleString()} SF</Tag>}
@@ -4603,10 +4604,7 @@ function OPVReport({subject,comps,leaseComps,leaseAvails=[],avails,analytics,aiT
               <div key={c.id} className="prop-card" style={{marginBottom:48,paddingBottom:48,borderBottom:'2px dashed #ddd'}}>
                 <div className="prop-card-header" style={{fontWeight:700,fontSize:14,paddingBottom:8,borderBottom:`2px solid ${gold}`,marginBottom:16,display:'flex',justifyContent:'space-between',alignItems:'baseline'}}>
                   <span>COMPARABLE {i+1}  —  {(c.address||'').toUpperCase()}{c.city?', '+c.city.toUpperCase():''}</span>
-                  <div style={{display:'flex',alignItems:'center',gap:12}}>
-                    {psf>0&&<span style={{color:gold,fontSize:16}}>${Number(psf).toFixed(2)}/SF</span>}
-                    <button className="no-print" onClick={()=>setComps(prev=>prev.filter(x=>x.id!==c.id))} style={{background:'rgba(239,68,68,0.1)',border:'1px solid rgba(239,68,68,0.3)',color:'#ef4444',fontSize:10,fontWeight:600,padding:'3px 8px',borderRadius:4,cursor:'pointer',lineHeight:1.4}}>✕ Remove</button>
-                  </div>
+                  {psf>0&&<span style={{color:gold,fontSize:16}}>${Number(psf).toFixed(2)}/SF</span>}
                 </div>
                 {Photo(`comp_${c.id}`, `/api/street-view?address=${encodeURIComponent(c.address+(c.city?', '+c.city:'')+', NY')}`)}
                 <div style={{border:'1px solid #ccc'}}>
@@ -4823,10 +4821,7 @@ function OPVReport({subject,comps,leaseComps,leaseAvails=[],avails,analytics,aiT
                 <div key={a.id} className="prop-card" style={{marginBottom:48,paddingBottom:48,borderBottom:'2px dashed #ddd'}}>
                   <div className="prop-card-header" style={{fontWeight:700,fontSize:14,paddingBottom:8,borderBottom:`2px solid ${gold}`,marginBottom:16,display:'flex',justifyContent:'space-between',alignItems:'baseline'}}>
                     <span>AVAILABILITY {i+1}  —  {(a.address||'').toUpperCase()}{a.city?', '+a.city.toUpperCase():''}</span>
-                    <div style={{display:'flex',alignItems:'center',gap:12}}>
-                      {psf>0&&<span style={{color:'#3b82f6',fontSize:16}}>${Number(psf).toFixed(2)}/SF</span>}
-                      <button className="no-print" onClick={()=>setAvails(prev=>prev.filter(x=>x.id!==a.id))} style={{background:'rgba(239,68,68,0.1)',border:'1px solid rgba(239,68,68,0.3)',color:'#ef4444',fontSize:10,fontWeight:600,padding:'3px 8px',borderRadius:4,cursor:'pointer',lineHeight:1.4}}>✕ Remove</button>
-                    </div>
+                    {psf>0&&<span style={{color:'#3b82f6',fontSize:16}}>${Number(psf).toFixed(2)}/SF</span>}
                   </div>
                   {Photo(`avail_${a.id}`, `/api/street-view?address=${encodeURIComponent(a.address+(a.city?', '+a.city:'')+', NY')}`)}
                   <div style={{border:'1px solid #ccc'}}>
