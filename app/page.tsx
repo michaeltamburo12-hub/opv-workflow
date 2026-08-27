@@ -3079,16 +3079,18 @@ function LeaseCompSearch({subject,leaseComps,setLeaseComps,setPage,folders,setFo
     let q = supabase.from('lease_comps').select('*')
     if (filters.county) q = q.eq('county', filters.county)
     if (filters.town) q = q.ilike('town', `%${filters.town}%`)
-    if (filters.min_sf) q = q.gte('building_sf', Number(filters.min_sf))
-    if (filters.max_sf) q = q.lte('building_sf', Number(filters.max_sf))
+    // SF filters handled client-side only
     if (filters.min_rent) q = q.gte('deal_rent', Number(filters.min_rent))
     if (filters.max_rent) q = q.lte('deal_rent', Number(filters.max_rent))
     if (filters.min_date) q = q.gte('transaction_date', filters.min_date)
     if (filters.max_date) q = q.lte('transaction_date', filters.max_date)
-    q = q.order('transaction_date', {ascending:false}).limit(200)
+    q = q.order('transaction_date', {ascending:false}).limit(2000)
     const {data,error} = await q
     if (error) { alert('Search error: ' + error.message); setLoading(false); return }
-    setResults(data||[]); setSearched(true); setLoading(false)
+    let filtered = data || []
+    if (filters.min_sf) filtered = filtered.filter((r: any) => Number(r.building_sf) >= Number(filters.min_sf))
+    if (filters.max_sf) filtered = filtered.filter((r: any) => Number(r.building_sf) <= Number(filters.max_sf))
+    setResults(filtered); setSearched(true); setLoading(false)
   }
   const sf = (k:string,v:string) => setFilters(f=>({...f,[k]:v}))
   const sm = (k:string,v:string) => setManual(m=>({...m,[k]:v}))
