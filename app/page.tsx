@@ -4145,6 +4145,23 @@ function OPVReport({subject,comps,leaseComps,leaseAvails=[],avails,analytics,aiT
     clone.querySelectorAll<HTMLElement>('tr, .photo-slot-wrap').forEach(el => {
       el.style.breakInside = 'avoid'; el.style.pageBreakInside = 'avoid'
     })
+    // Force photo containers to clip their images — browsers sometimes ignore overflow:hidden on print
+    clone.querySelectorAll<HTMLElement>('.photo-slot-wrap > div').forEach(el => {
+      el.style.overflow = 'hidden'
+      el.style.position = 'relative'
+      el.style.display = 'block'
+      // Explicitly set print heights (overrides any inline height from live render)
+      const isInPropCard = el.closest('.prop-card') !== null
+      el.style.height = isInPropCard ? '180px' : '220px'
+    })
+    clone.querySelectorAll<HTMLElement>('.photo-slot-wrap > div > img').forEach(el => {
+      el.style.position = 'absolute'
+      el.style.inset = '0'
+      el.style.width = '100%'
+      el.style.height = '100%'
+      el.style.objectFit = 'cover'
+      el.style.display = 'block'
+    })
     clone.querySelectorAll<HTMLElement>('.sec-heading, .prop-card-header').forEach(el => {
       el.style.breakAfter = 'avoid'; el.style.pageBreakAfter = 'avoid'
     })
@@ -5182,11 +5199,12 @@ export default function App() {
     return () => clearInterval(id)
   }, [])
 
-  // Real-time sync: poll every 30s; if DB updated_at is newer than our lastSaved, reload
-  const lastSavedRef = useRef(lastSaved)
+  // Real-time sync: poll every 10s; compare DB updated_at string directly to detect changes
   const savedOPVIdRef = useRef(savedOPVId)
-  useEffect(() => { lastSavedRef.current = lastSaved }, [lastSaved])
   useEffect(() => { savedOPVIdRef.current = savedOPVId }, [savedOPVId])
+  const restoreOPVRef = useRef(restoreOPV)
+  useEffect(() => { restoreOPVRef.current = restoreOPV })
+  const lastDbUpdatedAtRef = useRef<string|null>(null)
   const isSyncingRef = useRef(false)
   useEffect(() => {
     const id = setInterval(async () => {
@@ -5197,16 +5215,17 @@ export default function App() {
         const data = await res.json()
         const record = (data.reports || []).find((r: any) => r.id === currentId)
         if (!record) return
-        const dbUpdated = new Date(record.updated_at)
-        const ourSaved = lastSavedRef.current
-        // Only reload if DB is more than 5s newer (avoids reloading our own just-saved changes)
-        if (ourSaved && dbUpdated.getTime() > ourSaved.getTime() + 5000) {
+        const dbUpdatedAt: string = record.updated_at
+        const prev = lastDbUpdatedAtRef.current
+        lastDbUpdatedAtRef.current = dbUpdatedAt
+        // If DB timestamp changed AND we're in viewer mode, reload to pick up editor's changes
+        if (prev && dbUpdatedAt !== prev && viewerModeRef.current) {
           isSyncingRef.current = true
-          await restoreOPV(currentId)
+          await restoreOPVRef.current(currentId)
           isSyncingRef.current = false
         }
       } catch { /* network error — ignore */ }
-    }, 30000)
+    }, 10000)
     return () => clearInterval(id)
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
