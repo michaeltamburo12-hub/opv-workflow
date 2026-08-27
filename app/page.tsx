@@ -2467,10 +2467,11 @@ function CompSearch({subject,comps,setComps,setPage,folders,setFolders}: {subjec
     q = q.order('sale_date', {ascending:false}).limit(2000)
     const {data,error} = await q
     if (error) { alert('Search error: ' + error.message); setLoading(false); return }
-    // Client-side SF filter fallback in case building_sf is stored as text in DB
+    // Client-side SF filter — strip commas so "30,000" parses correctly
+    const parseSF = (v: string) => parseFloat(v.replace(/,/g,'').trim()) || 0
     let filtered = data || []
-    if (filters.min_sf) filtered = filtered.filter((c: Comp) => Number(c.building_sf) >= Number(filters.min_sf))
-    if (filters.max_sf) filtered = filtered.filter((c: Comp) => Number(c.building_sf) <= Number(filters.max_sf))
+    if (filters.min_sf && parseSF(filters.min_sf) > 0) filtered = filtered.filter((c: Comp) => Number(c.building_sf) >= parseSF(filters.min_sf))
+    if (filters.max_sf && parseSF(filters.max_sf) > 0) filtered = filtered.filter((c: Comp) => Number(c.building_sf) <= parseSF(filters.max_sf))
     const scored = filtered.map((c: Comp) => ({...c, score: subject ? scoreComp(c, subject) : 75}))
     if (subject) scored.sort((a: Comp,b: Comp) => (b.score||0)-(a.score||0))
     setResults(scored); setSearched(true); setLoading(false)
@@ -2499,8 +2500,8 @@ function CompSearch({subject,comps,setComps,setPage,folders,setFolders}: {subjec
             <Field label="County"><Sel value={filters.county} onChange={e=>sf('county',e.target.value)}><option value="">All Counties</option>{COUNTIES.map(c=><option key={c}>{c}</option>)}</Sel></Field>
             <Field label="City"><Input placeholder="e.g. Hauppauge" value={filters.city} onChange={e=>sf('city',e.target.value)}/></Field>
             <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8}}>
-              <Field label="Min SF"><Input type="number" placeholder="0" value={filters.min_sf} onChange={e=>sf('min_sf',e.target.value)}/></Field>
-              <Field label="Max SF"><Input type="number" placeholder="Any" value={filters.max_sf} onChange={e=>sf('max_sf',e.target.value)}/></Field>
+              <Field label="Min SF"><Input type="text" placeholder="e.g. 10000" value={filters.min_sf} onChange={e=>sf('min_sf',e.target.value)}/></Field>
+              <Field label="Max SF"><Input type="text" placeholder="e.g. 50000" value={filters.max_sf} onChange={e=>sf('max_sf',e.target.value)}/></Field>
               <Field label="Min Price"><Input type="number" placeholder="0" value={filters.min_price} onChange={e=>sf('min_price',e.target.value)}/></Field>
               <Field label="Max Price"><Input type="number" placeholder="Any" value={filters.max_price} onChange={e=>sf('max_price',e.target.value)}/></Field>
             </div>
@@ -2701,10 +2702,11 @@ function AvailSearch({subject,avails,setAvails,leaseAvails,setLeaseAvails,setPag
       // Lease mode: query lease_comps where status=Available
       const {data,error} = await buildLeaseAvailQuery()
       if (error) { alert('Search error: ' + error.message); setLoading(false); return }
-      // Client-side SF filter fallback
+      // Client-side SF filter — strip commas so "30,000" parses correctly
+      const parseSFa = (v: string) => parseFloat(v.replace(/,/g,'').trim()) || 0
       let filtered = data || []
-      if (leaseFilters.min_sf) filtered = filtered.filter((r: any) => Number(r.building_sf) >= Number(leaseFilters.min_sf))
-      if (leaseFilters.max_sf) filtered = filtered.filter((r: any) => Number(r.building_sf) <= Number(leaseFilters.max_sf))
+      if (leaseFilters.min_sf && parseSFa(leaseFilters.min_sf) > 0) filtered = filtered.filter((r: any) => Number(r.building_sf) >= parseSFa(leaseFilters.min_sf))
+      if (leaseFilters.max_sf && parseSFa(leaseFilters.max_sf) > 0) filtered = filtered.filter((r: any) => Number(r.building_sf) <= parseSFa(leaseFilters.max_sf))
       setLeaseResults(filtered); setSearched(true); setLoading(false)
     } else {
       // Sale mode: query market_availabilities
@@ -2715,10 +2717,11 @@ function AvailSearch({subject,avails,setAvails,leaseAvails,setLeaseAvails,setPag
         data = result.data; error = result.error
       }
       if (error) { alert('Search error: ' + error.message); setLoading(false); return }
-      // Client-side SF filter fallback
+      // Client-side SF filter — strip commas so "30,000" parses correctly
+      const parseSFb = (v: string) => parseFloat(v.replace(/,/g,'').trim()) || 0
       let filtered = data || []
-      if (filters.min_sf) filtered = filtered.filter((r: any) => Number(r.building_sf) >= Number(filters.min_sf))
-      if (filters.max_sf) filtered = filtered.filter((r: any) => Number(r.building_sf) <= Number(filters.max_sf))
+      if (filters.min_sf && parseSFb(filters.min_sf) > 0) filtered = filtered.filter((r: any) => Number(r.building_sf) >= parseSFb(filters.min_sf))
+      if (filters.max_sf && parseSFb(filters.max_sf) > 0) filtered = filtered.filter((r: any) => Number(r.building_sf) <= parseSFb(filters.max_sf))
       setResults(filtered); setSearched(true); setLoading(false)
     }
   }
@@ -2797,8 +2800,8 @@ function AvailSearch({subject,avails,setAvails,leaseAvails,setLeaseAvails,setPag
                 <Field label="County"><Sel value={leaseFilters.county} onChange={e=>setLeaseFilters(f=>({...f,county:e.target.value}))}><option value="">All Counties</option>{COUNTIES.map(c=><option key={c}>{c}</option>)}</Sel></Field>
                 <Field label="Town"><Input placeholder="e.g. Hauppauge" value={leaseFilters.town} onChange={e=>setLeaseFilters(f=>({...f,town:e.target.value}))}/></Field>
                 <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8}}>
-                  <Field label="Min SF"><Input type="number" placeholder="0" value={leaseFilters.min_sf} onChange={e=>setLeaseFilters(f=>({...f,min_sf:e.target.value}))}/></Field>
-                  <Field label="Max SF"><Input type="number" placeholder="Any" value={leaseFilters.max_sf} onChange={e=>setLeaseFilters(f=>({...f,max_sf:e.target.value}))}/></Field>
+                  <Field label="Min SF"><Input type="text" placeholder="e.g. 10000" value={leaseFilters.min_sf} onChange={e=>setLeaseFilters(f=>({...f,min_sf:e.target.value}))}/></Field>
+                  <Field label="Max SF"><Input type="text" placeholder="e.g. 50000" value={leaseFilters.max_sf} onChange={e=>setLeaseFilters(f=>({...f,max_sf:e.target.value}))}/></Field>
                   <Field label="Min Rent ($/SF)"><Input type="number" placeholder="0" value={leaseFilters.min_rent} onChange={e=>setLeaseFilters(f=>({...f,min_rent:e.target.value}))}/></Field>
                   <Field label="Max Rent ($/SF)"><Input type="number" placeholder="Any" value={leaseFilters.max_rent} onChange={e=>setLeaseFilters(f=>({...f,max_rent:e.target.value}))}/></Field>
                 </div>
@@ -2810,8 +2813,8 @@ function AvailSearch({subject,avails,setAvails,leaseAvails,setLeaseAvails,setPag
                 <Field label="County"><Sel value={filters.county} onChange={e=>sf('county',e.target.value)}><option value="">All Counties</option>{COUNTIES.map(c=><option key={c}>{c}</option>)}</Sel></Field>
                 <Field label="City"><Input placeholder="e.g. Hauppauge" value={filters.city} onChange={e=>sf('city',e.target.value)}/></Field>
                 <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8}}>
-                  <Field label="Min SF"><Input type="number" placeholder="0" value={filters.min_sf} onChange={e=>sf('min_sf',e.target.value)}/></Field>
-                  <Field label="Max SF"><Input type="number" placeholder="Any" value={filters.max_sf} onChange={e=>sf('max_sf',e.target.value)}/></Field>
+                  <Field label="Min SF"><Input type="text" placeholder="e.g. 10000" value={filters.min_sf} onChange={e=>sf('min_sf',e.target.value)}/></Field>
+                  <Field label="Max SF"><Input type="text" placeholder="e.g. 50000" value={filters.max_sf} onChange={e=>sf('max_sf',e.target.value)}/></Field>
                   <Field label="Min Price"><Input type="number" placeholder="0" value={filters.min_price} onChange={e=>sf('min_price',e.target.value)}/></Field>
                   <Field label="Max Price"><Input type="number" placeholder="Any" value={filters.max_price} onChange={e=>sf('max_price',e.target.value)}/></Field>
                 </div>
@@ -3087,9 +3090,11 @@ function LeaseCompSearch({subject,leaseComps,setLeaseComps,setPage,folders,setFo
     q = q.order('transaction_date', {ascending:false}).limit(2000)
     const {data,error} = await q
     if (error) { alert('Search error: ' + error.message); setLoading(false); return }
+    // Client-side SF filter — strip commas so "30,000" parses correctly
+    const parseSFc = (v: string) => parseFloat(v.replace(/,/g,'').trim()) || 0
     let filtered = data || []
-    if (filters.min_sf) filtered = filtered.filter((r: any) => Number(r.building_sf) >= Number(filters.min_sf))
-    if (filters.max_sf) filtered = filtered.filter((r: any) => Number(r.building_sf) <= Number(filters.max_sf))
+    if (filters.min_sf && parseSFc(filters.min_sf) > 0) filtered = filtered.filter((r: any) => Number(r.building_sf) >= parseSFc(filters.min_sf))
+    if (filters.max_sf && parseSFc(filters.max_sf) > 0) filtered = filtered.filter((r: any) => Number(r.building_sf) <= parseSFc(filters.max_sf))
     setResults(filtered); setSearched(true); setLoading(false)
   }
   const sf = (k:string,v:string) => setFilters(f=>({...f,[k]:v}))
@@ -3114,8 +3119,8 @@ function LeaseCompSearch({subject,leaseComps,setLeaseComps,setPage,folders,setFo
             <Field label="County"><Sel value={filters.county} onChange={e=>sf('county',e.target.value)}><option value="">All Counties</option>{COUNTIES.map(c=><option key={c}>{c}</option>)}</Sel></Field>
             <Field label="Town"><Input placeholder="e.g. Hauppauge" value={filters.town} onChange={e=>sf('town',e.target.value)}/></Field>
             <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8}}>
-              <Field label="Min SF"><Input type="number" placeholder="0" value={filters.min_sf} onChange={e=>sf('min_sf',e.target.value)}/></Field>
-              <Field label="Max SF"><Input type="number" placeholder="Any" value={filters.max_sf} onChange={e=>sf('max_sf',e.target.value)}/></Field>
+              <Field label="Min SF"><Input type="text" placeholder="e.g. 10000" value={filters.min_sf} onChange={e=>sf('min_sf',e.target.value)}/></Field>
+              <Field label="Max SF"><Input type="text" placeholder="e.g. 50000" value={filters.max_sf} onChange={e=>sf('max_sf',e.target.value)}/></Field>
               <Field label="Min Deal Rent ($/SF)"><Input type="number" placeholder="0" value={filters.min_rent} onChange={e=>sf('min_rent',e.target.value)}/></Field>
               <Field label="Max Deal Rent ($/SF)"><Input type="number" placeholder="Any" value={filters.max_rent} onChange={e=>sf('max_rent',e.target.value)}/></Field>
             </div>
