@@ -5202,7 +5202,8 @@ export default function App() {
   // Real-time sync: poll every 10s; compare DB updated_at string directly to detect changes
   const savedOPVIdRef = useRef(savedOPVId)
   useEffect(() => { savedOPVIdRef.current = savedOPVId }, [savedOPVId])
-  const restoreOPVRef = useRef(restoreOPV)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const restoreOPVRef = useRef<(id: string) => Promise<void>>(async () => {})
   useEffect(() => { restoreOPVRef.current = restoreOPV })
   const lastDbUpdatedAtRef = useRef<string|null>(null)
   const isSyncingRef = useRef(false)
