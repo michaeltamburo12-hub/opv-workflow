@@ -95,12 +95,13 @@ export async function POST(req: NextRequest) {
   if (existingId) {
     const { error } = await supabaseAdmin.from(TABLE).update(payload).eq('id', existingId)
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-    return NextResponse.json({ id: existingId })
+    const { data: saved } = await supabaseAdmin.from(TABLE).select('updated_at').eq('id', existingId).single()
+    return NextResponse.json({ id: existingId, updated_at: saved?.updated_at })
   }
 
   const { data, error } = await supabaseAdmin.from(TABLE).insert(payload).select().single()
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  return NextResponse.json({ id: data?.id })
+  return NextResponse.json({ id: data?.id, updated_at: data?.updated_at })
 }
 
 // DELETE — remove a saved OPV

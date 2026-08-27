@@ -5031,7 +5031,6 @@ export default function App() {
     try{return JSON.parse(localStorage.getItem('opv_verification')||'{}')}catch{return {}}
   })
   const [reports,setReports]=useState<OPVReportData[]>([])
-  const [viewerMode,setViewerMode]=useState(false) // true = loaded someone else's session; suppress auto-save
   const [savedOPVId,setSavedOPVId]=useState<string|null>(()=>{
     if(typeof window==='undefined') return null
     return localStorage.getItem('opv_saved_id')||null
@@ -5175,7 +5174,6 @@ export default function App() {
 
   const saveReport=async(silent=false)=>{
     if(!subject){if(!silent)alert('Enter a subject property address first.');return}
-    if(!silent) setViewerMode(false) // manual save takes ownership; re-enable auto-save
     setSaving(true)
     try {
       const res = await fetch('/api/opv-history',{
@@ -5187,26 +5185,28 @@ export default function App() {
       if(data.error) throw new Error(data.error)
       setSavedOPVId(data.id)
       setLastSaved(new Date())
+      // Record exact DB timestamp so poll knows this was OUR save (won't trigger reload)
+      if(data.updated_at) lastDbUpdatedAtRef.current = data.updated_at
       setReports(r=>[{id:Date.now(),subject,comps,avails,analytics,date:new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})},...r])
       if(!silent) alert('✓ OPV progress saved.')
     } catch(e) { if(!silent) alert('Save failed: '+(e as Error).message) }
     setSaving(false)
   }
 
-  // Auto-save every 30 seconds — skip in viewerMode so viewer doesn't overwrite editor's changes
-  const viewerModeRef = useRef(viewerMode)
-  useEffect(() => { viewerModeRef.current = viewerMode }, [viewerMode])
+  // Auto-save every 30 seconds — any device can edit; skip cycles after a poll-triggered reload
+  // to avoid a save-loop (reload → auto-save → another device reloads → auto-save → …)
   const saveReportRef = useRef(saveReport)
   useEffect(() => { saveReportRef.current = saveReport })
+  const skipAutoSaveCountRef = useRef(0)
   useEffect(() => {
     const id = setInterval(() => {
-      if (viewerModeRef.current) return
+      if (skipAutoSaveCountRef.current > 0) { skipAutoSaveCountRef.current--; return }
       if (saveReportRef.current) saveReportRef.current(true)
     }, 30000)
     return () => clearInterval(id)
   }, [])
 
-  // Real-time sync: poll every 10s; compare DB updated_at string directly to detect changes
+  // Real-time sync: poll every 10s; if DB updated_at changed (someone else saved), reload
   const savedOPVIdRef = useRef(savedOPVId)
   useEffect(() => { savedOPVIdRef.current = savedOPVId }, [savedOPVId])
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -5225,11 +5225,13 @@ export default function App() {
         if (!record) return
         const dbUpdatedAt: string = record.updated_at
         const prev = lastDbUpdatedAtRef.current
-        lastDbUpdatedAtRef.current = dbUpdatedAt
-        // If DB timestamp changed AND we're in viewer mode, reload to pick up editor's changes
-        if (prev && dbUpdatedAt !== prev && viewerModeRef.current) {
+        if (!prev) { lastDbUpdatedAtRef.current = dbUpdatedAt; return }
+        if (dbUpdatedAt !== prev) {
+          // Someone else saved — reload and skip our next 2 auto-saves to break the loop
           isSyncingRef.current = true
           await restoreOPVRef.current(currentId)
+          lastDbUpdatedAtRef.current = dbUpdatedAt
+          skipAutoSaveCountRef.current = 2
           isSyncingRef.current = false
         }
       } catch { /* network error — ignore */ }
@@ -5440,7 +5442,7 @@ export default function App() {
                 <div style={{fontSize:11,color:D.textSec,fontWeight:600,marginBottom:6}}>🔗 Load Shared Session</div>
                 <div style={{display:'flex',gap:6}}>
                   <input id="shared-session-input" placeholder="Paste Session ID…" style={{flex:1,background:'rgba(255,255,255,0.06)',border:`1px solid ${D.border}`,borderRadius:6,padding:'6px 10px',fontSize:11,color:D.text,fontFamily:'monospace',outline:'none'}}/>
-                  <button onClick={async()=>{const input=document.getElementById('shared-session-input') as HTMLInputElement;const id=input?.value?.trim();if(!id){alert('Paste a Session ID first');return}setViewerMode(true);await restoreOPV(id);setShowSavedPanel(false)}} style={{background:D.blue,border:'none',color:'#fff',fontSize:11,fontWeight:700,padding:'6px 14px',borderRadius:6,cursor:'pointer',flexShrink:0}}>Load</button>
+                  <button onClick={async()=>{const input=document.getElementById('shared-session-input') as HTMLInputElement;const id=input?.value?.trim();if(!id){alert('Paste a Session ID first');return}await restoreOPV(id);setShowSavedPanel(false)}} style={{background:D.blue,border:'none',color:'#fff',fontSize:11,fontWeight:700,padding:'6px 14px',borderRadius:6,cursor:'pointer',flexShrink:0}}>Load</button>
                 </div>
               </div>
               <div style={{padding:'16px 24px',flex:1}}>
