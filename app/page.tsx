@@ -1232,11 +1232,11 @@ function DatabaseManager() {
   const setPS = (k:string,v:string) => setPcreSaleForm(f=>({...f,[k]:v}))
   const setPL = (k:string,v:string) => setPcreLeaseForm(f=>({...f,[k]:v}))
 
-  const blankLeaseComp = {transaction_date:'',address:'',town:'',county:'Nassau',building_sf:'',lot_size_ac:'',office_sf:'',ceiling_height:'',loading_docks:'',drive_ins:'',power:'',sprinkler:'',parking:'',asking_rent:'',deal_rent:'',rent_type:'NNN',taxes:'',lease_term_years:'',rent_concession_months:'',ti_ll_work:'',mgmt_fee_pct:'',escalations:'',tenant:'',landlord:'',status:'Active',notes:''}
+  const blankLeaseComp = {transaction_date:'',address:'',town:'',county:'Nassau',building_sf:'',lot_size_ac:'',office_sf:'',ceiling_height:'',loading_docks:'',drive_ins:'',power:'',heat:'',sprinkler:'',parking:'',sewer:'',zoning:'',asking_rent:'',deal_rent:'',rent_type:'NNN',taxes:'',lease_term_years:'',rent_concession_months:'',ti_ll_work:'',mgmt_fee_pct:'',escalations:'',tenant:'',landlord:'',status:'Active',notes:''}
   const [leaseCompForm, setLeaseCompForm] = useState({...blankLeaseComp})
   const setLC = (k:string,v:string) => setLeaseCompForm(f=>({...f,[k]:v}))
 
-  const blankLeaseAvail = {address:'',town:'',county:'Nassau',building_sf:'',lot_size_ac:'',ceiling_height:'',loading_docks:'',drive_ins:'',power:'',sprinkler:'',parking:'',asking_rent:'',rent_type:'NNN',taxes:'',lease_term_years:'',escalations:'',landlord:'',listing_broker:'',loopnet_url:'',status:'Available',notes:''}
+  const blankLeaseAvail = {address:'',town:'',county:'Nassau',building_sf:'',lot_size_ac:'',ceiling_height:'',loading_docks:'',drive_ins:'',power:'',heat:'',sprinkler:'',parking:'',sewer:'',zoning:'',asking_rent:'',rent_type:'NNN',taxes:'',lease_term_years:'',escalations:'',landlord:'',listing_broker:'',loopnet_url:'',status:'Available',notes:''}
   const [leaseAvailForm, setLeaseAvailForm] = useState({...blankLeaseAvail})
   const setLA = (k:string,v:string) => setLeaseAvailForm(f=>({...f,[k]:v}))
   const pcreSetupAttempted = useRef(false)
@@ -1684,8 +1684,11 @@ function DatabaseManager() {
             <Field label="Loading Docks"><Input value={leaseCompForm.loading_docks} onChange={e=>setLC('loading_docks',e.target.value)}/></Field>
             <Field label="Drive-ins"><Input value={leaseCompForm.drive_ins} onChange={e=>setLC('drive_ins',e.target.value)}/></Field>
             <Field label="Power"><Input placeholder="200A / 3-Phase" value={leaseCompForm.power} onChange={e=>setLC('power',e.target.value)}/></Field>
+            <Field label="Heat"><Input placeholder="Gas / Electric" value={leaseCompForm.heat} onChange={e=>setLC('heat',e.target.value)}/></Field>
             <Field label="Sprinkler System"><Input placeholder="ESFR / Wet Pipe" value={leaseCompForm.sprinkler} onChange={e=>setLC('sprinkler',e.target.value)}/></Field>
             <Field label="Parking"><Input placeholder="50 spaces" value={leaseCompForm.parking} onChange={e=>setLC('parking',e.target.value)}/></Field>
+            <Field label="Sewer"><Input placeholder="Municipal / Septic" value={leaseCompForm.sewer} onChange={e=>setLC('sewer',e.target.value)}/></Field>
+            <Field label="Zoning"><Input placeholder="I-1 / M-1" value={leaseCompForm.zoning} onChange={e=>setLC('zoning',e.target.value)}/></Field>
           </div>
           <Divider label="Lease Terms"/>
           <div style={G3}>
@@ -1730,8 +1733,11 @@ function DatabaseManager() {
             <Field label="Loading Docks"><Input value={leaseAvailForm.loading_docks} onChange={e=>setLA('loading_docks',e.target.value)}/></Field>
             <Field label="Drive-In Doors"><Input value={leaseAvailForm.drive_ins} onChange={e=>setLA('drive_ins',e.target.value)}/></Field>
             <Field label="Power"><Input placeholder="200A / 3-Phase" value={leaseAvailForm.power} onChange={e=>setLA('power',e.target.value)}/></Field>
+            <Field label="Heat"><Input placeholder="Gas / Electric" value={leaseAvailForm.heat} onChange={e=>setLA('heat',e.target.value)}/></Field>
             <Field label="Sprinkler System"><Input placeholder="ESFR / Wet Pipe" value={leaseAvailForm.sprinkler} onChange={e=>setLA('sprinkler',e.target.value)}/></Field>
             <Field label="Parking"><Input placeholder="50 spaces" value={leaseAvailForm.parking} onChange={e=>setLA('parking',e.target.value)}/></Field>
+            <Field label="Sewer"><Input placeholder="Municipal / Septic" value={leaseAvailForm.sewer} onChange={e=>setLA('sewer',e.target.value)}/></Field>
+            <Field label="Zoning"><Input placeholder="I-1 / M-1" value={leaseAvailForm.zoning} onChange={e=>setLA('zoning',e.target.value)}/></Field>
           </div>
           <Divider label="Lease Terms"/>
           <div style={G3}>
@@ -1825,9 +1831,9 @@ function DatabaseManager() {
                 : tab==='avails'
                 ? ['address','city','county','zip_code','property_type','building_sf','lot_size_ac','ceiling_height','loading_docks','drive_ins','power','sprinkler','sewer','zoning','real_estate_taxes','asking_price','price_per_sf','pricing_guidance','availability_type','status','listing_broker','submarket','loopnet_url','notes']
                 : tab==='lease-comps'
-                ? ['transaction_date','address','town','county','building_sf','lot_size_ac','office_sf','ceiling_height','loading_docks','drive_ins','power','sprinkler','parking','asking_rent','deal_rent','rent_type','taxes','lease_term_years','escalations','rent_concession_months','ti_ll_work','mgmt_fee_pct','tenant','landlord','status','notes']
+                ? ['transaction_date','address','town','county','building_sf','lot_size_ac','office_sf','ceiling_height','loading_docks','drive_ins','power','heat','sprinkler','parking','sewer','zoning','asking_rent','deal_rent','rent_type','taxes','lease_term_years','escalations','rent_concession_months','ti_ll_work','mgmt_fee_pct','tenant','landlord','status','notes']
                 : tab==='lease-avails'
-                ? ['address','town','county','building_sf','lot_size_ac','ceiling_height','loading_docks','drive_ins','power','sprinkler','parking','asking_rent','rent_type','taxes','lease_term_years','escalations','landlord','listing_broker','loopnet_url','status','notes']
+                ? ['address','town','county','building_sf','lot_size_ac','ceiling_height','loading_docks','drive_ins','power','heat','sprinkler','parking','sewer','zoning','asking_rent','rent_type','taxes','lease_term_years','escalations','landlord','listing_broker','loopnet_url','status','notes']
                 : tab==='pcre-sales'
                 ? ['address','city','county','property_type','building_sf','sale_price_text','sale_date','buyer','seller','notes']
                 : ['address','city','county','tenant','landlord','building_sf','lease_price','lease_date','lease_term','notes']
@@ -4681,9 +4687,12 @@ function OPVReport({subject,comps,leaseComps,leaseAvails=[],avails,analytics,aiT
                 <LabelRow label="LOADING" value={c.loading_docks&&c.drive_ins?`${c.loading_docks} Docks / ${c.drive_ins} Drive-In`:c.loading_docks?`${c.loading_docks} Docks`:c.drive_ins?`${c.drive_ins} Drive-In`:'—'}/>
                 <LabelRow label="CEILING HEIGHT" value={c.ceiling_height?`${c.ceiling_height} ft`:'—'} shade/>
                 <LabelRow label="POWER" value={(c as any).power?String((c as any).power):'—'}/>
-                <LabelRow label="SPRINKLERS" value={(c as any).sprinkler?String((c as any).sprinkler):'—'} shade/>
-                <LabelRow label="PARKING" value={(c as any).parking?String((c as any).parking):'—'}/>
-                <LabelRow label="LEASE PRICE" value={c.deal_rent?`$${Number(c.deal_rent).toFixed(2)} PSF/yr${c.rent_type?' — '+c.rent_type:''}`:c.asking_rent?`$${Number(c.asking_rent).toFixed(2)} PSF/yr (Ask)`:'—'} shade/>
+                <LabelRow label="HEAT" value={(c as any).heat?String((c as any).heat):'—'} shade/>
+                <LabelRow label="SPRINKLERS" value={(c as any).sprinkler?String((c as any).sprinkler):'—'}/>
+                <LabelRow label="PARKING" value={(c as any).parking?String((c as any).parking):'—'} shade/>
+                <LabelRow label="SEWER" value={(c as any).sewer?String((c as any).sewer):'—'}/>
+                <LabelRow label="ZONING" value={(c as any).zoning?String((c as any).zoning):'—'} shade/>
+                <LabelRow label="LEASE PRICE" value={c.deal_rent?`$${Number(c.deal_rent).toFixed(2)} PSF/yr${c.rent_type?' — '+c.rent_type:''}`:c.asking_rent?`$${Number(c.asking_rent).toFixed(2)} PSF/yr (Ask)`:'—'}/>
                 <LabelRow label="TAXES" value={c.taxes?`$${Number(c.taxes).toFixed(2)}/SF`:'—'}/>
                 <LabelRow label="TERM" value={c.lease_term_years?`${c.lease_term_years} years`:'—'} shade/>
                 <LabelRow label="ESCALATIONS" value={(c as any).escalations?String((c as any).escalations):'—'}/>
@@ -4811,12 +4820,15 @@ function OPVReport({subject,comps,leaseComps,leaseAvails=[],avails,analytics,aiT
                   <LabelRow label="LOADING DOCKS" value={a.loading_docks||'—'}/>
                   <LabelRow label="DRIVE-INS" value={a.drive_ins||'—'} shade/>
                   <LabelRow label="POWER" value={(a as any).power?String((a as any).power):'—'}/>
-                  <LabelRow label="SPRINKLERS" value={(a as any).sprinkler?String((a as any).sprinkler):'—'} shade/>
-                  <LabelRow label="PARKING" value={(a as any).parking?String((a as any).parking):'—'}/>
-                  <LabelRow label="ASKING RENT" value={a.asking_rent?`$${Number(a.asking_rent).toFixed(2)}/SF/yr`:'—'} shade/>
-                  <LabelRow label="RENT TYPE" value={a.rent_type?String(a.rent_type):'—'}/>
-                  <LabelRow label="TAXES" value={a.taxes?`$${Number(a.taxes).toFixed(2)}/SF`:'—'} shade/>
-                  <LabelRow label="LANDLORD" value={a.landlord?String(a.landlord):'—'}/>
+                  <LabelRow label="HEAT" value={(a as any).heat?String((a as any).heat):'—'} shade/>
+                  <LabelRow label="SPRINKLERS" value={(a as any).sprinkler?String((a as any).sprinkler):'—'}/>
+                  <LabelRow label="PARKING" value={(a as any).parking?String((a as any).parking):'—'} shade/>
+                  <LabelRow label="SEWER" value={(a as any).sewer?String((a as any).sewer):'—'}/>
+                  <LabelRow label="ZONING" value={(a as any).zoning?String((a as any).zoning):'—'} shade/>
+                  <LabelRow label="ASKING RENT" value={a.asking_rent?`$${Number(a.asking_rent).toFixed(2)}/SF/yr`:'—'}/>
+                  <LabelRow label="RENT TYPE" value={a.rent_type?String(a.rent_type):'—'} shade/>
+                  <LabelRow label="TAXES" value={a.taxes?`$${Number(a.taxes).toFixed(2)}/SF`:'—'}/>
+                  <LabelRow label="LANDLORD" value={a.landlord?String(a.landlord):'—'} shade/>
                   {a.notes&&<LabelRow label="NOTES" value={String(a.notes)} shade/>}
                 </div>
               </div>
