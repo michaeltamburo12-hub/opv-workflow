@@ -4322,9 +4322,9 @@ function OPVReport({subject,comps,leaseComps,leaseAvails=[],avails,analytics,aiT
                 const url = URL.createObjectURL(blob)
                 const a = document.createElement('a')
                 a.href = url
-                a.download = res.headers.get('Content-Disposition')?.match(/filename="(.+)"/)?.[1] || 'OPV_Report.docx'
+                // No 'download' attribute — lets the OS open it directly in Word
                 a.click()
-                URL.revokeObjectURL(url)
+                setTimeout(()=>URL.revokeObjectURL(url), 5000)
               } catch(e:any) { alert('Download failed: '+e.message) }
             }} style={{padding:'9px 20px',fontSize:12,background:'rgba(59,130,246,0.10)',color:D.blue,border:`1px solid rgba(59,130,246,0.3)`}}>
               📄 Download Word Doc
