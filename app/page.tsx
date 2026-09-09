@@ -4309,25 +4309,23 @@ function OPVReport({subject,comps,leaseComps,leaseAvails=[],avails,analytics,aiT
               📕 Print / Save PDF
             </Btn>
             <Btn onClick={async()=>{
-              const html = frozenHTML || (reportRef.current ? reportRef.current.innerHTML : null)
-              if (!html) { alert('Generate the report first'); return }
+              if (!subject) { alert('No subject property — complete the OPV first'); return }
               try {
                 const res = await fetch('/api/generate-docx', {
                   method:'POST',
                   headers:{'Content-Type':'application/json'},
-                  body: JSON.stringify({ html, address: subject?.address || '' })
+                  body: JSON.stringify({ subject, comps, leaseComps, leaseAvails, avails, analytics, aiText, includeLeaseComps, includeAvails, includeMarketingStrategy })
                 })
                 if (!res.ok) { const e = await res.json(); alert('Error: '+e.error); return }
                 const blob = await res.blob()
                 const url = URL.createObjectURL(blob)
                 const a = document.createElement('a')
                 a.href = url
-                // No 'download' attribute — lets the OS open it directly in Word
                 a.click()
                 setTimeout(()=>URL.revokeObjectURL(url), 5000)
-              } catch(e:any) { alert('Download failed: '+e.message) }
+              } catch(e:any) { alert('Word doc failed: '+e.message) }
             }} style={{padding:'9px 20px',fontSize:12,background:'rgba(59,130,246,0.10)',color:D.blue,border:`1px solid rgba(59,130,246,0.3)`}}>
-              📄 Download Word Doc
+              📄 Word Doc
             </Btn>
           </div>
         </div>
