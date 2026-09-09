@@ -1609,6 +1609,7 @@ function DatabaseManager() {
             <Field label="Loading Docks"><Input value={availForm.loading_docks} onChange={e=>setA('loading_docks',e.target.value)}/></Field>
             <Field label="Drive-In Doors"><Input value={availForm.drive_ins} onChange={e=>setA('drive_ins',e.target.value)}/></Field>
             <Field label="Power"><Input placeholder="400A/3ph" value={availForm.power} onChange={e=>setA('power',e.target.value)}/></Field>
+            <Field label="Heat"><Input placeholder="Gas / Electric" value={availForm.heat} onChange={e=>setA('heat',e.target.value)}/></Field>
             <Field label="Sprinkler"><Sel value={availForm.sprinkler} onChange={e=>setA('sprinkler',e.target.value)}><option value="">Select...</option><option>ESFR</option><option>Wet</option><option>Dry</option><option>None</option></Sel></Field>
             <Field label="Sewer"><Sel value={availForm.sewer} onChange={e=>setA('sewer',e.target.value)}><option>Municipal</option><option>Septic</option></Sel></Field>
             <Field label="Zoning"><Input value={availForm.zoning} onChange={e=>setA('zoning',e.target.value)}/></Field>
@@ -2084,6 +2085,7 @@ function DatabaseManager() {
                 <Field label="Loading Docks"><Input value={availForm.loading_docks} onChange={e=>setA('loading_docks',e.target.value)}/></Field>
                 <Field label="Drive-In Doors"><Input value={availForm.drive_ins} onChange={e=>setA('drive_ins',e.target.value)}/></Field>
                 <Field label="Power"><Input placeholder="400A/3ph" value={availForm.power} onChange={e=>setA('power',e.target.value)}/></Field>
+                <Field label="Heat"><Input placeholder="Gas / Electric" value={availForm.heat} onChange={e=>setA('heat',e.target.value)}/></Field>
                 <Field label="Sprinkler"><Sel value={availForm.sprinkler} onChange={e=>setA('sprinkler',e.target.value)}><option value="">Select...</option><option>ESFR</option><option>Wet</option><option>Dry</option><option>None</option></Sel></Field>
                 <Field label="Sewer"><Sel value={availForm.sewer} onChange={e=>setA('sewer',e.target.value)}><option>Municipal</option><option>Septic</option></Sel></Field>
                 <Field label="Zoning"><Input value={availForm.zoning} onChange={e=>setA('zoning',e.target.value)}/></Field>
