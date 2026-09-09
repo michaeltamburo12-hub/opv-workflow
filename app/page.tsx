@@ -4308,6 +4308,27 @@ function OPVReport({subject,comps,leaseComps,leaseAvails=[],avails,analytics,aiT
             <Btn onClick={downloadPDF} style={{padding:'9px 20px',fontSize:12,background:`rgba(239,68,68,0.10)`,color:'#EF4444',border:`1px solid rgba(239,68,68,0.3)`}}>
               📕 Print / Save PDF
             </Btn>
+            <Btn onClick={async()=>{
+              const html = frozenHTML || (reportRef.current ? reportRef.current.innerHTML : null)
+              if (!html) { alert('Generate the report first'); return }
+              try {
+                const res = await fetch('/api/generate-docx', {
+                  method:'POST',
+                  headers:{'Content-Type':'application/json'},
+                  body: JSON.stringify({ html, address: subject?.address || '' })
+                })
+                if (!res.ok) { const e = await res.json(); alert('Error: '+e.error); return }
+                const blob = await res.blob()
+                const url = URL.createObjectURL(blob)
+                const a = document.createElement('a')
+                a.href = url
+                a.download = res.headers.get('Content-Disposition')?.match(/filename="(.+)"/)?.[1] || 'OPV_Report.docx'
+                a.click()
+                URL.revokeObjectURL(url)
+              } catch(e:any) { alert('Download failed: '+e.message) }
+            }} style={{padding:'9px 20px',fontSize:12,background:'rgba(59,130,246,0.10)',color:D.blue,border:`1px solid rgba(59,130,246,0.3)`}}>
+              📄 Download Word Doc
+            </Btn>
           </div>
         </div>
         <Card style={{padding:'14px 18px'}}>
