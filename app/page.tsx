@@ -4694,8 +4694,8 @@ function OPVReport({subject,comps,leaseComps,leaseAvails=[],avails,analytics,aiT
               {Photo(`lease_${c.id}`, `/api/street-view?address=${encodeURIComponent(c.address+(c.town?', '+c.town:'')+', NY')}`)}
               <div style={{border:'1px solid #ccc'}}>
                 <LabelRow label="PROPERTY ADDRESS" value={`${c.address||'—'}${c.town?', '+c.town:''}`}/>
-                {/* Template order: Building Size, Lot Size, Office Size, Loading, Ceiling Height, Power, Sprinklers, Parking, Lease Price, Taxes, Term, Escalations, Concession, Landlord Work, Tenant Name, Landlord Name, Transaction Date */}
-                <LabelRow label="BUILDING SIZE" value={fmt(c.building_sf,'',c.building_sf?' SF':'')} shade/>
+                {(c as any).property_type&&<LabelRow label="PROPERTY TYPE" value={String((c as any).property_type)} shade/>}
+                <LabelRow label="BUILDING SIZE" value={fmt(c.building_sf,'',c.building_sf?' SF':'')} shade={!(c as any).property_type}/>
                 <LabelRow label="LOT SIZE" value={c.lot_size_ac?`${c.lot_size_ac} Acres`:'—'}/>
                 <LabelRow label="OFFICE SIZE" value={(c as any).office_sf?`${Number((c as any).office_sf).toLocaleString()} SF`:'—'} shade/>
                 <LabelRow label="LOADING" value={c.loading_docks&&c.drive_ins?`${c.loading_docks} Docks / ${c.drive_ins} Drive-In`:c.loading_docks?`${c.loading_docks} Docks`:c.drive_ins?`${c.drive_ins} Drive-In`:'—'}/>
@@ -4706,7 +4706,8 @@ function OPVReport({subject,comps,leaseComps,leaseAvails=[],avails,analytics,aiT
                 <LabelRow label="PARKING" value={(c as any).parking?String((c as any).parking):'—'} shade/>
                 <LabelRow label="SEWER" value={(c as any).sewer?String((c as any).sewer):'—'}/>
                 <LabelRow label="ZONING" value={(c as any).zoning?String((c as any).zoning):'—'} shade/>
-                <LabelRow label="LEASE PRICE" value={c.deal_rent?`$${Number(c.deal_rent).toFixed(2)} PSF/yr${c.rent_type?' — '+c.rent_type:''}`:c.asking_rent?`$${Number(c.asking_rent).toFixed(2)} PSF/yr (Ask)`:'—'}/>
+                <LabelRow label="RE TAXES" value={(c as any).re_taxes?`$${Number((c as any).re_taxes).toLocaleString()}/yr`:'—'}/>
+                <LabelRow label="LEASE PRICE" value={c.deal_rent?`$${Number(c.deal_rent).toFixed(2)} PSF/yr${c.rent_type?' — '+c.rent_type:''}`:c.asking_rent?`$${Number(c.asking_rent).toFixed(2)} PSF/yr (Ask)`:'—'} shade/>
                 <LabelRow label="TAXES" value={c.taxes?`$${Number(c.taxes).toFixed(2)}/SF`:'—'}/>
                 <LabelRow label="TERM" value={c.lease_term_years?`${c.lease_term_years} years`:'—'} shade/>
                 <LabelRow label="ESCALATIONS" value={(c as any).escalations?String((c as any).escalations):'—'}/>
@@ -4782,10 +4783,19 @@ function OPVReport({subject,comps,leaseComps,leaseAvails=[],avails,analytics,aiT
               {Photo(`lease_${c.id}`, `/api/street-view?address=${encodeURIComponent(c.address+(c.town?', '+c.town:'')+', NY')}`)}
               <div style={{border:'1px solid #ccc'}}>
                 <LabelRow label="PROPERTY ADDRESS" value={`${c.address||'—'}${c.town?', '+c.town:''}`}/>
-                <LabelRow label="BUILDING SIZE" value={fmt(c.building_sf,'',c.building_sf?' SF':'')} shade/>
-                <LabelRow label="CEILING HEIGHT" value={c.ceiling_height?`${c.ceiling_height} ft`:'—'}/>
-                <LabelRow label="LOADING DOCKS" value={c.loading_docks||'—'} shade/>
-                <LabelRow label="DRIVE-INS" value={c.drive_ins||'—'}/>
+                {(c as any).property_type&&<LabelRow label="PROPERTY TYPE" value={String((c as any).property_type)} shade/>}
+                <LabelRow label="BUILDING SIZE" value={fmt(c.building_sf,'',c.building_sf?' SF':'')} shade={!(c as any).property_type}/>
+                {c.lot_size_ac&&<LabelRow label="LOT SIZE" value={`${c.lot_size_ac} Acres`}/>}
+                <LabelRow label="CEILING HEIGHT" value={c.ceiling_height?`${c.ceiling_height} ft`:'—'} shade/>
+                <LabelRow label="LOADING DOCKS" value={c.loading_docks||'—'}/>
+                <LabelRow label="DRIVE-INS" value={c.drive_ins||'—'} shade/>
+                <LabelRow label="POWER" value={(c as any).power?String((c as any).power):'—'}/>
+                <LabelRow label="HEAT" value={(c as any).heat?String((c as any).heat):'—'} shade/>
+                <LabelRow label="SPRINKLERS" value={(c as any).sprinkler?String((c as any).sprinkler):'—'}/>
+                <LabelRow label="PARKING" value={(c as any).parking?String((c as any).parking):'—'} shade/>
+                <LabelRow label="SEWER" value={(c as any).sewer?String((c as any).sewer):'—'}/>
+                <LabelRow label="ZONING" value={(c as any).zoning?String((c as any).zoning):'—'} shade/>
+                {(c as any).re_taxes&&<LabelRow label="RE TAXES" value={`$${Number((c as any).re_taxes).toLocaleString()}/yr`}/>}
                 <LabelRow label="ASKING RENT" value={c.asking_rent?`$${Number(c.asking_rent).toFixed(2)} PSF/yr`:'—'} shade/>
                 <LabelRow label="DEAL RENT" value={c.deal_rent?`$${Number(c.deal_rent).toFixed(2)} PSF/yr`:'—'}/>
                 {c.rent_type&&<LabelRow label="RENT TYPE" value={String(c.rent_type)} shade/>}
@@ -4828,7 +4838,8 @@ function OPVReport({subject,comps,leaseComps,leaseAvails=[],avails,analytics,aiT
                 {Photo(`lease_avail_${a.id}`, `/api/street-view?address=${encodeURIComponent(a.address+(a.town?', '+a.town:'')+', NY')}`)}
                 <div style={{border:'1px solid #ccc'}}>
                   <LabelRow label="PROPERTY ADDRESS" value={`${a.address||'—'}${a.town?', '+a.town:''}`}/>
-                  <LabelRow label="BUILDING SIZE" value={fmt(a.building_sf,'',a.building_sf?' SF':'')||'—'} shade/>
+                  {(a as any).property_type&&<LabelRow label="PROPERTY TYPE" value={String((a as any).property_type)} shade/>}
+                  <LabelRow label="BUILDING SIZE" value={fmt(a.building_sf,'',a.building_sf?' SF':'')||'—'} shade={!(a as any).property_type}/>
                   <LabelRow label="LOT SIZE" value={a.lot_size_ac?`${a.lot_size_ac} Acres`:'—'}/>
                   <LabelRow label="CEILING HEIGHT" value={a.ceiling_height?`${a.ceiling_height} ft`:'—'} shade/>
                   <LabelRow label="LOADING DOCKS" value={a.loading_docks||'—'}/>
@@ -4839,10 +4850,11 @@ function OPVReport({subject,comps,leaseComps,leaseAvails=[],avails,analytics,aiT
                   <LabelRow label="PARKING" value={(a as any).parking?String((a as any).parking):'—'} shade/>
                   <LabelRow label="SEWER" value={(a as any).sewer?String((a as any).sewer):'—'}/>
                   <LabelRow label="ZONING" value={(a as any).zoning?String((a as any).zoning):'—'} shade/>
-                  <LabelRow label="ASKING RENT" value={a.asking_rent?`$${Number(a.asking_rent).toFixed(2)}/SF/yr`:'—'}/>
-                  <LabelRow label="RENT TYPE" value={a.rent_type?String(a.rent_type):'—'} shade/>
-                  <LabelRow label="TAXES" value={a.taxes?`$${Number(a.taxes).toFixed(2)}/SF`:'—'}/>
-                  <LabelRow label="LANDLORD" value={a.landlord?String(a.landlord):'—'} shade/>
+                  {(a as any).re_taxes&&<LabelRow label="RE TAXES" value={`$${Number((a as any).re_taxes).toLocaleString()}/yr`}/>}
+                  <LabelRow label="ASKING RENT" value={a.asking_rent?`$${Number(a.asking_rent).toFixed(2)}/SF/yr`:'—'} shade/>
+                  <LabelRow label="RENT TYPE" value={a.rent_type?String(a.rent_type):'—'}/>
+                  <LabelRow label="TAXES" value={a.taxes?`$${Number(a.taxes).toFixed(2)}/SF`:'—'} shade/>
+                  <LabelRow label="LANDLORD" value={a.landlord?String(a.landlord):'—'}/>
                   {a.notes&&<LabelRow label="NOTES" value={String(a.notes)} shade/>}
                 </div>
               </div>
@@ -4873,7 +4885,8 @@ function OPVReport({subject,comps,leaseComps,leaseAvails=[],avails,analytics,aiT
                   {Photo(`avail_${a.id}`, `/api/street-view?address=${encodeURIComponent(a.address+(a.city?', '+a.city:'')+', NY')}`)}
                   <div style={{border:'1px solid #ccc'}}>
                     <LabelRow label="PROPERTY ADDRESS" value={`${a.address||'—'}${a.city?', '+a.city:''}`}/>
-                    <LabelRow label="BUILDING SIZE" value={fmt(a.building_sf,'',a.building_sf?' SF':'')||'—'} shade/>
+                    {(a as any).property_type&&<LabelRow label="PROPERTY TYPE" value={String((a as any).property_type)} shade/>}
+                    <LabelRow label="BUILDING SIZE" value={fmt(a.building_sf,'',a.building_sf?' SF':'')||'—'} shade={!(a as any).property_type}/>
                     <LabelRow label="LOT SIZE" value={a.lot_size_ac?`${a.lot_size_ac} Acres`:'—'}/>
                     <LabelRow label="CEILING HEIGHT" value={a.ceiling_height?`${a.ceiling_height} ft`:'—'} shade/>
                     <LabelRow label="LOADING DOCKS" value={a.loading_docks||'—'}/>
