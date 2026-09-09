@@ -5268,7 +5268,7 @@ export default function App() {
   const savedOPVIdRef = useRef(savedOPVId)
   useEffect(() => { savedOPVIdRef.current = savedOPVId }, [savedOPVId])
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const restoreOPVRef = useRef<(id: string) => Promise<void>>(async () => {})
+  const restoreOPVRef = useRef<(id: string, opts?: { keepPage?: boolean }) => Promise<void>>(async () => {})
   useEffect(() => { restoreOPVRef.current = restoreOPV })
   const lastDbUpdatedAtRef = useRef<string|null>(null)
   const isSyncingRef = useRef(false)
@@ -5287,7 +5287,7 @@ export default function App() {
         if (dbUpdatedAt !== prev) {
           // Someone else saved — reload and skip our next 2 auto-saves to break the loop
           isSyncingRef.current = true
-          await restoreOPVRef.current(currentId)
+          await restoreOPVRef.current(currentId, { keepPage: true })
           lastDbUpdatedAtRef.current = dbUpdatedAt
           skipAutoSaveCountRef.current = 2
           isSyncingRef.current = false
@@ -5298,16 +5298,25 @@ export default function App() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  const restoreOPV=async(id:string)=>{
+  // On page load, if a savedOPVId was restored from localStorage, reload the full OPV data from DB
+  // so subsequent auto-saves update the existing record instead of inserting a new one
+  useEffect(() => {
+    const storedId = localStorage.getItem('opv_saved_id')
+    if (!storedId) return
+    restoreOPVRef.current(storedId, { keepPage: true })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  const restoreOPV=async(id:string, opts?: { keepPage?: boolean })=>{
     try {
       const res = await fetch(`/api/opv-history?id=${id}`,{method:'PATCH'})
       const data = await res.json()
       if(data.error) throw new Error(data.error)
 
-      // Wipe everything first — no old data bleeds into the new OPV
-      clearAllOPVState()
+      // For background sync (keepPage=true), skip the full wipe so the user stays on their page
+      if (!opts?.keepPage) clearAllOPVState()
 
-      // Then load the saved OPV's data (empty defaults where not saved)
+      // Load the saved OPV's data
       setSubject(data.subject || null)
       setComps(data.comps || [])
       setLeaseComps(data.leaseComps || [])
@@ -5343,8 +5352,10 @@ export default function App() {
 
       setSavedOPVId(id)
       setLastSaved(new Date(data.updatedAt||data.createdAt))
-      setShowSavedPanel(false)
-      setPage(data.currentStep||'subject')
+      if (!opts?.keepPage) {
+        setShowSavedPanel(false)
+        setPage(data.currentStep||'subject')
+      }
     } catch(e) { alert('Load failed: '+(e as Error).message) }
   }
 
