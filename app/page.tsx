@@ -1232,11 +1232,11 @@ function DatabaseManager() {
   const setPS = (k:string,v:string) => setPcreSaleForm(f=>({...f,[k]:v}))
   const setPL = (k:string,v:string) => setPcreLeaseForm(f=>({...f,[k]:v}))
 
-  const blankLeaseComp = {transaction_date:'',address:'',town:'',county:'Nassau',building_sf:'',lot_size_ac:'',office_sf:'',ceiling_height:'',loading_docks:'',drive_ins:'',power:'',heat:'',sprinkler:'',parking:'',sewer:'',zoning:'',asking_rent:'',deal_rent:'',rent_type:'NNN',taxes:'',lease_term_years:'',rent_concession_months:'',ti_ll_work:'',mgmt_fee_pct:'',escalations:'',tenant:'',landlord:'',status:'Active',notes:''}
+  const blankLeaseComp = {transaction_date:'',address:'',town:'',county:'Nassau',property_type:'Industrial',building_sf:'',lot_size_ac:'',office_sf:'',ceiling_height:'',loading_docks:'',drive_ins:'',power:'',heat:'',sprinkler:'',parking:'',sewer:'',zoning:'',re_taxes:'',asking_rent:'',deal_rent:'',rent_type:'NNN',taxes:'',lease_term_years:'',rent_concession_months:'',ti_ll_work:'',mgmt_fee_pct:'',escalations:'',tenant:'',landlord:'',status:'Active',notes:''}
   const [leaseCompForm, setLeaseCompForm] = useState({...blankLeaseComp})
   const setLC = (k:string,v:string) => setLeaseCompForm(f=>({...f,[k]:v}))
 
-  const blankLeaseAvail = {address:'',town:'',county:'Nassau',building_sf:'',lot_size_ac:'',ceiling_height:'',loading_docks:'',drive_ins:'',power:'',heat:'',sprinkler:'',parking:'',sewer:'',zoning:'',asking_rent:'',rent_type:'NNN',taxes:'',lease_term_years:'',escalations:'',landlord:'',listing_broker:'',loopnet_url:'',status:'Available',notes:''}
+  const blankLeaseAvail = {address:'',town:'',county:'Nassau',property_type:'Industrial',building_sf:'',lot_size_ac:'',ceiling_height:'',loading_docks:'',drive_ins:'',power:'',heat:'',sprinkler:'',parking:'',sewer:'',zoning:'',re_taxes:'',asking_rent:'',rent_type:'NNN',taxes:'',lease_term_years:'',escalations:'',landlord:'',listing_broker:'',loopnet_url:'',status:'Available',notes:''}
   const [leaseAvailForm, setLeaseAvailForm] = useState({...blankLeaseAvail})
   const setLA = (k:string,v:string) => setLeaseAvailForm(f=>({...f,[k]:v}))
   const pcreSetupAttempted = useRef(false)
@@ -1677,6 +1677,7 @@ function DatabaseManager() {
           </div>
           <Divider label="Building"/>
           <div style={G3}>
+            <Field label="Property Type"><Sel value={leaseCompForm.property_type} onChange={e=>setLC('property_type',e.target.value)}><option>Industrial</option><option>Warehouse</option><option>Flex</option><option>Office</option><option>Retail</option></Sel></Field>
             <Field label="Building Size (SF)"><Input type="number" value={leaseCompForm.building_sf} onChange={e=>setLC('building_sf',e.target.value)}/></Field>
             <Field label="Office SF (If applicable)"><Input type="number" value={leaseCompForm.office_sf} onChange={e=>setLC('office_sf',e.target.value)}/></Field>
             <Field label="Lot Size (If applicable)"><Input type="number" step="0.01" placeholder="acres" value={leaseCompForm.lot_size_ac} onChange={e=>setLC('lot_size_ac',e.target.value)}/></Field>
@@ -1689,6 +1690,7 @@ function DatabaseManager() {
             <Field label="Parking"><Input placeholder="50 spaces" value={leaseCompForm.parking} onChange={e=>setLC('parking',e.target.value)}/></Field>
             <Field label="Sewer"><Input placeholder="Municipal / Septic" value={leaseCompForm.sewer} onChange={e=>setLC('sewer',e.target.value)}/></Field>
             <Field label="Zoning"><Input placeholder="I-1 / M-1" value={leaseCompForm.zoning} onChange={e=>setLC('zoning',e.target.value)}/></Field>
+            <Field label="RE Taxes ($/yr)"><Input type="number" placeholder="Annual taxes" value={leaseCompForm.re_taxes} onChange={e=>setLC('re_taxes',e.target.value)}/></Field>
           </div>
           <Divider label="Lease Terms"/>
           <div style={G3}>
@@ -1727,6 +1729,7 @@ function DatabaseManager() {
           </div>
           <Divider label="Building"/>
           <div style={G3}>
+            <Field label="Property Type"><Sel value={leaseAvailForm.property_type} onChange={e=>setLA('property_type',e.target.value)}><option>Industrial</option><option>Warehouse</option><option>Flex</option><option>Office</option><option>Retail</option></Sel></Field>
             <Field label="Building Size (SF)"><Input type="number" value={leaseAvailForm.building_sf} onChange={e=>setLA('building_sf',e.target.value)}/></Field>
             <Field label="Lot Size (acres)"><Input type="number" step="0.01" value={leaseAvailForm.lot_size_ac} onChange={e=>setLA('lot_size_ac',e.target.value)}/></Field>
             <Field label="Ceiling Height (ft.)"><Input placeholder="22" value={leaseAvailForm.ceiling_height} onChange={e=>setLA('ceiling_height',e.target.value)}/></Field>
@@ -1738,6 +1741,7 @@ function DatabaseManager() {
             <Field label="Parking"><Input placeholder="50 spaces" value={leaseAvailForm.parking} onChange={e=>setLA('parking',e.target.value)}/></Field>
             <Field label="Sewer"><Input placeholder="Municipal / Septic" value={leaseAvailForm.sewer} onChange={e=>setLA('sewer',e.target.value)}/></Field>
             <Field label="Zoning"><Input placeholder="I-1 / M-1" value={leaseAvailForm.zoning} onChange={e=>setLA('zoning',e.target.value)}/></Field>
+            <Field label="RE Taxes ($/yr)"><Input type="number" placeholder="Annual taxes" value={leaseAvailForm.re_taxes} onChange={e=>setLA('re_taxes',e.target.value)}/></Field>
           </div>
           <Divider label="Lease Terms"/>
           <div style={G3}>

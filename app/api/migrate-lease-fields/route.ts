@@ -12,12 +12,18 @@ export async function GET() {
   const results: string[] = []
 
   const statements = [
+    // lease_comps
     `ALTER TABLE public.lease_comps ADD COLUMN IF NOT EXISTS heat text`,
     `ALTER TABLE public.lease_comps ADD COLUMN IF NOT EXISTS sewer text`,
     `ALTER TABLE public.lease_comps ADD COLUMN IF NOT EXISTS zoning text`,
+    `ALTER TABLE public.lease_comps ADD COLUMN IF NOT EXISTS property_type text`,
+    `ALTER TABLE public.lease_comps ADD COLUMN IF NOT EXISTS re_taxes numeric`,
+    // lease_market_availabilities
     `ALTER TABLE public.lease_market_availabilities ADD COLUMN IF NOT EXISTS heat text`,
     `ALTER TABLE public.lease_market_availabilities ADD COLUMN IF NOT EXISTS sewer text`,
     `ALTER TABLE public.lease_market_availabilities ADD COLUMN IF NOT EXISTS zoning text`,
+    `ALTER TABLE public.lease_market_availabilities ADD COLUMN IF NOT EXISTS property_type text`,
+    `ALTER TABLE public.lease_market_availabilities ADD COLUMN IF NOT EXISTS re_taxes numeric`,
   ]
 
   for (const sql of statements) {
