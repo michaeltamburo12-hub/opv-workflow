@@ -2156,8 +2156,12 @@ function DatabaseManager() {
                 <Field label="Loading Docks"><Input value={leaseCompForm.loading_docks} onChange={e=>setLC('loading_docks',e.target.value)}/></Field>
                 <Field label="Drive-ins"><Input value={leaseCompForm.drive_ins} onChange={e=>setLC('drive_ins',e.target.value)}/></Field>
                 <Field label="Power"><Input placeholder="200A / 3-Phase" value={leaseCompForm.power} onChange={e=>setLC('power',e.target.value)}/></Field>
+                <Field label="Heat"><Input placeholder="Gas / Electric" value={leaseCompForm.heat} onChange={e=>setLC('heat',e.target.value)}/></Field>
                 <Field label="Sprinkler System"><Input placeholder="ESFR / Wet Pipe" value={leaseCompForm.sprinkler} onChange={e=>setLC('sprinkler',e.target.value)}/></Field>
                 <Field label="Parking"><Input placeholder="50 spaces" value={leaseCompForm.parking} onChange={e=>setLC('parking',e.target.value)}/></Field>
+                <Field label="Sewer"><Input placeholder="Municipal / Septic" value={leaseCompForm.sewer} onChange={e=>setLC('sewer',e.target.value)}/></Field>
+                <Field label="Zoning"><Input placeholder="I-1 / M-1" value={leaseCompForm.zoning} onChange={e=>setLC('zoning',e.target.value)}/></Field>
+                <Field label="RE Taxes ($/yr)"><Input type="number" placeholder="Annual taxes" value={leaseCompForm.re_taxes} onChange={e=>setLC('re_taxes',e.target.value)}/></Field>
               </div>
               <Divider label="Lease Terms"/>
               <div style={G3}>
@@ -2194,8 +2198,12 @@ function DatabaseManager() {
                 <Field label="Loading Docks"><Input value={leaseAvailForm.loading_docks} onChange={e=>setLA('loading_docks',e.target.value)}/></Field>
                 <Field label="Drive-In Doors"><Input value={leaseAvailForm.drive_ins} onChange={e=>setLA('drive_ins',e.target.value)}/></Field>
                 <Field label="Power"><Input placeholder="200A / 3-Phase" value={leaseAvailForm.power} onChange={e=>setLA('power',e.target.value)}/></Field>
+                <Field label="Heat"><Input placeholder="Gas / Electric" value={leaseAvailForm.heat} onChange={e=>setLA('heat',e.target.value)}/></Field>
                 <Field label="Sprinkler System"><Input placeholder="ESFR / Wet Pipe" value={leaseAvailForm.sprinkler} onChange={e=>setLA('sprinkler',e.target.value)}/></Field>
                 <Field label="Parking"><Input placeholder="50 spaces" value={leaseAvailForm.parking} onChange={e=>setLA('parking',e.target.value)}/></Field>
+                <Field label="Sewer"><Input placeholder="Municipal / Septic" value={leaseAvailForm.sewer} onChange={e=>setLA('sewer',e.target.value)}/></Field>
+                <Field label="Zoning"><Input placeholder="I-1 / M-1" value={leaseAvailForm.zoning} onChange={e=>setLA('zoning',e.target.value)}/></Field>
+                <Field label="RE Taxes ($/yr)"><Input type="number" placeholder="Annual taxes" value={leaseAvailForm.re_taxes} onChange={e=>setLA('re_taxes',e.target.value)}/></Field>
               </div>
               <Divider label="Lease Terms"/>
               <div style={G3}>
