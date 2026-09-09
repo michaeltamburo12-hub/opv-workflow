@@ -4311,10 +4311,14 @@ function OPVReport({subject,comps,leaseComps,leaseAvails=[],avails,analytics,aiT
             <Btn onClick={async()=>{
               if (!subject) { alert('No subject property — complete the OPV first'); return }
               try {
+                // Use frozenHTML (with user edits + patched photos) if available,
+                // otherwise capture the live rendered report DOM.
+                const html = frozenHTML || reportRef.current?.innerHTML || ''
+                if (!html) { alert('Generate the report first, then click Word Doc.'); return }
                 const res = await fetch('/api/generate-docx', {
                   method:'POST',
                   headers:{'Content-Type':'application/json'},
-                  body: JSON.stringify({ subject, comps, leaseComps, leaseAvails, avails, analytics, aiText, includeLeaseComps, includeAvails, includeMarketingStrategy })
+                  body: JSON.stringify({ html, subject })
                 })
                 if (!res.ok) { const e = await res.json(); alert('Error: '+e.error); return }
                 const blob = await res.blob()
