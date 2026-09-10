@@ -4322,8 +4322,11 @@ function OPVReport({subject,comps,leaseComps,leaseAvails=[],avails,analytics,aiT
                     if (!r.ok) return
                     const buf = await r.arrayBuffer()
                     const ct = r.headers.get('content-type') || 'image/jpeg'
-                    const b64 = btoa(String.fromCharCode(...new Uint8Array(buf)))
-                    resolvedPhotos[k] = `data:${ct};base64,${b64}`
+                    // Safe base64 for large buffers (avoid stack overflow with spread)
+                    const bytes = new Uint8Array(buf)
+                    let bin = ''
+                    for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i])
+                    resolvedPhotos[k] = `data:${ct};base64,${btoa(bin)}`
                   } catch { resolvedPhotos[k] = src }
                 }))
                 const res = await fetch('/api/generate-docx', {
