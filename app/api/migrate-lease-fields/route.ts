@@ -18,12 +18,14 @@ export async function GET() {
     `ALTER TABLE public.lease_comps ADD COLUMN IF NOT EXISTS zoning text`,
     `ALTER TABLE public.lease_comps ADD COLUMN IF NOT EXISTS property_type text`,
     `ALTER TABLE public.lease_comps ADD COLUMN IF NOT EXISTS re_taxes numeric`,
+    `ALTER TABLE public.lease_comps ADD COLUMN IF NOT EXISTS office_sf numeric`,
     // lease_market_availabilities
     `ALTER TABLE public.lease_market_availabilities ADD COLUMN IF NOT EXISTS heat text`,
     `ALTER TABLE public.lease_market_availabilities ADD COLUMN IF NOT EXISTS sewer text`,
     `ALTER TABLE public.lease_market_availabilities ADD COLUMN IF NOT EXISTS zoning text`,
     `ALTER TABLE public.lease_market_availabilities ADD COLUMN IF NOT EXISTS property_type text`,
     `ALTER TABLE public.lease_market_availabilities ADD COLUMN IF NOT EXISTS re_taxes numeric`,
+    `ALTER TABLE public.lease_market_availabilities ADD COLUMN IF NOT EXISTS office_sf numeric`,
   ]
 
   for (const sql of statements) {
