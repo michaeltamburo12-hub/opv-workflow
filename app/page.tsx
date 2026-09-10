@@ -2195,6 +2195,7 @@ function DatabaseManager() {
               <div style={G3}>
                 <Field label="Building Size (SF)"><Input type="number" value={leaseAvailForm.building_sf} onChange={e=>setLA('building_sf',e.target.value)}/></Field>
                 <Field label="Lot Size (acres)"><Input type="number" step="0.01" value={leaseAvailForm.lot_size_ac} onChange={e=>setLA('lot_size_ac',e.target.value)}/></Field>
+                <Field label="Office SF"><Input type="number" value={leaseAvailForm.office_sf} onChange={e=>setLA('office_sf',e.target.value)}/></Field>
                 <Field label="Ceiling Height (ft.)"><Input placeholder="22" value={leaseAvailForm.ceiling_height} onChange={e=>setLA('ceiling_height',e.target.value)}/></Field>
                 <Field label="Loading Docks"><Input value={leaseAvailForm.loading_docks} onChange={e=>setLA('loading_docks',e.target.value)}/></Field>
                 <Field label="Drive-In Doors"><Input value={leaseAvailForm.drive_ins} onChange={e=>setLA('drive_ins',e.target.value)}/></Field>
