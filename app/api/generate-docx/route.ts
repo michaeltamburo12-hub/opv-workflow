@@ -3,7 +3,11 @@ export const runtime = 'nodejs'
 import { NextRequest, NextResponse } from 'next/server'
 import { createRequire } from 'module'
 const require = createRequire(import.meta.url)
-const HTMLtoDOCX = require('html-to-docx')
+const _htmlDocxMod = require('html-to-docx')
+const HTMLtoDOCX: (...args: unknown[]) => Promise<Buffer> =
+  typeof _htmlDocxMod === 'function' ? _htmlDocxMod
+  : typeof _htmlDocxMod?.default === 'function' ? _htmlDocxMod.default
+  : _htmlDocxMod?.HTMLtoDOCX ?? _htmlDocxMod
 
 // Resolve every img src in the HTML to a data URI so Word can embed them.
 async function resolveImages(html: string): Promise<string> {
@@ -51,6 +55,9 @@ export async function POST(req: NextRequest) {
     const { html, subject } = await req.json()
 
     if (!html) return NextResponse.json({ error: 'No HTML content' }, { status: 400 })
+    if (typeof HTMLtoDOCX !== 'function') {
+      return NextResponse.json({ error: `html-to-docx did not export a function (got ${typeof HTMLtoDOCX}). Module keys: ${Object.keys(_htmlDocxMod||{}).join(',')}` }, { status: 500 })
+    }
 
     // Resolve all external images to data URIs server-side
     const processedHTML = await resolveImages(html)
