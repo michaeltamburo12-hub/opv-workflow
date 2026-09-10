@@ -4313,10 +4313,23 @@ function OPVReport({subject,comps,leaseComps,leaseAvails=[],avails,analytics,aiT
             <Btn onClick={async()=>{
               if (!subject) { alert('No subject property — complete the OPV first'); return }
               try {
+                // Resolve all photos to data URIs in the browser (avoids server-side hotlink blocks)
+                const resolvedPhotos: Record<string,string> = {}
+                await Promise.all(Object.entries(photoUrls).map(async ([k, src]) => {
+                  if (!src) return
+                  try {
+                    const r = await fetch(src)
+                    if (!r.ok) return
+                    const buf = await r.arrayBuffer()
+                    const ct = r.headers.get('content-type') || 'image/jpeg'
+                    const b64 = btoa(String.fromCharCode(...new Uint8Array(buf)))
+                    resolvedPhotos[k] = `data:${ct};base64,${b64}`
+                  } catch { resolvedPhotos[k] = src }
+                }))
                 const res = await fetch('/api/generate-docx', {
                   method:'POST',
                   headers:{'Content-Type':'application/json'},
-                  body: JSON.stringify({ subject, comps, leaseComps, leaseAvails, avails, analytics, aiText, includeLeaseComps, includeAvails, includeMarketingStrategy, photoUrls })
+                  body: JSON.stringify({ subject, comps, leaseComps, leaseAvails, avails, analytics, aiText, includeLeaseComps, includeAvails, includeMarketingStrategy, photoUrls: resolvedPhotos })
                 })
                 if (!res.ok) { const e = await res.json(); alert('Error: '+e.error); return }
                 const blob = await res.blob()
