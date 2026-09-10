@@ -4313,28 +4313,10 @@ function OPVReport({subject,comps,leaseComps,leaseAvails=[],avails,analytics,aiT
             <Btn onClick={async()=>{
               if (!subject) { alert('No subject property — complete the OPV first'); return }
               try {
-                // Clone the report DOM so we can strip interactive elements
-                const source = reportRef.current
-                if (!source) { alert('Generate the report first, then click Word Doc.'); return }
-                const clone = source.cloneNode(true) as HTMLElement
-                // Remove all interactive / UI-only elements
-                clone.querySelectorAll('button,input,select,textarea,label').forEach(el=>el.remove())
-                // Remove edit-photo overlays and controls
-                clone.querySelectorAll('[data-no-print],[class*="photo-edit"],[class*="edit-btn"]').forEach(el=>el.remove())
-                // Remove any empty divs that were just wrappers for removed UI
-                clone.querySelectorAll('[style*="cursor:pointer"]').forEach(el=>{
-                  if(!el.textContent?.trim() && !(el as HTMLElement).querySelector('img')) el.remove()
-                })
-                // Inline the current photo srcs (already resolved by the browser)
-                clone.querySelectorAll('img').forEach(img=>{
-                  // If src is a blob or relative API path, keep it — server will resolve
-                  // If src is already a data URI, it passes through
-                })
-                const html = clone.innerHTML
                 const res = await fetch('/api/generate-docx', {
                   method:'POST',
                   headers:{'Content-Type':'application/json'},
-                  body: JSON.stringify({ html, subject })
+                  body: JSON.stringify({ subject, comps, leaseComps, leaseAvails, avails, analytics, aiText, includeLeaseComps, includeAvails, includeMarketingStrategy, photoUrls })
                 })
                 if (!res.ok) { const e = await res.json(); alert('Error: '+e.error); return }
                 const blob = await res.blob()
