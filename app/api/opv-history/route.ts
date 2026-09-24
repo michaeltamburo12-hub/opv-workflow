@@ -10,46 +10,53 @@ const supabaseAdmin = createClient(
 
 const TABLE = 'opv_reports'
 
+// Run raw SQL via pg-meta API (service role key) — no exec_sql RPC needed
+async function runSQL(sql: string): Promise<boolean> {
+  try {
+    const res = await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/pg-meta/v1/query`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY}`,
+      },
+      body: JSON.stringify({ query: sql }),
+    })
+    if (res.ok) return true
+    // Fallback: try exec_sql RPC
+    const { error } = await supabaseAdmin.rpc('exec_sql', { sql })
+    return !error
+  } catch { return false }
+}
+
 async function ensureTable() {
-  await supabaseAdmin.rpc('exec_sql', {
-    sql: `
-      CREATE TABLE IF NOT EXISTS public.${TABLE} (
-        id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
-        created_at timestamptz DEFAULT now(),
-        updated_at timestamptz DEFAULT now(),
-        saved_by text,
-        address text,
-        current_step text,
-        subject_json text,
-        comps_json text,
-        lease_comps_json text,
-        lease_avails_json text,
-        avails_json text,
-        analytics_json text,
-        ai_text text,
-        folders_json text,
-        assignment_json text,
-        photo_urls_json text,
-        verification_json text,
-        edited_report_html text
-      );
-      ALTER TABLE public.${TABLE} ADD COLUMN IF NOT EXISTS updated_at timestamptz DEFAULT now();
-      ALTER TABLE public.${TABLE} ADD COLUMN IF NOT EXISTS current_step text;
-      ALTER TABLE public.${TABLE} ADD COLUMN IF NOT EXISTS lease_comps_json text;
-      ALTER TABLE public.${TABLE} ADD COLUMN IF NOT EXISTS lease_avails_json text;
-      ALTER TABLE public.${TABLE} ADD COLUMN IF NOT EXISTS folders_json text;
-      ALTER TABLE public.${TABLE} ADD COLUMN IF NOT EXISTS assignment_json text;
-      ALTER TABLE public.${TABLE} ADD COLUMN IF NOT EXISTS photo_urls_json text;
-      ALTER TABLE public.${TABLE} ADD COLUMN IF NOT EXISTS verification_json text;
-      ALTER TABLE public.${TABLE} ADD COLUMN IF NOT EXISTS edited_report_html text;
-      ALTER TABLE public.${TABLE} ENABLE ROW LEVEL SECURITY;
-      DO $$ BEGIN
-        IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename='${TABLE}' AND policyname='Allow all opv_reports') THEN
-          CREATE POLICY "Allow all opv_reports" ON public.${TABLE} FOR ALL USING (true) WITH CHECK (true);
-        END IF;
-      END $$;
-    `
-  })
+  const sqls = [
+    `CREATE TABLE IF NOT EXISTS public.${TABLE} (
+      id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+      created_at timestamptz DEFAULT now(),
+      updated_at timestamptz DEFAULT now(),
+      saved_by text, address text, current_step text,
+      subject_json text, comps_json text, lease_comps_json text,
+      lease_avails_json text, avails_json text, analytics_json text,
+      ai_text text, folders_json text, assignment_json text,
+      photo_urls_json text, verification_json text, edited_report_html text
+    )`,
+    `ALTER TABLE public.${TABLE} ADD COLUMN IF NOT EXISTS updated_at timestamptz DEFAULT now()`,
+    `ALTER TABLE public.${TABLE} ADD COLUMN IF NOT EXISTS current_step text`,
+    `ALTER TABLE public.${TABLE} ADD COLUMN IF NOT EXISTS lease_comps_json text`,
+    `ALTER TABLE public.${TABLE} ADD COLUMN IF NOT EXISTS lease_avails_json text`,
+    `ALTER TABLE public.${TABLE} ADD COLUMN IF NOT EXISTS folders_json text`,
+    `ALTER TABLE public.${TABLE} ADD COLUMN IF NOT EXISTS assignment_json text`,
+    `ALTER TABLE public.${TABLE} ADD COLUMN IF NOT EXISTS photo_urls_json text`,
+    `ALTER TABLE public.${TABLE} ADD COLUMN IF NOT EXISTS verification_json text`,
+    `ALTER TABLE public.${TABLE} ADD COLUMN IF NOT EXISTS edited_report_html text`,
+    `ALTER TABLE public.${TABLE} ENABLE ROW LEVEL SECURITY`,
+    `DO $$ BEGIN
+       IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename='${TABLE}' AND policyname='Allow all opv_reports') THEN
+         CREATE POLICY "Allow all opv_reports" ON public.${TABLE} FOR ALL USING (true) WITH CHECK (true);
+       END IF;
+     END $$`,
+  ]
+  for (const sql of sqls) { await runSQL(sql) }
 }
 
 // GET — list saved OPVs
