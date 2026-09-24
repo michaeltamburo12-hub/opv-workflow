@@ -4314,20 +4314,30 @@ function OPVReport({subject,comps,leaseComps,leaseAvails=[],avails,analytics,aiT
               if (!subject) { alert('No subject property — complete the OPV first'); return }
               try {
                 // Resolve all photos to data URIs in the browser (avoids server-side hotlink blocks)
+                // For comps/avails without custom photos, fall back to street-view API (same-origin, no CORS)
                 const resolvedPhotos: Record<string,string> = {}
-                await Promise.all(Object.entries(photoUrls).map(async ([k, src]) => {
-                  if (!src) return
+                const svAddr = (a: string, b?: string) => encodeURIComponent((a||'') + (b ? ', '+b : '') + ', NY')
+                // Build job list: user-set photos first, then street-view fallbacks for missing ones
+                const photoJobs: {key:string,src:string}[] = []
+                // User-set custom photos
+                for (const [k, src] of Object.entries(photoUrls)) { if (src) photoJobs.push({key:k,src:src as string}) }
+                // Street-view fallbacks for items without custom photos
+                if (!photoUrls['subject'] && subject.address) photoJobs.push({key:'subject',src:`/api/street-view?address=${svAddr(subject.address,subject.city)}`})
+                for (const c of comps) { if (!photoUrls[c.id] && c.address) photoJobs.push({key:c.id,src:`/api/street-view?address=${svAddr(c.address,c.city)}`}) }
+                for (const c of leaseComps) { if (!photoUrls[c.id] && c.address) photoJobs.push({key:c.id,src:`/api/street-view?address=${svAddr(c.address,(c as any).town)}`}) }
+                for (const a of leaseAvails) { if (!photoUrls[a.id] && a.address) photoJobs.push({key:a.id,src:`/api/street-view?address=${svAddr(a.address,(a as any).town)}`}) }
+                for (const a of avails) { if (!photoUrls[a.id] && a.address) photoJobs.push({key:a.id,src:`/api/street-view?address=${svAddr(a.address,a.city)}`}) }
+                await Promise.all(photoJobs.map(async ({key, src}) => {
                   try {
                     const r = await fetch(src)
                     if (!r.ok) return
                     const buf = await r.arrayBuffer()
                     const ct = r.headers.get('content-type') || 'image/jpeg'
-                    // Safe base64 for large buffers (avoid stack overflow with spread)
                     const bytes = new Uint8Array(buf)
                     let bin = ''
                     for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i])
-                    resolvedPhotos[k] = `data:${ct};base64,${btoa(bin)}`
-                  } catch { resolvedPhotos[k] = src }
+                    resolvedPhotos[key] = `data:${ct};base64,${btoa(bin)}`
+                  } catch { /* skip */ }
                 }))
                 const res = await fetch('/api/generate-docx', {
                   method:'POST',
