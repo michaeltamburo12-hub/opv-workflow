@@ -118,8 +118,8 @@ const ComboSel = ({options, value, onChange, placeholder, style={}}: {options:st
   )
 }
 
-interface BtnProps { children: React.ReactNode; onClick?: () => void; style?: React.CSSProperties; variant?: 'primary'|'ghost'|'danger'|'success'|'blue'; disabled?: boolean; size?: 'sm'|'md' }
-const Btn = ({children,onClick,style={},variant='primary',disabled,size='md'}: BtnProps) => {
+interface BtnProps { children: React.ReactNode; onClick?: () => void; style?: React.CSSProperties; variant?: 'primary'|'ghost'|'danger'|'success'|'blue'; disabled?: boolean; size?: 'sm'|'md'; title?: string }
+const Btn = ({children,onClick,style={},variant='primary',disabled,size='md',title}: BtnProps) => {
   const base: React.CSSProperties = {fontFamily:"'Inter',sans-serif",fontWeight:600,letterSpacing:'-.01em',border:'1px solid transparent',borderRadius:8,cursor:disabled?'not-allowed':'pointer',transition:'all .15s',opacity:disabled?.4:1,fontSize:size==='sm'?11:13,padding:size==='sm'?'6px 13px':'10px 22px',display:'inline-flex',alignItems:'center',justifyContent:'center',gap:6,whiteSpace:'nowrap' as const}
   const vars: Record<string, React.CSSProperties> = {
     primary:{background:`linear-gradient(135deg,${D.blue} 0%,#2563EB 100%)`,color:'#FFFFFF',boxShadow:`0 1px 0 rgba(255,255,255,0.1) inset,0 3px 16px rgba(59,130,246,0.3)`,borderColor:'rgba(59,130,246,0.4)'},
@@ -128,7 +128,7 @@ const Btn = ({children,onClick,style={},variant='primary',disabled,size='md'}: B
     success:{background:`rgba(16,185,129,0.1)`,color:D.green,borderColor:`rgba(16,185,129,0.2)`},
     blue:{background:`rgba(59,130,246,0.1)`,color:D.blue,borderColor:`rgba(59,130,246,0.2)`},
   }
-  return <button onClick={onClick} disabled={disabled} style={{...base,...vars[variant],...style}}>{children}</button>
+  return <button onClick={onClick} disabled={disabled} title={title} style={{...base,...vars[variant],...style}}>{children}</button>
 }
 
 const Card = ({children,style={},accent}: {children:React.ReactNode,style?: React.CSSProperties,accent?:string}) => (
@@ -731,7 +731,7 @@ function FolderManager({folders, setFolders, setPage, comps, setComps, avails, s
                                 : <div style={{width:190,height:115,background:D.surface2,borderRadius:5,border:`1px dashed ${D.border}`,display:'flex',alignItems:'center',justifyContent:'center',fontSize:10,color:D.textMuted,flexShrink:0}}>No Photo</div>
                             }
                             <div style={{display:'flex',flexDirection:'column',gap:4}}>
-                              {(item as Comp).loopnet_url&&<Btn variant="ghost" size="sm" disabled={fetchingPhoto===item.id} onClick={()=>fetchPhoto(item)} style={{fontSize:10,padding:'4px 10px'}}>{fetchingPhoto===item.id?'Fetching...':'📸 Fetch from LoopNet'}</Btn>}
+                              {!!(item as Comp).loopnet_url&&<Btn variant="ghost" size="sm" disabled={fetchingPhoto===item.id} onClick={()=>fetchPhoto(item as Comp)} style={{fontSize:10,padding:'4px 10px'}}>{fetchingPhoto===item.id?'Fetching...':'📸 Fetch from LoopNet'}</Btn>}
                               <input placeholder="Or paste photo URL..." style={{background:D.surface2,border:`1px solid ${D.border}`,borderRadius:5,color:D.text,fontSize:10,padding:'4px 8px',width:180,fontFamily:"'Inter',sans-serif"}} onClick={e=>e.stopPropagation()} onChange={e=>{
                                 const val=e.target.value.trim()
                                 if(val) setFolders(folders.map(f=>f.id===activeFolder?{...f,items:f.items.map(i=>i.id===item.id?{...i,photo_url:val}:i)}:f))
@@ -1889,7 +1889,7 @@ function DatabaseManager() {
                   {tab==='lease-avails'&&!!row.lease_term_years&&<Tag color={D.textSec}>{Number(row.lease_term_years)} yr</Tag>}
                   {tab==='lease-avails'&&!!(row as Record<string,unknown>).landlord&&<Tag color={D.textSec}>🏠 {String((row as Record<string,unknown>).landlord)}</Tag>}
                   {tab==='lease-avails'&&<Tag color={row.status==='Available'?D.green:row.status==='Under Negotiation'?D.gold:row.status==='Leased'?D.blue:D.textMuted}>{String(row.status||'Available')}</Tag>}
-                  {tab==='lease-avails'&&row.town&&<Tag color={D.textMuted}>{String(row.town)}</Tag>}
+                  {tab==='lease-avails'&&!!row.town&&<Tag color={D.textMuted}>{String(row.town)}</Tag>}
                   {/* shared */}
                   {!!row.county&&<Tag color={row.county==='Nassau'?D.blue:'#0891B2'}>{String(row.county)}</Tag>}
                 </div>
@@ -2863,7 +2863,7 @@ function AvailSearch({subject,avails,setAvails,leaseAvails,setLeaseAvails,setPag
                             {sc('Notes', (r as Record<string,unknown>).notes as string)}
                           </div>
                           <div style={{paddingTop:10,borderTop:`1px solid ${D.border}`,display:'flex',gap:8,alignItems:'center',flexWrap:'wrap' as const}}>
-                            {r.loopnet_url&&<a href={r.loopnet_url} target="_blank" rel="noopener noreferrer" style={{fontSize:12,color:D.blue,padding:'6px 10px',textDecoration:'none',border:`1px solid ${D.blue}33`,borderRadius:6,fontWeight:600}}>↗ LoopNet</a>}
+                            {!!r.loopnet_url&&<a href={String(r.loopnet_url)} target="_blank" rel="noopener noreferrer" style={{fontSize:12,color:D.blue,padding:'6px 10px',textDecoration:'none',border:`1px solid ${D.blue}33`,borderRadius:6,fontWeight:600}}>↗ LoopNet</a>}
                             <div style={{position:'relative'}}>
                               <button onClick={()=>setFolderDropdown(folderDropdown===r.id?null:r.id)} style={{background:'transparent',border:`1px solid ${D.border}`,borderRadius:6,color:D.textSec,fontSize:12,fontWeight:600,padding:'6px 12px',cursor:'pointer',fontFamily:"'Inter',sans-serif",display:'flex',alignItems:'center',gap:5}}>
                                 📁 Add to Folder
@@ -2949,7 +2949,7 @@ function AvailSearch({subject,avails,setAvails,leaseAvails,setLeaseAvails,setPag
                             {sc('Submarket', (r as Avail&{submarket?:string}).submarket)}
                           </div>
                           <div style={{display:'flex',gap:8,alignItems:'center',flexWrap:'wrap' as const,paddingTop:10,borderTop:`1px solid ${D.border}`}}>
-                            {r.loopnet_url&&<a href={r.loopnet_url} target="_blank" rel="noopener noreferrer" style={{fontSize:12,color:D.blue,padding:'6px 10px',textDecoration:'none',border:`1px solid ${D.blue}33`,borderRadius:6,fontWeight:600}}>↗ LoopNet</a>}
+                            {!!r.loopnet_url&&<a href={String(r.loopnet_url)} target="_blank" rel="noopener noreferrer" style={{fontSize:12,color:D.blue,padding:'6px 10px',textDecoration:'none',border:`1px solid ${D.blue}33`,borderRadius:6,fontWeight:600}}>↗ LoopNet</a>}
                             <div style={{position:'relative'}}>
                               <button onClick={()=>setFolderDropdown(folderDropdown===r.id?null:r.id)} style={{background:'transparent',border:`1px solid ${D.border}`,borderRadius:6,color:D.textSec,fontSize:12,fontWeight:600,padding:'6px 12px',cursor:'pointer',fontFamily:"'Inter',sans-serif",display:'flex',alignItems:'center',gap:5}}>
                                 📁 Add to Folder
@@ -3449,7 +3449,7 @@ function BrokerReview({subject,comps,analytics,setAnalytics,aiText,setAiText,set
     const suggested=Math.round(market*1.05/5)*5
     return {mean,median,std,weighted,min:Math.min(...psfs),max:Math.max(...psfs),low,market,high,suggested,aMean:0,count:comps.length}
   }
-  const a = analytics || computeAnalytics()
+  const a: AnalyticsData|null = analytics || computeAnalytics()
   const updateSubjectValue = (k: string, v: string) => {
     if (!subject) return
     setSubject({...subject, [k]: v})

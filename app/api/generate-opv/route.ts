@@ -84,7 +84,7 @@ function subHeading(text: string): AnyEl {
 
 function bodyText(text: string, opts: { italic?: boolean; bold?: boolean; color?: string; size?: number } = {}): AnyEl {
   return new Paragraph({
-    children: [new TextRun({ text, size: opts.size || 20, font: 'Arial', italic: opts.italic, bold: opts.bold, color: opts.color || DARK })],
+    children: [new TextRun({ text, size: opts.size || 20, font: 'Arial', italics: opts.italic, bold: opts.bold, color: opts.color || DARK })],
     spacing: { before: 60, after: 60 },
   })
 }
@@ -420,7 +420,7 @@ export async function POST(req: NextRequest) {
       border: { top: { style: BorderStyle.SINGLE, size: 2, color: BORDER_CLR, space: 2 } },
       tabStops: [{ type: TabStopType.RIGHT, position: TabStopPosition.MAX }],
       children: [
-        new TextRun({ text: t('tagline', '"Complex Issues – Simple Solutions"'), italic: true, size: 16, font: 'Arial', color: '666666' }),
+        new TextRun({ text: t('tagline', '"Complex Issues – Simple Solutions"'), italics: true, size: 16, font: 'Arial', color: '666666' }),
         new TextRun({ text: '\tPage ', size: 16, font: 'Arial', color: '666666' }),
         new TextRun({ children: [PageNumber.CURRENT], size: 16, font: 'Arial', color: '666666' }),
       ],
@@ -432,7 +432,7 @@ export async function POST(req: NextRequest) {
   const coverChildren: AnyEl[] = [
     new Paragraph({
       alignment: AlignmentType.CENTER,
-      children: [new TextRun({ text: '"COMPLEX ISSUES – SIMPLE SOLUTIONS"', italic: true, size: 20, font: 'Arial', color: '555555' })],
+      children: [new TextRun({ text: '"COMPLEX ISSUES – SIMPLE SOLUTIONS"', italics: true, size: 20, font: 'Arial', color: '555555' })],
       spacing: { before: 0, after: 280 },
     }),
     logoLarge,
@@ -478,7 +478,7 @@ export async function POST(req: NextRequest) {
       }),
       new Paragraph({
         alignment: AlignmentType.CENTER,
-        children: [new TextRun({ text: `${subject?.address || ''}${subject?.city ? ', ' + subject.city : ''}`, italic: true, size: 16, font: 'Arial', color: '999999' })],
+        children: [new TextRun({ text: `${subject?.address || ''}${subject?.city ? ', ' + subject.city : ''}`, italics: true, size: 16, font: 'Arial', color: '999999' })],
         spacing: { after: 240 },
       }),
     ] : [spacer(120, 240)]),
@@ -516,7 +516,7 @@ export async function POST(req: NextRequest) {
       ]})],
     }),
     spacer(120, 80),
-    new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: 'Premier Commercial Real Estate, LLC  |  500 N. Broadway, Suite 105, Jericho, NY 11753', italic: true, size: 17, font: 'Arial', color: '666666' })] }),
+    new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: 'Premier Commercial Real Estate, LLC  |  500 N. Broadway, Suite 105, Jericho, NY 11753', italics: true, size: 17, font: 'Arial', color: '666666' })] }),
     new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: 'Main: 516.284.8000  |  www.pcrellc.com', size: 17, font: 'Arial', color: '666666' })] }),
   ]
 
@@ -933,7 +933,7 @@ export async function POST(req: NextRequest) {
   const buffer = await Packer.toBuffer(doc)
   const filename = `OPV_${(subject?.address || 'Report').replace(/[^a-zA-Z0-9]/g, '_')}_${monthYear.replace(/ /g, '_')}.docx`
 
-  return new NextResponse(buffer, {
+  return new NextResponse(new Uint8Array(buffer), {
     headers: {
       'Content-Type': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
       'Content-Disposition': `attachment; filename="${filename}"`,

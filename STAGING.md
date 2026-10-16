@@ -13,14 +13,30 @@ production database; Preview and Development point at staging.
 
 ## Shipping a change
 
-1. Work on `staging` (or a feature branch). Push → Vercel builds a preview wired to staging.
+1. Work on `staging` (or a feature branch). Push → Vercel builds a preview wired to staging,
+   and the **CI** GitHub Action type-checks and builds the commit.
 2. Database changes go in a new file in `supabase/migrations/` (`npx supabase migration new <name>`).
    Apply to staging: `npx supabase db push` (the repo is linked to staging).
-3. Check the preview URL.
-4. Promote: apply the same migration to production, then merge `staging` → `main`.
-   Production deploys automatically from `main`.
+3. Check https://opv-workflow-git-staging-godiscoapp.vercel.app.
+4. Promote: merge `staging` → `main`. Vercel deploys production, and the
+   **Migrate production database** action applies any new migrations to production.
 
-Apply migrations to production **before** merging code that depends on them.
+The Vercel deploy and the migration action run at the same time, so migrations
+must work with both the old and new code:
+
+- **Adding** tables/columns: ship in one merge.
+- **Removing or renaming** things the live code uses: two merges — first code that
+  no longer uses it, then the migration that removes it.
+
+## Automation
+
+- `.github/workflows/ci.yml` — type check + build on every push and PR. The Next.js
+  build also fails on type errors (no `ignoreBuildErrors`).
+- `.github/workflows/migrate-production.yml` — on push to `main` touching
+  `supabase/migrations/`, runs `supabase db push` against production. Needs the
+  `PROD_DB_URL` repository secret (Supabase → Connect → **Session pooler** string;
+  GitHub runners are IPv4-only so the direct connection won't work). Skips with a
+  warning if the secret is missing.
 
 ## Notes
 

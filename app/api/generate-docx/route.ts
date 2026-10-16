@@ -75,11 +75,12 @@ function loadPublicFile(filename: string): Buffer | null {
 }
 
 function makeImgRun(buf: Buffer, width: number, height: number): ImageRun | null {
-  for (const type of ['jpeg','png','jpg','gif'] as const) {
-    try { return new ImageRun({ data: buf, transformation: { width, height }, type }) }
-    catch { continue }
-  }
-  return null
+  // Detect the real format from magic bytes; default to jpg
+  const type = buf[0] === 0x89 && buf[1] === 0x50 ? 'png'
+    : buf[0] === 0x47 && buf[1] === 0x49 ? 'gif'
+    : 'jpg'
+  try { return new ImageRun({ data: buf, transformation: { width, height }, type }) }
+  catch { return null }
 }
 
 function photoPara(buf: Buffer|null, width=500, height=260): Paragraph {
@@ -816,7 +817,7 @@ export async function POST(req: NextRequest) {
 
     const buf = await Packer.toBuffer(doc)
     const safeName = (subject.address || 'OPV').replace(/[^a-zA-Z0-9\s]/g,'').replace(/\s+/g,'_').slice(0,40)
-    return new NextResponse(buf, {
+    return new NextResponse(new Uint8Array(buf), {
       headers: {
         'Content-Type': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
         'Content-Disposition': `attachment; filename="${safeName}_OPV.docx"`,
