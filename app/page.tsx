@@ -858,9 +858,6 @@ function FileImport({autoTable}: {autoTable?: string}) {
   const [parsing, setParsing] = useState(false)
   const [parsed, setParsed] = useState<ParsedFile|null>(null)
   const [targetTable, setTargetTable] = useState(autoTable || '')
-  const [newTableName, setNewTableName] = useState('')
-  const [isNewTable, setIsNewTable] = useState(false)
-  const [createSQL, setCreateSQL] = useState('')
   const [importing, setImporting] = useState(false)
   const [importProgress, setImportProgress] = useState('')
   const [importError, setImportError] = useState('')
@@ -885,7 +882,7 @@ function FileImport({autoTable}: {autoTable?: string}) {
   useEffect(() => { if (autoTable) setTargetTable(autoTable) }, [autoTable])
 
   const processFile = async (file: File) => {
-    setParsing(true); setParsed(null); setResult(null); setCreateSQL(''); setNewTableName(''); setIsNewTable(false); setColMapping({})
+    setParsing(true); setParsed(null); setResult(null); setColMapping({})
     const form = new FormData(); form.append('file', file)
     try {
       const res = await fetch(`/api/import?hint=${encodeURIComponent(targetTable)}`, {method:'POST', body:form})
@@ -914,19 +911,9 @@ function FileImport({autoTable}: {autoTable?: string}) {
     const file = e.dataTransfer.files[0]
     if (file) processFile(file)
   }
-  const genSQL = (name: string) => {
-    if (!parsed || !name.trim()) return ''
-    const colDefs = parsed.columnTypes.map(c => {
-      const pg = c.type==='number'?'numeric':c.type==='date'?'date':'text'
-      return `  ${c.name.padEnd(32)} ${pg}`
-    }).join(',\n')
-    return `CREATE TABLE public.${name} (\n  id uuid DEFAULT gen_random_uuid() PRIMARY KEY,\n${colDefs},\n  created_at timestamptz DEFAULT now()\n);\n\nALTER TABLE public.${name} ENABLE ROW LEVEL SECURITY;\nCREATE POLICY "Allow all" ON public.${name} FOR ALL USING (true) WITH CHECK (true);`
-  }
-  const sanitizeTableName = (v: string) => v.toLowerCase().replace(/\s+/g,'_').replace(/[^a-z0-9_]/g,'')
-  const handleNewTableName = (v: string) => { setNewTableName(v); const clean = sanitizeTableName(v); setCreateSQL(clean ? genSQL(clean) : '') }
   const runImport = async () => {
     if (!parsed) return
-    const table = isNewTable ? sanitizeTableName(newTableName) : targetTable
+    const table = targetTable
     if (!table) { alert('Select or name a table first'); return }
     setImporting(true); setResult(null); setImportError(''); setImportProgress('')
     try {
@@ -957,7 +944,6 @@ function FileImport({autoTable}: {autoTable?: string}) {
         const chunk = rowsToInsert.slice(i * CHUNK, (i + 1) * CHUNK)
         setImportProgress(`Importing batch ${i+1} of ${chunks}...`)
         const body: Record<string,unknown> = {tableName: table, rows: chunk}
-        if (i === 0 && isNewTable && createSQL) body.createSQL = createSQL
         const res = await fetch('/api/import?action=insert', {method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body)})
         if (!res.ok) { const text = await res.text(); throw new Error(`Server error: ${res.status} — ${text.slice(0,200)}`) }
         const data = await res.json()
@@ -1020,37 +1006,20 @@ function FileImport({autoTable}: {autoTable?: string}) {
               <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:15,color:D.blue,marginBottom:6}}>📄 {parsed.fileName}</div>
               <div style={{fontSize:12,color:D.textSec,marginBottom:16}}><strong style={{color:D.text}}>{parsed.totalRows.toLocaleString()}</strong> rows · <strong style={{color:D.text}}>{parsed.headers.length}</strong> columns detected</div>
               <Divider label="Target Table"/>
-              <div style={{display:'flex',gap:8,marginBottom:14}}>
-                <div onClick={()=>{setIsNewTable(false)}} style={{flex:1,padding:'8px',borderRadius:7,cursor:'pointer',fontSize:11,fontWeight:600,textAlign:'center' as const,background:!isNewTable?`rgba(59,130,246,0.12)`:'transparent',color:!isNewTable?D.blue:D.textMuted,border:`1px solid ${!isNewTable?`${D.blue}55`:D.border}`}}>Existing Table</div>
-                <div onClick={()=>{setIsNewTable(true)}} style={{flex:1,padding:'8px',borderRadius:7,cursor:'pointer',fontSize:11,fontWeight:600,textAlign:'center' as const,background:isNewTable?`rgba(16,185,129,0.12)`:'transparent',color:isNewTable?D.green:D.textMuted,border:`1px solid ${isNewTable?`${D.green}55`:D.border}`}}>New Table</div>
-              </div>
-              {!isNewTable&&(
-                autoTable ? (
-                  <div style={{padding:'8px 10px',borderRadius:7,background:`rgba(59,130,246,0.08)`,border:`1px solid ${D.blue}33`,fontSize:11,color:D.blue,fontWeight:600}}>
-                    🗃️ {autoTable}
-                  </div>
-                ) : (
-                  <Field label="Select table">
-                    <Sel value={availableTables.includes(targetTable)?targetTable:''} onChange={e=>setTargetTable(e.target.value)}>
-                      {!availableTables.length&&<option value="">Loading tables...</option>}
-                      {availableTables.map(t=><option key={t} value={t}>{t}</option>)}
-                    </Sel>
-                  </Field>
-                )
-              )}
-              {isNewTable&&(
-                <div>
-                  <Field label="New Table Name"><Input placeholder="e.g. market_availabilities" value={newTableName} onChange={e=>handleNewTableName(e.target.value)}/></Field>
-                  {newTableName.trim()&&(
-                    <div style={{padding:'10px 12px',borderRadius:8,background:`rgba(16,185,129,0.1)`,border:`1px solid rgba(16,185,129,0.2)`,fontSize:11,color:D.green,marginTop:4,lineHeight:1.6}}>
-                      ✓ Table will be created automatically on import<br/>
-                      <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:10,opacity:.8}}>→ {sanitizeTableName(newTableName)}</span>
-                    </div>
-                  )}
+              {autoTable ? (
+                <div style={{padding:'8px 10px',borderRadius:7,background:`rgba(59,130,246,0.08)`,border:`1px solid ${D.blue}33`,fontSize:11,color:D.blue,fontWeight:600}}>
+                  🗃️ {autoTable}
                 </div>
+              ) : (
+                <Field label="Select table">
+                  <Sel value={availableTables.includes(targetTable)?targetTable:''} onChange={e=>setTargetTable(e.target.value)}>
+                    {!availableTables.length&&<option value="">Loading tables...</option>}
+                    {availableTables.map(t=><option key={t} value={t}>{t}</option>)}
+                  </Sel>
+                </Field>
               )}
             </Card>
-            <Btn onClick={runImport} disabled={importing || (isNewTable && !newTableName.trim())} style={{width:'100%',padding:13,fontSize:13}}>
+            <Btn onClick={runImport} disabled={importing} style={{width:'100%',padding:13,fontSize:13}}>
               {importing ? (importProgress||'Starting import...') : '📥 Import to Supabase'}
             </Btn>
             {importError&&<div style={{marginTop:10,padding:'10px 14px',borderRadius:8,background:'rgba(239,68,68,0.1)',border:'1px solid rgba(239,68,68,0.2)',fontSize:11,color:D.red,lineHeight:1.6}}><strong>Import failed:</strong> {importError}</div>}
@@ -1239,20 +1208,6 @@ function DatabaseManager() {
   const blankLeaseAvail = {address:'',town:'',county:'Nassau',property_type:'Industrial',building_sf:'',lot_size_ac:'',office_sf:'',ceiling_height:'',loading_docks:'',drive_ins:'',power:'',heat:'',sprinkler:'',parking:'',sewer:'',zoning:'',re_taxes:'',asking_rent:'',rent_type:'NNN',taxes:'',lease_term_years:'',escalations:'',landlord:'',listing_broker:'',loopnet_url:'',status:'Available',notes:''}
   const [leaseAvailForm, setLeaseAvailForm] = useState({...blankLeaseAvail})
   const setLA = (k:string,v:string) => setLeaseAvailForm(f=>({...f,[k]:v}))
-  const pcreSetupAttempted = useRef(false)
-  const [pcreSetupSQL, setPcreSetupSQL] = useState<{sales?:string,leases?:string}|null>(null)
-  const setupPcreTables = useCallback(async () => {
-    if (pcreSetupAttempted.current) return
-    pcreSetupAttempted.current = true
-    try {
-      const res = await fetch('/api/setup-pcre-tables', {method:'POST'})
-      const data = await res.json()
-      if (data.sales_sql || data.leases_sql) {
-        setPcreSetupSQL({sales: data.sales_sql, leases: data.leases_sql})
-      }
-    } catch {}
-  }, [])
-
   const tableForTab = (t: typeof tab) => t==='comps'?'industrial_sale_comps':t==='avails'?'market_availabilities':t==='pcre-sales'?'pcre_sale_transactions':t==='lease-comps'?'lease_comps':t==='lease-avails'?'lease_market_availabilities':'pcre_lease_transactions'
 
   const doSaveComp = async () => {
@@ -1495,7 +1450,7 @@ function DatabaseManager() {
   const G2 = {display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}
   const G3 = {display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:12}
   const tabBtn = (id: 'comps'|'avails'|'pcre-sales'|'pcre-leases'|'lease-comps'|'lease-avails', label: string) => (
-    <div onClick={()=>{setTab(id);setSubTab('add');setBrowseData([]);setBrowseSearch('');setBrowseStatusFilter('');setImportPreview([]);setImportResult(null);cancelEdit();if(id==='pcre-sales'||id==='pcre-leases')setupPcreTables()}} style={{padding:'8px 20px',borderRadius:7,cursor:'pointer',fontSize:12,fontWeight:700,background:tab===id?D.blue:'transparent',color:tab===id?'#FFFFFF':D.textSec,border:`1px solid ${tab===id?'transparent':D.border}`,transition:'all .2s'}}>{label}</div>
+    <div onClick={()=>{setTab(id);setSubTab('add');setBrowseData([]);setBrowseSearch('');setBrowseStatusFilter('');setImportPreview([]);setImportResult(null);cancelEdit()}} style={{padding:'8px 20px',borderRadius:7,cursor:'pointer',fontSize:12,fontWeight:700,background:tab===id?D.blue:'transparent',color:tab===id?'#FFFFFF':D.textSec,border:`1px solid ${tab===id?'transparent':D.border}`,transition:'all .2s'}}>{label}</div>
   )
   const subTabBtn = (id: 'add'|'import'|'file'|'browse', label: string, icon: string) => (
     <div onClick={()=>{ setSubTab(id); if(id==='browse') loadBrowse(0,'') }} style={{padding:'7px 16px',borderRadius:7,cursor:'pointer',fontSize:11,fontWeight:600,display:'flex',alignItems:'center',gap:6,background:subTab===id?`rgba(59,130,246,0.15)`:'transparent',color:subTab===id?D.blue:D.textSec,border:`1px solid ${subTab===id?`${D.blue}55`:D.border}`,transition:'all .2s'}}><span>{icon}</span>{label}</div>
@@ -1636,14 +1591,6 @@ function DatabaseManager() {
       {subTab==='add' && tab==='pcre-sales' && (
         <Card>
           <SL>Add PCRE Sale Transaction</SL>
-          {pcreSetupSQL&&(
-            <div style={{marginBottom:16,padding:'12px 16px',borderRadius:8,background:'rgba(239,68,68,0.08)',border:'1px solid rgba(239,68,68,0.2)',fontSize:12,color:D.red,lineHeight:1.6}}>
-              ⚠️ Tables not yet created. Open <a href="https://supabase.com/dashboard" target="_blank" rel="noreferrer" style={{color:D.blue}}>Supabase SQL Editor</a> and run the SQL shown below, then come back and save.
-              <details style={{marginTop:8}}><summary style={{cursor:'pointer',color:D.textSec}}>View setup SQL</summary>
-                <pre style={{marginTop:8,padding:10,background:'rgba(0,0,0,0.3)',borderRadius:6,fontSize:10,overflowX:'auto' as const,whiteSpace:'pre-wrap' as const}}>{pcreSetupSQL.sales}</pre>
-              </details>
-            </div>
-          )}
           <Field label="Property Address" full><Input placeholder="128 Spagnoli Rd, Melville, NY" value={pcreSaleForm.address} onChange={e=>setPS('address',e.target.value)}/></Field>
           <div style={G3}>
             <Field label="City"><Input value={pcreSaleForm.city} onChange={e=>setPS('city',e.target.value)}/></Field>
@@ -1769,14 +1716,6 @@ function DatabaseManager() {
       {subTab==='add' && tab==='pcre-leases' && (
         <Card>
           <SL>Add PCRE Lease Transaction</SL>
-          {pcreSetupSQL&&(
-            <div style={{marginBottom:16,padding:'12px 16px',borderRadius:8,background:'rgba(239,68,68,0.08)',border:'1px solid rgba(239,68,68,0.2)',fontSize:12,color:D.red,lineHeight:1.6}}>
-              ⚠️ Tables not yet created. Open <a href="https://supabase.com/dashboard" target="_blank" rel="noreferrer" style={{color:D.blue}}>Supabase SQL Editor</a> and run the SQL shown below, then come back and save.
-              <details style={{marginTop:8}}><summary style={{cursor:'pointer',color:D.textSec}}>View setup SQL</summary>
-                <pre style={{marginTop:8,padding:10,background:'rgba(0,0,0,0.3)',borderRadius:6,fontSize:10,overflowX:'auto' as const,whiteSpace:'pre-wrap' as const}}>{pcreSetupSQL.leases}</pre>
-              </details>
-            </div>
-          )}
           <Field label="Property Address" full><Input placeholder="1460 N Clinton Ave, Bay Shore, NY" value={pcreLeaseForm.address} onChange={e=>setPL('address',e.target.value)}/></Field>
           <div style={G3}>
             <Field label="City"><Input value={pcreLeaseForm.city} onChange={e=>setPL('city',e.target.value)}/></Field>
@@ -2661,7 +2600,6 @@ function AvailSearch({subject,avails,setAvails,leaseAvails,setLeaseAvails,setPag
   const toggleExpand = (id:string) => setExpandedRows(prev=>{const n=new Set(prev);n.has(id)?n.delete(id):n.add(id);return n})
   const [statusChanging,setStatusChanging]=useState<Set<string>>(new Set())
   const [sellModal,setSellModal]=useState<{id:string,salePrice:string,saleDate:string,buyer:string,seller:string}|null>(null)
-  const [statusColReady,setStatusColReady]=useState(false)
 
   const AVAIL_STATUSES = [
     {value:'Available',   color:D.green,     label:'Available'},
@@ -2670,11 +2608,6 @@ function AvailSearch({subject,avails,setAvails,leaseAvails,setLeaseAvails,setPag
     {value:'Off Market',  color:D.textMuted, label:'Off Market'},
   ]
   const availStatusColor = (s:string) => AVAIL_STATUSES.find(x=>x.value===s)?.color ?? D.textMuted
-
-  // Run migration on mount so status column exists before first search
-  useEffect(()=>{
-    fetch('/api/status').then(()=>setStatusColReady(true)).catch(()=>setStatusColReady(true))
-  },[])
 
   const updateAvailStatus = async (id:string,status:string) => {
     setStatusChanging(prev=>{const n=new Set(prev);n.add(id);return n})
@@ -2732,7 +2665,6 @@ function AvailSearch({subject,avails,setAvails,leaseAvails,setLeaseAvails,setPag
       setLeaseResults(filtered); setSearched(true); setLoading(false)
     } else {
       // Sale mode: query market_availabilities
-      if (!statusColReady) await fetch('/api/status').catch(()=>{})
       let {data,error} = await buildQuery(true)
       if (error && (error.message?.toLowerCase().includes('status') || error.message?.toLowerCase().includes('column'))) {
         const result = await buildQuery(false)

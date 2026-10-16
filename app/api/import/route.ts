@@ -26,24 +26,10 @@ export async function POST(req: NextRequest) {
   const { searchParams } = new URL(req.url)
   const action = searchParams.get('action')
 
-  // ── CREATE TABLE then INSERT rows ─────────────────────────────────────────
+  // ── INSERT rows into an existing table ────────────────────────────────────
   if (action === 'insert') {
-    const { tableName, rows, createSQL } = await req.json() as { tableName: string, rows: Record<string, unknown>[], createSQL?: string }
+    const { tableName, rows } = await req.json() as { tableName: string, rows: Record<string, unknown>[] }
     if (!tableName || !rows?.length) return NextResponse.json({ error: 'tableName and rows required' }, { status: 400 })
-
-    // Auto-create table if SQL provided
-    if (createSQL) {
-      const { error: createErr } = await supabaseAdmin.rpc('exec_sql', { sql: createSQL })
-      if (createErr) return NextResponse.json({ error: 'Failed to create table: ' + createErr.message }, { status: 500 })
-      // Verify table was actually created
-      const { data: tableCheck } = await supabaseAdmin
-        .from('information_schema.tables')
-        .select('table_name')
-        .eq('table_schema', 'public')
-        .eq('table_name', tableName)
-        .single()
-      if (!tableCheck) return NextResponse.json({ error: `Table "${tableName}" was not created. The exec_sql function may lack permissions. Please create the table manually in Supabase SQL Editor first, then import using "Existing Table".` }, { status: 500 })
-    }
 
     // ── Table-aware column remapping — ALL data preserved, nothing dropped ────
     //

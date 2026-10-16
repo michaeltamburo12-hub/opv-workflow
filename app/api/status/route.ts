@@ -8,27 +8,6 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 )
 
-async function ensureStatusColumns(): Promise<string|null> {
-  const { error } = await supabase.rpc('exec_sql', {
-    sql: `
-      ALTER TABLE public.industrial_sale_comps ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'Closed';
-      ALTER TABLE public.market_availabilities ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'Available';
-      UPDATE public.market_availabilities SET status = 'Available' WHERE status IS NULL;
-      UPDATE public.industrial_sale_comps SET status = 'Closed' WHERE status IS NULL;
-    `
-  })
-  if (error) {
-    console.error('[ensureStatusColumns]', error.message)
-    return error.message
-  }
-  return null
-}
-
-export async function GET() {
-  await ensureStatusColumns()
-  return NextResponse.json({ ok: true })
-}
-
 // PATCH — update status, or move record to the correct table when status triggers a table change
 // table=comps|avails|lease-comps|lease-avails, id=<uuid>
 // Body: { status: string }
@@ -40,9 +19,6 @@ export async function PATCH(req: NextRequest) {
 
   const { status } = await req.json()
   if (!status) return NextResponse.json({ error: 'status required' }, { status: 400 })
-
-  const colErr = await ensureStatusColumns()
-  if (colErr) return NextResponse.json({ error: `Schema setup failed: ${colErr}` }, { status: 500 })
 
   // ── Avail → Comp when status = Sold ──────────────────────────────────────
   if (table === 'avails' && status === 'Sold') {
