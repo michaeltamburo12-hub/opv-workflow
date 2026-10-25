@@ -1,7 +1,7 @@
 export const runtime = 'nodejs'
 
 import { NextRequest, NextResponse } from 'next/server'
-import { fetchStreetViewImage } from '@/lib/street-view'
+import { fetchStreetViewImage, StreetViewError } from '@/lib/street-view'
 
 export async function GET(req: NextRequest) {
   const address = req.nextUrl.searchParams.get('address')
@@ -20,6 +20,8 @@ export async function GET(req: NextRequest) {
       },
     })
   } catch (e) {
+    // Google refusals (disabled API, billing, key restrictions) come back as 502 with Google's reason
+    if (e instanceof StreetViewError) return NextResponse.json({ error: 'Google refused the image request', google: e.message }, { status: 502 })
     return NextResponse.json({ error: (e as Error).message }, { status: 500 })
   }
 }

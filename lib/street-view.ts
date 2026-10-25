@@ -3,6 +3,10 @@
 
 export type StreetViewImage = { buffer: ArrayBuffer, contentType: string, source: 'streetview' | 'satellite' }
 
+// Why Google refused, e.g. "satellite: 403 This API project is not authorized to use this API."
+// Never includes the key.
+export class StreetViewError extends Error {}
+
 export async function fetchStreetViewImage(address: string, mode: 'auto' | 'satellite' = 'auto'): Promise<StreetViewImage | null> {
   const key = process.env.GOOGLE_MAPS_KEY
   if (!key) throw new Error('GOOGLE_MAPS_KEY not configured')
@@ -11,9 +15,14 @@ export async function fetchStreetViewImage(address: string, mode: 'auto' | 'sate
   const satelliteUrl = `https://maps.googleapis.com/maps/api/staticmap?center=${encoded}&zoom=18&size=800x500&maptype=satellite&markers=color:red%7C${encoded}&key=${key}`
   const streetViewUrl = `https://maps.googleapis.com/maps/api/streetview?size=800x500&location=${encoded}&key=${key}&return_error_code=true`
 
+  const failures: string[] = []
   const get = async (url: string, source: StreetViewImage['source']): Promise<StreetViewImage | null> => {
     const res = await fetch(url, { signal: AbortSignal.timeout(10000) })
-    if (!res.ok) return null
+    if (!res.ok) {
+      const body = (await res.text().catch(() => '')).replace(/\s+/g, ' ').trim().slice(0, 300)
+      failures.push(`${source}: ${res.status}${body ? ' ' + body : ''}`)
+      return null
+    }
     return { buffer: await res.arrayBuffer(), contentType: res.headers.get('Content-Type') || 'image/jpeg', source }
   }
 
@@ -22,5 +31,9 @@ export async function fetchStreetViewImage(address: string, mode: 'auto' | 'sate
     const sv = await get(streetViewUrl, 'streetview')
     if (sv) return sv
   }
-  return get(satelliteUrl, 'satellite')
+  const sat = await get(satelliteUrl, 'satellite')
+  if (sat) return sat
+  // Street View legitimately returns 404 when there's no panorama; anything else is a Google-side refusal
+  if (failures.some(f => !/^streetview: 404/.test(f))) throw new StreetViewError(failures.join(' | '))
+  return null
 }
