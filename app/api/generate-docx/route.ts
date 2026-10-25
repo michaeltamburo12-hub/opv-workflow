@@ -7,6 +7,7 @@ import {
   Document, Packer, Paragraph, Table, TableRow, TableCell, TextRun,
   AlignmentType, WidthType, ShadingType, BorderStyle, PageBreak, ImageRun,
 } from 'docx'
+import { fetchStreetViewImage } from '@/lib/street-view'
 
 // ── Constants ──────────────────────────────────────────────────────────────
 const NAVY   = '1C3557'
@@ -58,9 +59,16 @@ async function fetchImg(src: string): Promise<Buffer | null> {
       if (comma === -1) return null
       return Buffer.from(src.slice(comma + 1), 'base64')
     }
+    // Same-origin street-view URLs: call Google directly instead of round-tripping through the browser
+    if (src.startsWith('/api/street-view?')) {
+      const address = new URLSearchParams(src.split('?')[1]).get('address')
+      if (!address) return null
+      const img = await fetchStreetViewImage(address)
+      return img ? Buffer.from(img.buffer) : null
+    }
     let url = src
     if (src.includes('/api/proxy-image?url=')) {
-      url = decodeURIComponent(src.split('?url=')[1] || '')
+      url = new URLSearchParams(src.split('?')[1]).get('url') || ''
     }
     if (!url.startsWith('http')) return null
     const res = await fetch(url, { signal: AbortSignal.timeout(8000), headers: { 'User-Agent': 'Mozilla/5.0' } })
@@ -810,7 +818,8 @@ export async function POST(req: NextRequest) {
     // ── Build and return document ──────────────────────────────────────────
     const doc = new Document({
       sections: [{
-        properties: { page: { margin: { top: 720, bottom: 720, left: 900, right: 900 } } },
+        // US Letter (docx defaults to A4, which prints with odd sizing in the US)
+        properties: { page: { size: { width: 12240, height: 15840 }, margin: { top: 720, bottom: 720, left: 900, right: 900 } } },
         children,
       }],
     })

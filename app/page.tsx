@@ -51,8 +51,11 @@ const css = `
   @media print{
     @page{size:letter;margin:0.65in 0.75in}
     /* Hide everything except the cloned print target appended to <body> */
+    /* White paper: otherwise the app's dark background prints below the report on the last page */
+    html,body{background:#fff!important}
     body.printing-opv > *:not(#__print_target__){display:none!important}
-    #__print_target__{display:block!important;background:#fff!important;color:#111!important;box-shadow:none!important;border-radius:0!important;padding:40px!important;width:100%!important}
+    /* No extra padding: the @page margins already provide the page margins */
+    #__print_target__{display:block!important;background:#fff!important;color:#111!important;box-shadow:none!important;border-radius:0!important;padding:0!important;width:100%!important;max-width:none!important}
     /* Also hide no-print when using browser's own Ctrl+P */
     .no-print{display:none!important}
     /* Page breaks — applied inline by JS, these are fallbacks */
@@ -1177,6 +1180,12 @@ function DatabaseManager() {
   const [browseStatusDropdown, setBrowseStatusDropdown] = useState<string|null>(null)
   const [browseSearch, setBrowseSearch] = useState('')
   const [browseStatusFilter, setBrowseStatusFilter] = useState('')
+  type BrowseFilters = {minSF:string,maxSF:string,town:string,county:string,minPrice:string,maxPrice:string,since:string}
+  type BrowseSort = {col:string,asc:boolean}
+  const blankBrowseFilters: BrowseFilters = {minSF:'',maxSF:'',town:'',county:'',minPrice:'',maxPrice:'',since:''}
+  const [browseFilters, setBrowseFilters] = useState<BrowseFilters>({...blankBrowseFilters})
+  const [browseSort, setBrowseSort] = useState<BrowseSort>({col:'',asc:false})
+  const setBF = (k: keyof BrowseFilters, v: string) => setBrowseFilters(f=>({...f,[k]:v}))
   const [browseError, setBrowseError] = useState('')
   const [editingId, setEditingId] = useState<string|null>(null)
   const [editPanelOpen, setEditPanelOpen] = useState(false)
@@ -1400,12 +1409,34 @@ function DatabaseManager() {
     setImporting(false); setImportResult({ok,fail,skipped,skippedAddresses})
     if (ok>0) { setImportText(''); setImportPreview([]) }
   }
-  const loadBrowse = async (offset=0, search='', statusFilter='') => {
+  // Column names differ between tables: town vs city, and which column holds the price/rent and date
+  const browseCols = (t: typeof tab) => ({
+    town:  t==='lease-comps'||t==='lease-avails' ? 'town' : 'city',
+    price: t==='comps'?'sale_price':t==='avails'?'asking_price':t==='lease-comps'?'deal_rent':t==='lease-avails'?'asking_rent':null,
+    priceLabel: t==='lease-comps'||t==='lease-avails' ? 'Rent ($/SF/yr)' : 'Price ($)',
+    psf:   t==='comps'||t==='avails' ? 'price_per_sf' : null,
+    date:  t==='comps'||t==='pcre-sales'?'sale_date':t==='lease-comps'?'transaction_date':t==='pcre-leases'?'lease_date':null,
+    dateLabel: t==='lease-comps'||t==='pcre-leases' ? 'Leased since' : 'Sold since',
+  })
+  const loadBrowse = async (offset=0, search='', statusFilter='', opts?: {filters?: BrowseFilters, sort?: BrowseSort}) => {
     setBrowseLoading(true); setBrowseError('')
     const table = tableForTab(tab)
+    const f = opts?.filters ?? browseFilters
+    const sort = opts?.sort ?? browseSort
+    const cols = browseCols(tab)
+    const num = (v: string) => Number(v.replace(/[$,\s]/g,''))
     const buildQ = (orderCol: string) => {
-      let q = supabase.from(table).select('*',{count:'exact'}).order(orderCol,{ascending:false}).range(offset,offset+PAGE_SIZE-1)
+      let q = supabase.from(table).select('*',{count:'exact'})
+      q = sort.col ? q.order(sort.col,{ascending:sort.asc,nullsFirst:false}) : q.order(orderCol,{ascending:false})
+      q = q.range(offset,offset+PAGE_SIZE-1)
       if (search.trim()) q = q.ilike('address', `%${search.trim()}%`)
+      if (f.minSF && !isNaN(num(f.minSF))) q = q.gte('building_sf', num(f.minSF))
+      if (f.maxSF && !isNaN(num(f.maxSF))) q = q.lte('building_sf', num(f.maxSF))
+      if (f.town.trim()) q = q.ilike(cols.town, `%${f.town.trim()}%`)
+      if (f.county) q = q.eq('county', f.county)
+      if (cols.price && f.minPrice && !isNaN(num(f.minPrice))) q = q.gte(cols.price, num(f.minPrice))
+      if (cols.price && f.maxPrice && !isNaN(num(f.maxPrice))) q = q.lte(cols.price, num(f.maxPrice))
+      if (cols.date && f.since) q = q.gte(cols.date, f.since)
       if (tab==='lease-comps') {
         if (statusFilter) q = q.eq('status', statusFilter)
         else q = q.in('status',['Active','Expired','Confidential'])
@@ -1450,10 +1481,10 @@ function DatabaseManager() {
   const G2 = {display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}
   const G3 = {display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:12}
   const tabBtn = (id: 'comps'|'avails'|'pcre-sales'|'pcre-leases'|'lease-comps'|'lease-avails', label: string) => (
-    <div onClick={()=>{setTab(id);setSubTab('add');setBrowseData([]);setBrowseSearch('');setBrowseStatusFilter('');setImportPreview([]);setImportResult(null);cancelEdit()}} style={{padding:'8px 20px',borderRadius:7,cursor:'pointer',fontSize:12,fontWeight:700,background:tab===id?D.blue:'transparent',color:tab===id?'#FFFFFF':D.textSec,border:`1px solid ${tab===id?'transparent':D.border}`,transition:'all .2s'}}>{label}</div>
+    <div onClick={()=>{setTab(id);setSubTab('add');setBrowseData([]);setBrowseSearch('');setBrowseStatusFilter('');setBrowseFilters({...blankBrowseFilters});setBrowseSort({col:'',asc:false});setImportPreview([]);setImportResult(null);cancelEdit()}} style={{padding:'8px 20px',borderRadius:7,cursor:'pointer',fontSize:12,fontWeight:700,background:tab===id?D.blue:'transparent',color:tab===id?'#FFFFFF':D.textSec,border:`1px solid ${tab===id?'transparent':D.border}`,transition:'all .2s'}}>{label}</div>
   )
   const subTabBtn = (id: 'add'|'import'|'file'|'browse', label: string, icon: string) => (
-    <div onClick={()=>{ setSubTab(id); if(id==='browse') loadBrowse(0,'') }} style={{padding:'7px 16px',borderRadius:7,cursor:'pointer',fontSize:11,fontWeight:600,display:'flex',alignItems:'center',gap:6,background:subTab===id?`rgba(59,130,246,0.15)`:'transparent',color:subTab===id?D.blue:D.textSec,border:`1px solid ${subTab===id?`${D.blue}55`:D.border}`,transition:'all .2s'}}><span>{icon}</span>{label}</div>
+    <div onClick={()=>{ setSubTab(id); if(id==='browse') loadBrowse(0, browseSearch, browseStatusFilter) }}style={{padding:'7px 16px',borderRadius:7,cursor:'pointer',fontSize:11,fontWeight:600,display:'flex',alignItems:'center',gap:6,background:subTab===id?`rgba(59,130,246,0.15)`:'transparent',color:subTab===id?D.blue:D.textSec,border:`1px solid ${subTab===id?`${D.blue}55`:D.border}`,transition:'all .2s'}}><span>{icon}</span>{label}</div>
   )
   return (
     <>
@@ -1831,9 +1862,59 @@ function DatabaseManager() {
               </div>
             )}
             <Btn variant="ghost" size="sm" onClick={()=>loadBrowse(0, browseSearch, browseStatusFilter)}>🔍 Search</Btn>
-            {(browseSearch||browseStatusFilter)&&<Btn variant="ghost" size="sm" onClick={()=>{setBrowseSearch('');setBrowseStatusFilter('');loadBrowse(0,'','')}}>✕ Clear</Btn>}
+            {(browseSearch||browseStatusFilter||Object.values(browseFilters).some(Boolean)||browseSort.col)&&<Btn variant="ghost" size="sm" onClick={()=>{
+              const sort = {col:'',asc:false}
+              setBrowseSearch('');setBrowseStatusFilter('');setBrowseFilters({...blankBrowseFilters});setBrowseSort(sort)
+              loadBrowse(0,'','',{filters:{...blankBrowseFilters},sort})
+            }}>✕ Clear</Btn>}
             <Btn variant="ghost" size="sm" onClick={()=>loadBrowse(browseOffset, browseSearch, browseStatusFilter)}>↻ Refresh</Btn>
           </div>
+          {/* Filters & sort — press Enter in any box or click Search to apply */}
+          {(()=>{
+            const cols = browseCols(tab)
+            const fInput = (k: keyof BrowseFilters, placeholder: string, width=110) => (
+              <input value={browseFilters[k]} onChange={e=>setBF(k, e.target.value)} placeholder={placeholder}
+                onKeyDown={e=>{ if(e.key==='Enter') loadBrowse(0, browseSearch, browseStatusFilter) }}
+                style={{...inputStyle as React.CSSProperties, width, padding:'6px 10px', fontSize:12}}/>
+            )
+            const lbl = (t: string) => <span style={{fontSize:10,fontWeight:700,letterSpacing:'.08em',textTransform:'uppercase' as const,color:D.textMuted}}>{t}</span>
+            const sortOptions: {value:string,label:string}[] = [
+              {value:'',label:'Newest added'},
+              {value:'building_sf:desc',label:'Size: largest first'},
+              {value:'building_sf:asc',label:'Size: smallest first'},
+              ...(cols.price?[{value:`${cols.price}:desc`,label:`${cols.priceLabel.split(' ')[0]}: highest first`},{value:`${cols.price}:asc`,label:`${cols.priceLabel.split(' ')[0]}: lowest first`}]:[]),
+              ...(cols.psf?[{value:`${cols.psf}:desc`,label:'$/SF: highest first'},{value:`${cols.psf}:asc`,label:'$/SF: lowest first'}]:[]),
+              ...(cols.date?[{value:`${cols.date}:desc`,label:'Date: most recent first'}]:[]),
+              {value:`${cols.town}:asc`,label:'Town: A → Z'},
+              {value:'address:asc',label:'Address: A → Z'},
+            ]
+            return (
+              <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:16,flexWrap:'wrap' as const,padding:'10px 12px',background:D.surface2,border:`1px solid ${D.border}`,borderRadius:8}}>
+                {lbl('Size (SF)')}{fInput('minSF','Min',90)}<span style={{color:D.textMuted}}>–</span>{fInput('maxSF','Max',90)}
+                {lbl('Town')}{fInput('town','Any town',120)}
+                {lbl('County')}
+                <select value={browseFilters.county} onChange={e=>{ const filters={...browseFilters,county:e.target.value}; setBrowseFilters(filters); loadBrowse(0,browseSearch,browseStatusFilter,{filters}) }}
+                  style={{...inputStyle as React.CSSProperties, width:110, padding:'6px 10px', fontSize:12}}>
+                  <option value="">Any</option><option value="Nassau">Nassau</option><option value="Suffolk">Suffolk</option>
+                </select>
+                {cols.price&&<>{lbl(cols.priceLabel)}{fInput('minPrice','Min',100)}<span style={{color:D.textMuted}}>–</span>{fInput('maxPrice','Max',100)}</>}
+                {cols.date&&<>{lbl(cols.dateLabel)}
+                  <input type="date" value={browseFilters.since} onChange={e=>{ const filters={...browseFilters,since:e.target.value}; setBrowseFilters(filters); loadBrowse(0,browseSearch,browseStatusFilter,{filters}) }}
+                    style={{...inputStyle as React.CSSProperties, width:150, padding:'5px 10px', fontSize:12}}/></>}
+                <div style={{marginLeft:'auto',display:'flex',alignItems:'center',gap:8}}>
+                  {lbl('Sort')}
+                  <select value={browseSort.col?`${browseSort.col}:${browseSort.asc?'asc':'desc'}`:''} onChange={e=>{
+                      const [col,dir] = e.target.value.split(':')
+                      const sort = {col:col||'',asc:dir==='asc'}
+                      setBrowseSort(sort); loadBrowse(0,browseSearch,browseStatusFilter,{sort})
+                    }}
+                    style={{...inputStyle as React.CSSProperties, width:190, padding:'6px 10px', fontSize:12}}>
+                    {sortOptions.map(o=><option key={o.value} value={o.value}>{o.label}</option>)}
+                  </select>
+                </div>
+              </div>
+            )
+          })()}
           {browseLoading&&<div style={{textAlign:'center' as const,padding:40}}><div className="spin" style={{width:28,height:28,border:`2px solid ${D.border}`,borderTopColor:D.blue,borderRadius:'50%',margin:'0 auto 12px'}}/><p style={{color:D.textSec,fontSize:12}}>Loading...</p></div>}
           {browseError&&<p style={{color:D.red,fontSize:12,textAlign:'center' as const,padding:16,background:'rgba(239,68,68,0.08)',borderRadius:8,margin:'8px 0'}}>⚠️ Query error: {browseError}</p>}
           {!browseLoading&&!browseError&&browseData.length===0&&<p style={{color:D.textSec,fontSize:12,textAlign:'center' as const,padding:32}}>No records found.</p>}
@@ -1945,9 +2026,9 @@ function DatabaseManager() {
           })}
           {!browseLoading&&browseCount>PAGE_SIZE&&(
             <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginTop:16}}>
-              <Btn variant="ghost" size="sm" disabled={browseOffset===0} onClick={()=>loadBrowse(Math.max(0,browseOffset-PAGE_SIZE), browseSearch)}>← Prev</Btn>
+              <Btn variant="ghost" size="sm" disabled={browseOffset===0} onClick={()=>loadBrowse(Math.max(0,browseOffset-PAGE_SIZE), browseSearch, browseStatusFilter)}>← Prev</Btn>
               <span style={{fontSize:11,color:D.textSec}}>Showing {browseOffset+1}–{Math.min(browseOffset+PAGE_SIZE,browseCount)} of {browseCount.toLocaleString()}</span>
-              <Btn variant="ghost" size="sm" disabled={browseOffset+PAGE_SIZE>=browseCount} onClick={()=>loadBrowse(browseOffset+PAGE_SIZE, browseSearch)}>Next →</Btn>
+              <Btn variant="ghost" size="sm" disabled={browseOffset+PAGE_SIZE>=browseCount} onClick={()=>loadBrowse(browseOffset+PAGE_SIZE, browseSearch, browseStatusFilter)}>Next →</Btn>
             </div>
           )}
         </Card>
@@ -3689,17 +3770,13 @@ function RichEditor({initialValue, onSave, onEscape, editorStyle={}}: {initialVa
 }
 
 // ── OPV REPORT ────────────────────────────────────────────────────────────────
-function OPVReport({subject,comps,leaseComps,leaseAvails=[],avails,analytics,aiText,setPage,frozenHTML,setFrozenHTML,photoUrls={},opvId}: {subject:SubjectForm|null,comps:Comp[],leaseComps:LeaseComp[],leaseAvails?:LeaseComp[],avails:Avail[],analytics:AnalyticsData|null,aiText:string,setPage:(p:string)=>void,frozenHTML:string|null,setFrozenHTML:React.Dispatch<React.SetStateAction<string|null>>,photoUrls?:Record<string,string>,opvId?:string|null}) {
+function OPVReport({subject,comps,leaseComps,leaseAvails=[],avails,analytics,aiText,setPage,frozenHTML,setFrozenHTML,photoUrls={},photoOverrides,setPhotoOverrides,textEdits,setTextEdits,reportOutdated,onFreeze}: {subject:SubjectForm|null,comps:Comp[],leaseComps:LeaseComp[],leaseAvails?:LeaseComp[],avails:Avail[],analytics:AnalyticsData|null,aiText:string,setPage:(p:string)=>void,frozenHTML:string|null,setFrozenHTML:React.Dispatch<React.SetStateAction<string|null>>,photoUrls?:Record<string,string>,photoOverrides:Record<string,string>,setPhotoOverrides:React.Dispatch<React.SetStateAction<Record<string,string>>>,textEdits:Record<string,string>,setTextEdits:React.Dispatch<React.SetStateAction<Record<string,string>>>,reportOutdated:boolean,onFreeze:()=>void}) {
   const today = new Date().toLocaleDateString('en-US',{month:'long',year:'numeric'}).toUpperCase()
   // downloading state removed — print now uses window.print() directly
   const [includeLeaseComps, setIncludeLeaseComps] = useState(leaseComps.length>0)
   const [includeAvails, setIncludeAvails] = useState(true)
   const [includeMarketingStrategy, setIncludeMarketingStrategy] = useState(true)
   const [includePcreProfile, setIncludePcreProfile] = useState(true)
-  const _photoKey = `opv_photo_overrides_${opvId||'new'}`
-  const [photoOverrides, setPhotoOverrides] = useState<Record<string,string>>(() => {
-    try { return JSON.parse(localStorage.getItem(_photoKey) || '{}') } catch { return {} }
-  })
   const [editingKey, setEditingKey] = useState<string|null>(null)
   const [editMode, setEditMode] = useState(false)
   const [nothingToUndo, setNothingToUndo] = useState(false)
@@ -3767,26 +3844,21 @@ function OPVReport({subject,comps,leaseComps,leaseAvails=[],avails,analytics,aiT
       const iframe = editFrameRef.current
       if (iframe?.contentDocument?.body) {
         setFrozenHTML(iframe.contentDocument.body.innerHTML)
+        onFreeze()
       }
       setEditMode(false)
     }
   }
 
   const hardResetIframe = () => {
+    if (frozenHTML && !confirm('Rebuild the report from the current data?\n\nThis discards changes made with "Edit Text" (typed edits and formatting in the report). Photo swaps are kept.')) return
     iframeLoaded.current = false
     setFrozenHTML(null)
     setEditMode(false)
   }
 
   // ── INLINE TEXT EDITING ──
-  const _textKey = `opv_text_edits_${opvId||'new'}`
-  const [textEdits, setTextEdits] = useState<Record<string,string>>(() => {
-    try { return JSON.parse(localStorage.getItem(_textKey) || '{}') } catch { return {} }
-  })
   const [activeTextKey, setActiveTextKey] = useState<string|null>(null)
-  useEffect(() => {
-    try { localStorage.setItem(_textKey, JSON.stringify(textEdits)) } catch {}
-  }, [textEdits])
   const getText = (key: string, def: string) => textEdits[key] !== undefined ? textEdits[key] : def
   const saveText = (key: string, val: string, def: string) => {
     if (val === def) { setTextEdits(p=>{const n={...p};delete n[key];return n}) }
@@ -3843,11 +3915,6 @@ function OPVReport({subject,comps,leaseComps,leaseAvails=[],avails,analytics,aiT
       </span>
     )
   }
-
-  // Persist photo overrides to localStorage whenever they change
-  useEffect(() => {
-    try { localStorage.setItem(_photoKey, JSON.stringify(photoOverrides)) } catch {}
-  }, [photoOverrides])
 
   // When photoOverrides change (set via "Edit Photo" button inside this report),
   // patch them into frozenHTML. OPVReport is always mounted when overrides change,
@@ -3946,9 +4013,7 @@ function OPVReport({subject,comps,leaseComps,leaseAvails=[],avails,analytics,aiT
     setEditingKey(null)
   }
   const handleFileUpload = (key: string, file: File) => {
-    const reader = new FileReader()
-    reader.onload = e => { if(e.target?.result) setCustomPhoto(key, e.target.result as string) }
-    reader.readAsDataURL(file)
+    resizeImageFile(file).then(url => setCustomPhoto(key, url)).catch(() => alert('Could not read that image file.'))
   }
   const clearPhoto = (key: string) => {
     setEditingKey(null)
@@ -4081,30 +4146,53 @@ function OPVReport({subject,comps,leaseComps,leaseAvails=[],avails,analytics,aiT
   }
   // ─────────────────────────────────────────────────────────────────────────────
 
-  const downloadPDF = () => {
-    // Clone the live report and append as a direct <body> child.
-    // This keeps all global CSS / fonts / colors intact (unlike iframe which loses them)
-    // and lets CSS page-break work in normal document flow (unlike position:absolute).
+  // Build a print-ready copy of the report and append it as a direct <body> child.
+  // This keeps all global CSS / fonts / colors intact (unlike iframe which loses them)
+  // and lets CSS page-break work in normal document flow (unlike position:absolute).
+  // Used by the Print button and by Ctrl+P (via beforeprint) so both print the same way.
+  const preparePrint = (): boolean => {
+    if (document.getElementById('__print_target__')) return true
     const area = reportRef.current || document.querySelector<HTMLElement>('.print-area')
-    if (!area) { alert('Please view the OPV report before printing.'); return }
+    if (!area) return false
 
     const clone = area.cloneNode(true) as HTMLElement
     clone.id = '__print_target__'
-    clone.style.cssText = 'margin:0;padding:40px;background:#fff;box-shadow:none;border-radius:0'
+    clone.style.cssText = 'margin:0;padding:0;background:#fff;box-shadow:none;border-radius:0'
 
     // Remove toolbar / interactive elements from the clone
     clone.querySelectorAll('.no-print, button, input, textarea, select').forEach(el => el.remove())
 
-    // Apply page breaks inline so they work regardless of CSS cascade order
-    clone.querySelectorAll<HTMLElement>('.sec-heading').forEach((el, i) => {
-      if (i === 0) return // no break before the very first section
+    // Cover page: drop the on-screen minimum height so it fits on one page, then start a new page
+    const cover = clone.firstElementChild as HTMLElement | null
+    if (cover) {
+      cover.style.minHeight = '0'
+      cover.style.marginBottom = '0'
+      cover.style.paddingBottom = '0'
+      cover.style.borderBottom = 'none'
+      cover.style.breakAfter = 'page'; cover.style.pageBreakAfter = 'always'
+    }
+
+    // Apply page breaks inline so they work regardless of CSS cascade order.
+    // Every numbered section starts on a new page (the first one follows the table of contents).
+    clone.querySelectorAll<HTMLElement>('.sec-heading').forEach(el => {
       el.style.breakBefore = 'page'; el.style.pageBreakBefore = 'always'
+      el.style.marginTop = '0'
     })
     clone.querySelectorAll<HTMLElement>('.prop-card').forEach(el => {
       el.style.breakBefore = 'page'; el.style.pageBreakBefore = 'always'
+      el.style.borderBottom = 'none'; el.style.marginBottom = '0'; el.style.paddingBottom = '0'
     })
+    // A section heading already starts a page, so the first property card right after it
+    // shouldn't start another one
+    clone.querySelectorAll<HTMLElement>('.sec-heading + .prop-card').forEach(el => {
+      el.style.breakBefore = 'auto'; el.style.pageBreakBefore = 'auto'
+    })
+    // Never split a table row, label/value row or photo across pages
     clone.querySelectorAll<HTMLElement>('tr, .photo-slot-wrap').forEach(el => {
       el.style.breakInside = 'avoid'; el.style.pageBreakInside = 'avoid'
+    })
+    clone.querySelectorAll<HTMLElement>('[style]').forEach(el => {
+      if (el.style.display === 'grid' && el.children.length <= 8) { el.style.breakInside = 'avoid'; el.style.pageBreakInside = 'avoid' }
     })
     // Force photo containers to clip their images — browsers sometimes ignore overflow:hidden on print
     clone.querySelectorAll<HTMLElement>('.photo-slot-wrap > div').forEach(el => {
@@ -4126,20 +4214,44 @@ function OPVReport({subject,comps,leaseComps,leaseAvails=[],avails,analytics,aiT
     clone.querySelectorAll<HTMLElement>('.sec-heading, .prop-card-header').forEach(el => {
       el.style.breakAfter = 'avoid'; el.style.pageBreakAfter = 'avoid'
     })
-    // Force page break before "ABOUT THE BROKERS" section
+    // Force page breaks before "ABOUT THE BROKERS" and the PCRE lease transactions table
+    // (its heading otherwise gets stranded at the bottom of the sales table page)
     clone.querySelectorAll<HTMLElement>('div').forEach(el => {
-      if (el.childNodes.length === 1 && el.textContent?.trim() === 'ABOUT THE BROKERS') {
+      const text = el.childNodes.length === 1 ? el.textContent?.trim().toUpperCase() : ''
+      if (text === 'ABOUT THE BROKERS' || text?.startsWith('PCRE\'S SAMPLE OF OUR RECENTLY COMPLETED LEASE')) {
         el.style.breakBefore = 'page'; el.style.pageBreakBefore = 'always'
       }
     })
 
     document.body.appendChild(clone)
     document.body.classList.add('printing-opv')
+    return true
+  }
+
+  const cleanupPrint = () => {
+    document.getElementById('__print_target__')?.remove()
+    document.body.classList.remove('printing-opv')
+  }
+
+  // Ctrl+P / browser menu printing goes through the same preparation as the Print button
+  const preparePrintRef = useRef(preparePrint)
+  useEffect(() => { preparePrintRef.current = preparePrint })
+  useEffect(() => {
+    const before = () => { preparePrintRef.current() }
+    window.addEventListener('beforeprint', before)
+    window.addEventListener('afterprint', cleanupPrint)
+    return () => {
+      window.removeEventListener('beforeprint', before)
+      window.removeEventListener('afterprint', cleanupPrint)
+      cleanupPrint()
+    }
+  }, [])
+
+  const downloadPDF = () => {
+    if (!preparePrint()) { alert('Please view the OPV report before printing.'); return }
     window.print()
-    setTimeout(() => {
-      document.body.removeChild(clone)
-      document.body.classList.remove('printing-opv')
-    }, 2000)
+    // afterprint normally cleans up; this is a fallback for browsers that don't fire it
+    setTimeout(cleanupPrint, 2000)
   }
 
   if (!subject) return (
@@ -4227,8 +4339,10 @@ function OPVReport({subject,comps,leaseComps,leaseAvails=[],avails,analytics,aiT
                 // Do NOT reload the iframe — that would wipe the undo stack
                 if (editFrameRef.current?.contentDocument?.body) {
                   setFrozenHTML(editFrameRef.current.contentDocument.body.innerHTML)
+                  onFreeze()
                 } else if (reportRef.current) {
                   setFrozenHTML(reportRef.current.innerHTML)
+                  onFreeze()
                 }
                 setEditMode(false)
               }}
@@ -4245,43 +4359,41 @@ function OPVReport({subject,comps,leaseComps,leaseAvails=[],avails,analytics,aiT
             <Btn onClick={async()=>{
               if (!subject) { alert('No subject property — complete the OPV first'); return }
               try {
-                // Resolve all photos to data URIs in the browser (avoids server-side hotlink blocks)
-                // For comps/avails without custom photos, fall back to street-view API (same-origin, no CORS)
-                const resolvedPhotos: Record<string,string> = {}
+                // Send photo *links*; the server fetches them. (Sending the images themselves
+                // exceeded Vercel's 4.5 MB request limit on larger reports.) Only photos uploaded
+                // from a computer are sent as data, and those are downscaled on upload.
+                // Keys: 'subject' for the subject property, raw id for comps/avails.
                 const svAddr = (a: string, b?: string) => encodeURIComponent((a||'') + (b ? ', '+b : '') + ', NY')
-                // Build job list: user-set photos first, then street-view fallbacks for missing ones
-                const photoJobs: {key:string,src:string}[] = []
-                // User-set custom photos
-                for (const [k, src] of Object.entries(photoUrls)) { if (src) photoJobs.push({key:k,src:src as string}) }
-                // Street-view fallbacks for items without custom photos
-                if (!photoUrls['subject'] && subject.address) photoJobs.push({key:'subject',src:`/api/street-view?address=${svAddr(subject.address,subject.city)}`})
-                for (const c of comps) { if (!photoUrls[c.id] && c.address) photoJobs.push({key:c.id,src:`/api/street-view?address=${svAddr(c.address,c.city)}`}) }
-                for (const c of leaseComps) { if (!photoUrls[c.id] && c.address) photoJobs.push({key:c.id,src:`/api/street-view?address=${svAddr(c.address,(c as any).town)}`}) }
-                for (const a of leaseAvails) { if (!photoUrls[a.id] && a.address) photoJobs.push({key:a.id,src:`/api/street-view?address=${svAddr(a.address,(a as any).town)}`}) }
-                for (const a of avails) { if (!photoUrls[a.id] && a.address) photoJobs.push({key:a.id,src:`/api/street-view?address=${svAddr(a.address,a.city)}`}) }
-                await Promise.all(photoJobs.map(async ({key, src}) => {
-                  try {
-                    const r = await fetch(src)
-                    if (!r.ok) return
-                    const buf = await r.arrayBuffer()
-                    const ct = r.headers.get('content-type') || 'image/jpeg'
-                    const bytes = new Uint8Array(buf)
-                    let bin = ''
-                    for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i])
-                    resolvedPhotos[key] = `data:${ct};base64,${btoa(bin)}`
-                  } catch { /* skip */ }
-                }))
-                const res = await fetch('/api/generate-docx', {
-                  method:'POST',
-                  headers:{'Content-Type':'application/json'},
-                  body: JSON.stringify({ subject, comps, leaseComps, leaseAvails, avails, analytics, aiText, includeLeaseComps, includeAvails, includeMarketingStrategy, photoUrls: resolvedPhotos })
-                })
-                if (!res.ok) { const e = await res.json(); alert('Error: '+e.error); return }
+                const photos: Record<string,string> = {}
+                for (const [k, src] of Object.entries(photoUrls)) { if (src) photos[k] = src as string }
+                // Photos swapped in the report ("Edit Photo") take precedence
+                for (const [k, src] of Object.entries(photoOverrides)) {
+                  if (!src) continue
+                  const id = k === 'subject_cover' ? 'subject' : k.replace(/^lease_avail_|^comp_|^avail_|^lease_/, '')
+                  photos[id] = src
+                }
+                // Street-view fallbacks for items without a photo
+                if (!photos['subject'] && subject.address) photos['subject'] = `/api/street-view?address=${svAddr(subject.address,subject.city)}`
+                for (const c of comps) { if (!photos[c.id] && c.address) photos[c.id] = `/api/street-view?address=${svAddr(c.address,c.city)}` }
+                for (const c of leaseComps) { if (!photos[c.id] && c.address) photos[c.id] = `/api/street-view?address=${svAddr(c.address,(c as any).town)}` }
+                for (const a of leaseAvails) { if (!photos[a.id] && a.address) photos[a.id] = `/api/street-view?address=${svAddr(a.address,(a as any).town)}` }
+                for (const a of avails) { if (!photos[a.id] && a.address) photos[a.id] = `/api/street-view?address=${svAddr(a.address,a.city)}` }
+                const body = JSON.stringify({ subject, comps, leaseComps, leaseAvails, avails, analytics, aiText, includeLeaseComps, includeAvails, includeMarketingStrategy, photoUrls: photos })
+                if (body.length > MAX_SAVE_BYTES) { alert('This report has too many large uploaded photos to export. Re-upload or remove a few of them and try again.'); return }
+                const res = await fetch('/api/generate-docx', { method:'POST', headers:{'Content-Type':'application/json'}, body })
+                if (!res.ok) {
+                  const e = await res.json().catch(()=>({error:`HTTP ${res.status}`}))
+                  alert('Word doc failed: '+e.error); return
+                }
                 const blob = await res.blob()
+                const fileName = /filename="([^"]+)"/.exec(res.headers.get('Content-Disposition')||'')?.[1] || 'OPV.docx'
                 const url = URL.createObjectURL(blob)
                 const a = document.createElement('a')
                 a.href = url
+                a.download = fileName
+                document.body.appendChild(a)
                 a.click()
+                a.remove()
                 setTimeout(()=>URL.revokeObjectURL(url), 5000)
               } catch(e:any) { alert('Word doc failed: '+e.message) }
             }} style={{padding:'9px 20px',fontSize:12,background:'rgba(59,130,246,0.10)',color:D.blue,border:`1px solid rgba(59,130,246,0.3)`}}>
@@ -4306,6 +4418,12 @@ function OPVReport({subject,comps,leaseComps,leaseAvails=[],avails,analytics,aiT
           </div>
         </Card>
       </div>
+
+      {/* Out-of-date banner: data changed after the report text was edited/frozen */}
+      {!editMode&&frozenHTML&&reportOutdated&&<div className="no-print" style={{background:'rgba(217,119,6,0.10)',border:'1px solid rgba(217,119,6,0.35)',borderRadius:8,padding:'10px 16px',marginBottom:12,display:'flex',alignItems:'center',gap:10,fontSize:13,color:D.gold}}>
+        <span style={{fontSize:18}}>⚠️</span>
+        <span><strong>This report is out of date.</strong> Comps, availabilities or other data changed after the report text was edited, and the report below doesn&apos;t show those changes yet. Click <strong>↩ Refresh Report</strong> to rebuild it (this discards &quot;Edit Text&quot; changes, so copy any text you want to keep first).</span>
+      </div>}
 
       {/* Edit mode banner */}
       {editMode&&<div className="no-print" style={{background:'rgba(16,185,129,0.1)',border:'1px solid rgba(16,185,129,0.3)',borderRadius:8,padding:'10px 16px',marginBottom:12,display:'flex',alignItems:'center',gap:10,fontSize:13,color:D.green}}>
@@ -4994,6 +5112,54 @@ const PAGE_TITLES: Record<string,string> = {
   analytics:'Analytics',database:'Database Manager',
 }
 
+// ── SAVE & SYNC HELPERS ───────────────────────────────────────────────────────
+// The fields that make up a saved OPV. Each is compared as JSON to detect unsaved changes
+// and to merge a teammate's save with local edits field by field.
+const SYNC_KEYS = ['subject','comps','leaseComps','leaseAvails','avails','analytics','aiText','assignmentData','folders','editedReportHTML','editedReportSig','photoUrls','photoOverrides','textEdits','verificationStatus'] as const
+type SyncKey = typeof SYNC_KEYS[number]
+type SyncFields = Record<SyncKey, any>
+const SYNC_LABELS: Partial<Record<SyncKey,string>> = {
+  subject:'the subject property', comps:'sale comps', leaseComps:'lease comps', leaseAvails:'lease availabilities',
+  avails:'availabilities', analytics:'analytics', aiText:'the broker narrative', assignmentData:'the assignment',
+  folders:'folders', editedReportHTML:'report text edits', photoUrls:'photos', photoOverrides:'report photos',
+  textEdits:'report text edits', verificationStatus:'verification',
+}
+const BLANK_ASSIGNMENT: AssignmentData = {clientName:'',propertyAddress:'',opvType:'For Sale',dueDate:'',preparedBy:'',notes:''}
+const serializeFields = (f: SyncFields) => Object.fromEntries(SYNC_KEYS.map(k => [k, JSON.stringify(f[k] ?? null)])) as Record<SyncKey,string>
+// Saves go through a Vercel function, whose request body limit is 4.5 MB
+const MAX_SAVE_BYTES = 4_200_000
+
+// Short, stable fingerprint of a string (for "has the report data changed?" checks)
+const hashString = (s: string) => {
+  let h = 5381
+  for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) | 0
+  return (h >>> 0).toString(36)
+}
+
+// Downscale an uploaded photo so saved OPVs stay well under the save size limit
+const resizeImageFile = (file: File, maxDim = 1600, quality = 0.82) => new Promise<string>((resolve, reject) => {
+  const reader = new FileReader()
+  reader.onerror = reject
+  reader.onload = () => {
+    const img = new Image()
+    img.onerror = () => resolve(reader.result as string)
+    img.onload = () => {
+      const scale = Math.min(1, maxDim / Math.max(img.width, img.height))
+      const canvas = document.createElement('canvas')
+      canvas.width = Math.round(img.width * scale)
+      canvas.height = Math.round(img.height * scale)
+      const ctx = canvas.getContext('2d')
+      if (!ctx) { resolve(reader.result as string); return }
+      ctx.fillStyle = '#fff'
+      ctx.fillRect(0, 0, canvas.width, canvas.height)
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
+      resolve(canvas.toDataURL('image/jpeg', quality))
+    }
+    img.src = reader.result as string
+  }
+  reader.readAsDataURL(file)
+})
+
 // ── APP ───────────────────────────────────────────────────────────────────────
 export default function App() {
   const [user,setUser]=useState<{name:string,role:string,init:string}>({name:'Premier',role:'Commercial Broker',init:'PC'})
@@ -5057,21 +5223,19 @@ export default function App() {
   const [saving,setSaving]=useState(false)
   const [savedOPVs,setSavedOPVs]=useState<{id:string,address:string,current_step:string,updated_at:string,saved_by:string}[]>([])
   const [showSavedPanel,setShowSavedPanel]=useState(false)
-  const [editedReportHTML,setEditedReportHTML]=useState<string|null>(()=>{
-    // On page load, restore the edited HTML for whatever OPV was last open
-    if (typeof window==='undefined') return null
-    try {
-      const id = localStorage.getItem('opv_saved_id')
-      if (!id) return null
-      return localStorage.getItem(`opv_edited_html_${id}`) || null
-    } catch { return null }
-  })
-
-  // Save editedReportHTML to localStorage whenever it's set — never delete on state clear
+  // Frozen report HTML (Edit Text mode), report photo swaps and inline text edits all live in the
+  // database with the OPV; they're loaded by restoreOPV on startup.
+  const [editedReportHTML,setEditedReportHTML]=useState<string|null>(null)
+  const [editedReportSig,setEditedReportSig]=useState<string|null>(null)
+  const [photoOverrides,setPhotoOverrides]=useState<Record<string,string>>({})
+  const [textEdits,setTextEdits]=useState<Record<string,string>>({})
+  const [saveError,setSaveError]=useState<string|null>(null)
+  const [syncNotice,setSyncNotice]=useState<string|null>(null)
   useEffect(()=>{
-    if (!savedOPVId || !editedReportHTML) return
-    try { localStorage.setItem(`opv_edited_html_${savedOPVId}`, editedReportHTML) } catch {}
-  }, [editedReportHTML, savedOPVId])
+    if (!syncNotice) return
+    const t = setTimeout(()=>setSyncNotice(null), 8000)
+    return () => clearTimeout(t)
+  },[syncNotice])
 
   const [folders,setFolders]=useState<Folder[]>(()=>{
     if (typeof window==='undefined') return []
@@ -5190,114 +5354,222 @@ export default function App() {
     'opv-report': false,
   }
 
-  const saveReport=async(silent=false)=>{
-    if(!subject){if(!silent)alert('Enter a subject property address first.');return}
-    setSaving(true)
-    try {
-      const res = await fetch('/api/opv-history',{
-        method:'POST',
-        headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({savedBy:user.name, address:subject.address, subject, comps, leaseComps, leaseAvails, avails, analytics, aiText, currentStep:page, existingId:savedOPVId, assignmentData, folders, editedReportHTML, photoUrls, verificationStatus})
-      })
-      const data = await res.json()
-      if(data.error) throw new Error(data.error)
-      setSavedOPVId(data.id)
-      setLastSaved(new Date())
-      // Record exact DB timestamp so poll knows this was OUR save (won't trigger reload)
-      if(data.updated_at) lastDbUpdatedAtRef.current = data.updated_at
-      setReports(r=>[{id:Date.now(),subject,comps,avails,analytics,date:new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})},...r])
-      if(!silent) alert('✓ OPV progress saved.')
-    } catch(e) { if(!silent) alert('Save failed: '+(e as Error).message) }
-    setSaving(false)
+  // Fingerprint of the data the report is built from; stored when report text is frozen so the
+  // report can show an "out of date" banner after comps/availabilities etc. change.
+  const reportDataSig = hashString(JSON.stringify({subject, comps, leaseComps, leaseAvails, avails, analytics, aiText}))
+
+  // ── SAVE & SYNC ────────────────────────────────────────────────────────────
+  // Saves happen only when something changed. Each save sends the updated_at this tab last saw;
+  // if a teammate saved in between, the server refuses (409) and we merge field by field instead
+  // of overwriting their work. A poll picks up teammates' saves the same way.
+  const currentFields: SyncFields = {subject, comps, leaseComps, leaseAvails, avails, analytics, aiText, assignmentData, folders, editedReportHTML, editedReportSig, photoUrls, photoOverrides, textEdits, verificationStatus}
+  const currentFieldsRef = useRef(currentFields)
+  useEffect(() => { currentFieldsRef.current = currentFields })
+  const pageRef = useRef(page)
+  useEffect(() => { pageRef.current = page }, [page])
+  const savedOPVIdRef = useRef(savedOPVId)
+  useEffect(() => { savedOPVIdRef.current = savedOPVId }, [savedOPVId])
+  // JSON of each field as last loaded from / saved to the DB — the merge base
+  const baseRef = useRef<Record<SyncKey,string>|null>(null)
+  const lastDbUpdatedAtRef = useRef<string|null>(null)
+  // One save or sync at a time
+  const busyRef = useRef(false)
+  // Don't save an existing OPV until the startup load from the DB has finished
+  const readyRef = useRef(false)
+
+  // Normalize an OPV as returned by /api/opv-history into SyncFields
+  const fromServer = (data: any): SyncFields => ({
+    subject:            data.subject || null,
+    comps:              data.comps || [],
+    leaseComps:         data.leaseComps || [],
+    leaseAvails:        data.leaseAvails || [],
+    avails:             data.avails || [],
+    analytics:          data.analytics || null,
+    aiText:             data.aiText || '',
+    assignmentData:     data.assignmentData || BLANK_ASSIGNMENT,
+    folders:            data.folders || [],
+    editedReportHTML:   data.editedReportHTML || null,
+    editedReportSig:    data.editedReportSig || null,
+    photoUrls:          data.photoUrls || {},
+    photoOverrides:     data.photoOverrides || {},
+    textEdits:          data.textEdits || {},
+    verificationStatus: data.verificationStatus || {},
+  })
+
+  const applyFields = (f: SyncFields) => {
+    setSubject(f.subject)
+    setComps(f.comps)
+    setLeaseComps(f.leaseComps)
+    setLeaseAvails(f.leaseAvails)
+    setAvails(f.avails)
+    setAnalytics(f.analytics)
+    setAiText(f.aiText)
+    setAssignmentData(f.assignmentData)
+    updateFolders(f.folders)
+    setEditedReportHTML(f.editedReportHTML)
+    setEditedReportSig(f.editedReportSig)
+    setPhotoUrls(f.photoUrls)
+    setPhotoOverrides(f.photoOverrides)
+    setTextEdits(f.textEdits)
+    setVerificationStatus(f.verificationStatus)
   }
 
-  // Auto-save every 30 seconds — any device can edit; skip cycles after a poll-triggered reload
-  // to avoid a save-loop (reload → auto-save → another device reloads → auto-save → …)
+  const isDirty = () => {
+    const base = baseRef.current
+    if (!base) return true
+    const cur = serializeFields(currentFieldsRef.current)
+    return SYNC_KEYS.some(k => cur[k] !== base[k])
+  }
+
+  // Merge a teammate's saved version into local state. Per field: if only one side changed it
+  // since the last load/save, that side wins; if both changed it, the saved (teammate's) version wins.
+  const mergeFromServer = (data: any) => {
+    const server = fromServer(data)
+    const serverJSON = serializeFields(server)
+    const base = baseRef.current
+    const localJSON = serializeFields(currentFieldsRef.current)
+    const merged = {...server}
+    const conflicts: SyncKey[] = []
+    const takeLocal = (k: SyncKey) => { merged[k] = currentFieldsRef.current[k] }
+    for (const k of SYNC_KEYS) {
+      if (k === 'editedReportSig') continue // follows editedReportHTML
+      if (!base || localJSON[k] === base[k]) continue              // unchanged locally → take saved
+      if (serverJSON[k] === base[k] || serverJSON[k] === localJSON[k]) { takeLocal(k); continue } // only we changed it
+      conflicts.push(k)                                             // both changed → keep saved
+    }
+    merged.editedReportSig = merged.editedReportHTML === currentFieldsRef.current.editedReportHTML && merged.editedReportHTML !== server.editedReportHTML
+      ? currentFieldsRef.current.editedReportSig : server.editedReportSig
+    applyFields(merged)
+    baseRef.current = serverJSON
+    lastDbUpdatedAtRef.current = data.updatedAt || null
+    setLastSaved(new Date(data.updatedAt || Date.now()))
+    const changedByTeammate = base ? SYNC_KEYS.some(k => serverJSON[k] !== base[k]) : false
+    if (conflicts.length) {
+      const labels = [...new Set(conflicts.map(k => SYNC_LABELS[k] || k))].join(', ')
+      setSyncNotice(`A teammate changed ${labels} at the same time you did. Their version was kept, so please re-check your last edit there.`)
+    } else if (changedByTeammate) {
+      setSyncNotice('Updated with a teammate\'s latest changes.')
+    }
+  }
+
+  const saveReport=async(silent=false)=>{
+    const fields = currentFieldsRef.current
+    if(!fields.subject){if(!silent)alert('Enter a subject property address first.');return}
+    const existingId = savedOPVIdRef.current
+    if (existingId && !readyRef.current) return
+    if (busyRef.current) { if(!silent) setTimeout(()=>saveReportRef.current(false), 700); return }
+    if (silent && existingId && !isDirty()) return
+    busyRef.current = true
+    setSaving(true)
+    try {
+      const snapshot = serializeFields(fields)
+      const body = JSON.stringify({
+        ...fields,
+        savedBy: user.name, address: fields.subject.address, currentStep: pageRef.current,
+        existingId, baseUpdatedAt: existingId ? lastDbUpdatedAtRef.current : null,
+      })
+      if (body.length > MAX_SAVE_BYTES) {
+        throw new Error(`This OPV is too large to save (${(body.length/1e6).toFixed(1)} MB; the limit is about 4 MB). This is usually caused by uploaded photos. Re-upload or remove a few of them.`)
+      }
+      const res = await fetch('/api/opv-history',{method:'POST',headers:{'Content-Type':'application/json'},body})
+      const data = await res.json().catch(()=>({error:`Save failed (HTTP ${res.status})`}))
+      if (res.status === 409 && data.conflict) {
+        // A teammate saved first: merge their version in, then save whatever we kept locally
+        mergeFromServer(data.current)
+        setTimeout(()=>saveReportRef.current(true), 500)
+        return
+      }
+      if (res.status === 404 && data.missing) {
+        // Deleted elsewhere: the next save stores this copy as a new OPV
+        setSavedOPVId(null)
+        baseRef.current = null
+        lastDbUpdatedAtRef.current = null
+        setSyncNotice('This OPV was deleted from another session. Your copy will be saved as a new OPV.')
+        setTimeout(()=>saveReportRef.current(true), 500)
+        return
+      }
+      if(data.error) throw new Error(data.error)
+      setSavedOPVId(data.id)
+      savedOPVIdRef.current = data.id
+      baseRef.current = snapshot
+      lastDbUpdatedAtRef.current = data.updated_at || null
+      setLastSaved(new Date())
+      setSaveError(null)
+      setReports(r=>[{id:Date.now(),subject:fields.subject,comps:fields.comps,avails:fields.avails,analytics:fields.analytics,date:new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})},...r])
+      if(!silent) alert('✓ OPV progress saved.')
+    } catch(e) {
+      setSaveError((e as Error).message)
+      if(!silent) alert('Save failed: '+(e as Error).message)
+    } finally {
+      busyRef.current = false
+      setSaving(false)
+    }
+  }
+
   const saveReportRef = useRef(saveReport)
   useEffect(() => { saveReportRef.current = saveReport })
-  const skipAutoSaveCountRef = useRef(0)
+
+  // Auto-save: check every 4s and save only if something changed
   useEffect(() => {
-    const id = setInterval(() => {
-      if (skipAutoSaveCountRef.current > 0) { skipAutoSaveCountRef.current--; return }
-      if (saveReportRef.current) saveReportRef.current(true)
-    }, 30000)
+    const id = setInterval(() => { saveReportRef.current(true) }, 4000)
     return () => clearInterval(id)
   }, [])
 
-  // Real-time sync: poll every 10s; if DB updated_at changed (someone else saved), reload
-  const savedOPVIdRef = useRef(savedOPVId)
-  useEffect(() => { savedOPVIdRef.current = savedOPVId }, [savedOPVId])
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const restoreOPVRef = useRef<(id: string, opts?: { keepPage?: boolean }) => Promise<void>>(async () => {})
-  useEffect(() => { restoreOPVRef.current = restoreOPV })
-  const lastDbUpdatedAtRef = useRef<string|null>(null)
-  const isSyncingRef = useRef(false)
+  // Sync: every 5s, check whether a teammate saved this OPV; if so, merge their version in
+  const mergeFromServerRef = useRef(mergeFromServer)
+  useEffect(() => { mergeFromServerRef.current = mergeFromServer })
   useEffect(() => {
     const id = setInterval(async () => {
       const currentId = savedOPVIdRef.current
-      if (!currentId || isSyncingRef.current) return
+      if (!currentId || busyRef.current || !readyRef.current) return
       try {
-        const res = await fetch('/api/opv-history')
-        const data = await res.json()
-        const record = (data.reports || []).find((r: any) => r.id === currentId)
-        if (!record) return
-        const dbUpdatedAt: string = record.updated_at
-        const prev = lastDbUpdatedAtRef.current
-        if (!prev) { lastDbUpdatedAtRef.current = dbUpdatedAt; return }
-        if (dbUpdatedAt !== prev) {
-          // Someone else saved — reload and skip our next 2 auto-saves to break the loop
-          isSyncingRef.current = true
-          await restoreOPVRef.current(currentId, { keepPage: true })
-          lastDbUpdatedAtRef.current = dbUpdatedAt
-          skipAutoSaveCountRef.current = 2
-          isSyncingRef.current = false
-        }
-      } catch { /* network error — ignore */ }
-    }, 10000)
+        const meta = await fetch(`/api/opv-history?id=${currentId}`).then(r=>r.json())
+        if (!meta.updated_at || meta.updated_at === lastDbUpdatedAtRef.current) return
+        if (busyRef.current || savedOPVIdRef.current !== currentId) return
+        busyRef.current = true
+        try {
+          const full = await fetch(`/api/opv-history?id=${currentId}`,{method:'PATCH'}).then(r=>r.json())
+          if (!full.error && savedOPVIdRef.current === currentId) mergeFromServerRef.current(full)
+        } finally { busyRef.current = false }
+      } catch { /* network error — try again next tick */ }
+    }, 5000)
     return () => clearInterval(id)
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // On page load, if a savedOPVId was restored from localStorage, reload the full OPV data from DB
-  // so subsequent auto-saves update the existing record instead of inserting a new one
+  // On page load, if a savedOPVId was restored from localStorage, reload the full OPV from the DB
+  // so later saves update the existing record instead of inserting a new one
+  const restoreOPVRef = useRef<(id: string, opts?: { keepPage?: boolean, background?: boolean }) => Promise<void>>(async () => {})
+  useEffect(() => { restoreOPVRef.current = restoreOPV })
   useEffect(() => {
     const storedId = localStorage.getItem('opv_saved_id')
-    if (!storedId) return
-    restoreOPVRef.current(storedId, { keepPage: true })
+    if (!storedId) { readyRef.current = true; return }
+    restoreOPVRef.current(storedId, { keepPage: true, background: true }).finally(() => { readyRef.current = true })
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  const restoreOPV=async(id:string, opts?: { keepPage?: boolean })=>{
+  const restoreOPV=async(id:string, opts?: { keepPage?: boolean, background?: boolean })=>{
+    busyRef.current = true
     try {
       const res = await fetch(`/api/opv-history?id=${id}`,{method:'PATCH'})
       const data = await res.json()
       if(data.error) throw new Error(data.error)
 
-      // For background sync (keepPage=true), skip the full wipe so the user stays on their page
       if (!opts?.keepPage) clearAllOPVState()
 
-      // Load the saved OPV's data
-      setSubject(data.subject || null)
-      setComps(data.comps || [])
-      setLeaseComps(data.leaseComps || [])
-      setLeaseAvails(data.leaseAvails || [])
-      setAvails(data.avails || [])
-      setAnalytics(data.analytics || null)
-      setAiText(data.aiText || '')
-      setAssignmentData(data.assignmentData || {clientName:'',propertyAddress:'',opvType:'For Sale',dueDate:'',preparedBy:'',notes:''})
-      updateFolders(data.folders || [])
-      setPhotoUrls(data.photoUrls || {})
-      setVerificationStatus(data.verificationStatus || {})
-
-      // Restore edited report HTML — prefer DB, fall back to localStorage
-      const dbHTML = data.editedReportHTML || null
-      const localHTML = (() => { try { return localStorage.getItem(`opv_edited_html_${id}`) } catch { return null } })()
-      const rawHTML = dbHTML || localHTML
+      const server = fromServer(data)
+      const loaded = {...server}
+      // One-time migration: report photo swaps / text edits used to live only in this browser
+      if (Object.keys(loaded.photoOverrides).length === 0) {
+        try { loaded.photoOverrides = JSON.parse(localStorage.getItem(`opv_photo_overrides_${id}`) || '{}') } catch {}
+      }
+      if (Object.keys(loaded.textEdits).length === 0) {
+        try { loaded.textEdits = JSON.parse(localStorage.getItem(`opv_text_edits_${id}`) || '{}') } catch {}
+      }
       // Strip LISTING BROKER rows from past frozen reports
-      const cleanHTML = rawHTML ? (() => {
+      if (loaded.editedReportHTML) {
         try {
           const parser = new DOMParser()
-          const doc = parser.parseFromString(`<!DOCTYPE html><html><body>${rawHTML}</body></html>`,'text/html')
+          const doc = parser.parseFromString(`<!DOCTYPE html><html><body>${loaded.editedReportHTML}</body></html>`,'text/html')
           doc.querySelectorAll('div').forEach(el => {
             if (el.textContent?.trim().toUpperCase() === 'LISTING BROKER') {
               // Remove the whole row (parent that contains both label and value cells)
@@ -5305,18 +5577,27 @@ export default function App() {
               if (row && row !== doc.body) row.remove()
             }
           })
-          return doc.body.innerHTML
-        } catch { return rawHTML }
-      })() : null
-      setEditedReportHTML(cleanHTML)
+          loaded.editedReportHTML = doc.body.innerHTML
+        } catch {}
+      }
+      applyFields(loaded)
+      // Base is the DB version, so migrated / cleaned values count as changes and get saved once
+      baseRef.current = serializeFields(server)
+      lastDbUpdatedAtRef.current = data.updatedAt || null
 
       setSavedOPVId(id)
+      savedOPVIdRef.current = id
       setLastSaved(new Date(data.updatedAt||data.createdAt))
+      setSaveError(null)
       if (!opts?.keepPage) {
         setShowSavedPanel(false)
         setPage(data.currentStep||'subject')
       }
-    } catch(e) { alert('Load failed: '+(e as Error).message) }
+    } catch(e) {
+      if (!opts?.background) alert('Load failed: '+(e as Error).message)
+    } finally {
+      busyRef.current = false
+    }
   }
 
   const loadSavedOPVs=async()=>{
@@ -5337,20 +5618,26 @@ export default function App() {
     setScoredComps([])
     setAnalytics(null)
     setAiText('')
-    setAssignmentData({clientName:'',propertyAddress:'',opvType:'For Sale',dueDate:'',preparedBy:'',notes:''})
+    setAssignmentData(BLANK_ASSIGNMENT)
     setPhotoUrls({})
+    setPhotoOverrides({})
+    setTextEdits({})
     setVerificationStatus({})
     setFolders([])
     setEditedReportHTML(null)
+    setEditedReportSig(null)
     setSavedOPVId(null)
+    savedOPVIdRef.current = null
+    baseRef.current = null
+    lastDbUpdatedAtRef.current = null
     setLastSaved(null)
+    setSaveError(null)
     try {
       localStorage.removeItem('opv_saved_id')
       localStorage.removeItem('opv_folders')
-      // Clear scoped keys for new-OPV sessions (restored OPVs use their own ID-scoped keys)
+      // Legacy browser-only keys (report edits now live in the DB)
       localStorage.removeItem('opv_text_edits_new')
       localStorage.removeItem('opv_photo_overrides_new')
-      // Also clear legacy unscoped keys for backward compatibility
       localStorage.removeItem('opv_text_edits')
       localStorage.removeItem('opv_photo_overrides')
     } catch {}
@@ -5432,10 +5719,15 @@ export default function App() {
             <button onClick={()=>saveReport(false)} disabled={saving} style={{background:`linear-gradient(135deg,${D.blue} 0%,#2563EB 100%)`,border:'1px solid rgba(59,130,246,0.4)',color:'#FFFFFF',fontFamily:"'Inter',sans-serif",fontSize:11,fontWeight:700,padding:'10px 12px',borderRadius:8,cursor:saving?'not-allowed':'pointer',width:'100%',opacity:saving?.7:1,display:'flex',alignItems:'center',justifyContent:'center',gap:6,boxShadow:'0 2px 12px rgba(59,130,246,0.25)',letterSpacing:'-.01em'}}>
               {saving?<><span className="spin" style={{display:'inline-block',width:10,height:10,border:'1.5px solid rgba(255,255,255,0.3)',borderTopColor:'#fff',borderRadius:'50%'}}/>Saving...</>:'💾 Save Progress'}
             </button>
-            {lastSaved&&<div style={{fontSize:9,color:D.textMuted,textAlign:'center' as const,lineHeight:1.4}}>
-              ✓ Auto-saved {lastSaved.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'})}
-              {savedOPVId&&<span> · #{savedOPVId.slice(0,6)}</span>}
-            </div>}
+            {saveError
+              ? <div title={saveError} style={{fontSize:10,color:D.red,textAlign:'center' as const,lineHeight:1.4,background:'rgba(239,68,68,0.08)',border:'1px solid rgba(239,68,68,0.3)',borderRadius:6,padding:'5px 6px'}}>
+                  ⚠ Not saved: {saveError.length>120?saveError.slice(0,120)+'…':saveError}
+                </div>
+              : lastSaved&&<div style={{fontSize:9,color:D.textMuted,textAlign:'center' as const,lineHeight:1.4}}>
+                  ✓ Auto-saved {lastSaved.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'})}
+                  {savedOPVId&&<span> · #{savedOPVId.slice(0,6)}</span>}
+                </div>}
+            {syncNotice&&<div style={{fontSize:10,color:D.blue,textAlign:'center' as const,lineHeight:1.4,background:'rgba(59,130,246,0.08)',border:'1px solid rgba(59,130,246,0.3)',borderRadius:6,padding:'5px 6px'}}>{syncNotice}</div>}
             <button onClick={()=>{setShowSavedPanel(true);loadSavedOPVs()}} style={{background:`rgba(255,255,255,0.04)`,border:`1px solid ${D.border}`,color:D.textSec,fontFamily:"'Inter',sans-serif",fontSize:11,fontWeight:500,padding:'8px 12px',borderRadius:8,cursor:'pointer',width:'100%'}}>
               📂 Load Saved OPV
             </button>
@@ -5459,7 +5751,7 @@ export default function App() {
               </div>
               {savedOPVId&&<div style={{padding:'12px 24px',background:`rgba(16,185,129,0.08)`,borderBottom:`1px solid ${D.border}`}}>
                 <div style={{fontSize:11,color:D.green,fontWeight:600,marginBottom:2}}>✓ Current session is saved</div>
-                <div style={{fontSize:11,color:D.textSec,marginBottom:8}}>{lastSaved?`Last saved ${lastSaved.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'})}`:'Saved'} · auto-syncs every 30s</div>
+                <div style={{fontSize:11,color:D.textSec,marginBottom:8}}>{lastSaved?`Last saved ${lastSaved.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'})}`:'Saved'} · saves changes automatically and syncs with teammates every few seconds</div>
                 <div style={{display:'flex',alignItems:'center',gap:6,background:'rgba(0,0,0,0.15)',borderRadius:6,padding:'6px 8px'}}>
                   <span style={{fontSize:10,color:D.textMuted,flexShrink:0}}>Session ID:</span>
                   <span style={{fontSize:10,fontFamily:'monospace',color:D.text,flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{savedOPVId}</span>
@@ -5504,7 +5796,8 @@ export default function App() {
                             if(!confirm('Delete this saved OPV?')) return
                             await fetch(`/api/opv-history?id=${s.id}`,{method:'DELETE'})
                             setSavedOPVs(prev=>prev.filter(x=>x.id!==s.id))
-                            if(isCurrent){setSavedOPVId(null);setLastSaved(null)}
+                            // Clear the workspace too, otherwise auto-save would immediately re-create it
+                            if(isCurrent) clearAllOPVState()
                           }}>Delete</Btn>
                         </div>
                       </div>
@@ -5527,7 +5820,9 @@ export default function App() {
           <div className="no-print" style={{height:58,padding:'0 32px',borderBottom:`1px solid ${D.border}`,display:'flex',alignItems:'center',justifyContent:'space-between',background:D.surface,position:'sticky',top:0,zIndex:50,boxShadow:'0 1px 0 rgba(255,255,255,0.03)'}}>
             <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:22,fontWeight:600,color:D.text,letterSpacing:'-.02em'}}>{PAGE_TITLES[page]||page}</div>
             <div style={{display:'flex',alignItems:'center',gap:10}}>
-              {lastSaved&&<span style={{fontSize:10,color:D.textMuted}}>Saved {lastSaved.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'})}</span>}
+              {saveError
+                ? <span title={saveError} style={{fontSize:10,color:D.red,fontWeight:600}}>⚠ Not saved</span>
+                : lastSaved&&<span style={{fontSize:10,color:D.textMuted}}>Saved {lastSaved.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'})}</span>}
               <button onClick={()=>saveReport(false)} disabled={saving||!subject} style={{fontFamily:"'Inter',sans-serif",fontSize:11,fontWeight:600,padding:'6px 14px',borderRadius:7,cursor:saving||!subject?'not-allowed':'pointer',background:`rgba(59,130,246,0.12)`,color:D.blue,border:`1px solid rgba(59,130,246,0.25)`,opacity:!subject?.5:1}}>
                 {saving?'Saving…':'💾 Save'}
               </button>
@@ -5549,7 +5844,7 @@ export default function App() {
             {page==='folders'&&<FolderManager folders={folders} setFolders={updateFolders} setPage={handleSetPage} comps={comps} setComps={setComps} avails={avails} setAvails={setAvails} leaseComps={leaseComps} setLeaseComps={setLeaseComps} leaseAvails={leaseAvails} setLeaseAvails={setLeaseAvails}/>}
             {page==='analytics'&&<Analytics comps={scoredComps.length>0?scoredComps:comps} avails={avails} analytics={analytics} setAnalytics={setAnalytics} setPage={handleSetPage} subject={subject} leaseComps={leaseComps}/>}
             {page==='broker-review'&&<BrokerReview subject={subject} comps={scoredComps.length>0?scoredComps:comps} analytics={analytics} setAnalytics={setAnalytics} aiText={aiText} setAiText={setAiText} setPage={handleSetPage} setSubject={setSubject}/>}
-            {page==='opv-report'&&<OPVReport key={savedOPVId||'new'} opvId={savedOPVId} subject={subject} comps={scoredComps.length>0?scoredComps:comps} leaseComps={leaseComps} leaseAvails={leaseAvails} avails={avails} analytics={analytics} aiText={aiText} setPage={handleSetPage} frozenHTML={editedReportHTML} setFrozenHTML={setEditedReportHTML} photoUrls={photoUrls}/>}
+            {page==='opv-report'&&<OPVReport key={savedOPVId||'new'} subject={subject} comps={scoredComps.length>0?scoredComps:comps} leaseComps={leaseComps} leaseAvails={leaseAvails} avails={avails} analytics={analytics} aiText={aiText} setPage={handleSetPage} frozenHTML={editedReportHTML} setFrozenHTML={setEditedReportHTML} photoUrls={photoUrls} photoOverrides={photoOverrides} setPhotoOverrides={setPhotoOverrides} textEdits={textEdits} setTextEdits={setTextEdits} reportOutdated={!!editedReportSig&&editedReportSig!==reportDataSig} onFreeze={()=>setEditedReportSig(reportDataSig)}/>}
           </div>
           {/* ── Sticky Step Nav Bar ── */}
           {(()=>{

@@ -9,7 +9,7 @@ const supabase = createClient(
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url)
   
-  let query = supabase.from('industrial_availabilities').select('*')
+  let query = supabase.from('market_availabilities').select('*')
 
   if (searchParams.get('county')) query = query.eq('county', searchParams.get('county')!)
   if (searchParams.get('city')) query = query.ilike('city', `%${searchParams.get('city')}%`)
@@ -31,7 +31,7 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   const body = await req.json()
-  const { data, error } = await supabase.from('industrial_availabilities').insert([body]).select()
+  const { data, error } = await supabase.from('market_availabilities').insert([body]).select()
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   return NextResponse.json(data)
 }
