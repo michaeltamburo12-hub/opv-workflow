@@ -369,6 +369,12 @@ function Dashboard({user,subject,comps,avails,leaseComps,analytics,savedOPVs,set
 function Assignment({assignmentData,setAssignmentData,user,setPage,setSubject,subject}: {assignmentData:AssignmentData,setAssignmentData:(a:AssignmentData)=>void,user:{name:string,role:string,init:string},setPage:(p:string)=>void,setSubject:(s:SubjectForm)=>void,subject:SubjectForm|null}) {
   const [form,setForm]=useState<AssignmentData>({...assignmentData,preparedBy:assignmentData.preparedBy||user.name})
   const set=(k:string,v:string)=>setForm(f=>{const next={...f,[k]:v};setAssignmentData(next);return next})
+  // Follow changes that arrive from elsewhere (a teammate's save merged in, or loading an OPV)
+  useEffect(()=>{
+    const incoming = {...assignmentData,preparedBy:assignmentData.preparedBy||user.name}
+    setForm(f => JSON.stringify(f)===JSON.stringify(incoming) ? f : incoming)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  },[assignmentData])
   const begin=()=>{
     setAssignmentData(form)
     if(!subject&&form.propertyAddress){
@@ -2310,6 +2316,11 @@ function SubjectProperty({subject,setSubject,setPage,folders,setFolders,assignme
   const defaultOpvType = assignmentData.opvType==='For Lease'?'lease':assignmentData.opvType==='Investment Sale'?'investment':'sale'
   const [form,setForm]=useState<SubjectForm>(subject||{address:assignmentData.propertyAddress||'',city:'',county:'Nassau',municipality:'',parcelId:'',type:'Warehouse',opvType:defaultOpvType,size:'',lot:'',ceiling:'',docks:'',driveIn:'',power:'',heat:'Gas FHA',parking:'',sprinkler:'ESFR',sewer:'Municipal',zoning:'',taxes:'',yearBuilt:'',officePct:'',construction:'Masonry/Steel',condition:'Good',notes:'',highestBestUse:'',capRateLow:'',capRateHigh:'',leasePsfLow:'',leasePsfHigh:'',estimatedValueLow:'',estimatedValueHigh:'',preparedBy:assignmentData.preparedBy||''})
   const set=(k:string,v:string)=>setForm((f:SubjectForm)=>{const next={...f,[k]:v};setSubject(next);return next})
+  // Follow changes that arrive from elsewhere (a teammate's save merged in, or loading an OPV)
+  useEffect(()=>{
+    if (!subject) return
+    setForm(f => JSON.stringify(f)===JSON.stringify(subject) ? f : subject)
+  },[subject])
   const autoCreateFolders = (address: string) => {
     const color = FOLDER_COLORS[folders.length % FOLDER_COLORS.length]
     const now = Date.now(); const shortAddr = address.split(',')[0]
