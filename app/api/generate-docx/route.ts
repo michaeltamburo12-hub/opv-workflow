@@ -94,9 +94,9 @@ function makeImgRun(buf: Buffer, width: number, height: number): ImageRun | null
 function photoPara(buf: Buffer|null, width=500, height=260): Paragraph {
   if (buf) {
     const img = makeImgRun(buf, width, height)
-    if (img) return new Paragraph({ alignment: AlignmentType.CENTER, spacing: { before: 80, after: 80 }, children: [img] })
+    if (img) return new Paragraph({ alignment: AlignmentType.CENTER, keepNext: true, spacing: { before: 80, after: 80 }, children: [img] })
   }
-  return new Paragraph({ text: '', spacing: { before: 80, after: 80 } })
+  return new Paragraph({ text: '', keepNext: true, spacing: { before: 80, after: 80 } })
 }
 
 // ── Paragraph helpers ──────────────────────────────────────────────────────
@@ -157,6 +157,7 @@ function tocEntry(label: string, page: string | number): Paragraph {
 function labelRow(label: string, value: string, shade = false): TableRow {
   const bg = shade ? LGRAY : WHITE
   return new TableRow({
+    cantSplit: true,
     children: [
       new TableCell({
         width: { size: L_COL, type: WidthType.DXA },
@@ -189,6 +190,7 @@ function tblHeaderRow(cols: string[], widths?: number[]): TableRow {
 function tblDataRowWidths(cells: string[], widths: number[], shade = false): TableRow {
   const bg = shade ? LGRAY : WHITE
   return new TableRow({
+    cantSplit: true,
     children: cells.map((c, i) => new TableCell({
       width: { size: widths[i], type: WidthType.DXA },
       shading: { fill: bg, type: ShadingType.CLEAR, color: 'auto' },
@@ -202,9 +204,12 @@ function simpleTable(rows: TableRow[]): Table {
   return new Table({ width: { size: W, type: WidthType.DXA }, rows })
 }
 
+// Each property card starts on its own page, like the printed report
 function propCardHeader(title: string, badge = ''): Paragraph {
   return new Paragraph({
-    spacing: { before: 240, after: 80 },
+    pageBreakBefore: true,
+    keepNext: true,
+    spacing: { before: 0, after: 80 },
     border: { bottom: { style: BorderStyle.SINGLE, size: 12, color: GOLD } },
     children: [
       new TextRun({ text: title, bold: true, size: 22, font: 'Arial' }),
@@ -219,8 +224,11 @@ export async function POST(req: NextRequest) {
     const {
       subject, comps = [], leaseComps = [], leaseAvails = [], avails = [],
       analytics, aiText, includeLeaseComps, includeAvails, includeMarketingStrategy,
-      photoUrls = {},
+      photoUrls = {}, pcreSales, pcreLeases, includePcreProfile = true,
     } = await req.json()
+    // PCRE track record: the rows the report shows (live from the database), else the built-in sample
+    const recentSales: string[][]  = Array.isArray(pcreSales)  && pcreSales.length  ? pcreSales  : FALLBACK_SALES
+    const recentLeases: string[][] = Array.isArray(pcreLeases) && pcreLeases.length ? pcreLeases : FALLBACK_LEASES
 
     if (!subject) return NextResponse.json({ error: 'No subject property' }, { status: 400 })
 
@@ -339,7 +347,7 @@ export async function POST(req: NextRequest) {
       ...(includeAvails && (isLease ? leaseAvails.length > 0 : avails.length > 0)
         ? [isLease ? 'VI.  LEASE MARKET AVAILABILITIES' : 'VI.  MARKET AVAILABILITIES'] : []),
       ...(includeMarketingStrategy ? ['VII.  MARKETING STRATEGY'] : []),
-      'VIII.  PREMIER COMMERCIAL REAL ESTATE PROFILE',
+      ...(includePcreProfile ? ['VIII.  PREMIER COMMERCIAL REAL ESTATE PROFILE'] : []),
     ]
     tocEntries_.forEach((e, i) => children.push(tocEntry(e, i + 2)))
 
@@ -723,25 +731,29 @@ export async function POST(req: NextRequest) {
     // ══════════════════════════════════════════════════════════════════════
     // SECTION VIII: PCRE PROFILE
     // ══════════════════════════════════════════════════════════════════════
-    children.push(new Paragraph({ children: [new PageBreak()] }))
-    children.push(heading('VIII.  PREMIER COMMERCIAL REAL ESTATE PROFILE'))
-    children.push(body('Premier Commercial Real Estate, LLC is a full-service commercial real estate service provider offering personalized and strategic solutions for investors, property owners, tenants and diverse businesses. With a laser-sharp focus on, and in-depth knowledge of the Long Island market, Premier\'s seasoned professionals work together as a team to identify the best real estate opportunities for its clients.'))
-    children.push(body('From property sales and leasing to tax-advantaged 1031 exchanges and portfolio development, Premier applies the full force of its experience, know-how and network to effectively achieve the real estate goals of its clients.'))
-    children.push(spacer())
+    if (includePcreProfile) {
+      children.push(new Paragraph({ children: [new PageBreak()] }))
+      children.push(heading('VIII.  PREMIER COMMERCIAL REAL ESTATE PROFILE'))
+      children.push(body('Premier Commercial Real Estate, LLC is a full-service commercial real estate service provider offering personalized and strategic solutions for investors, property owners, tenants and diverse businesses. With a laser-sharp focus on, and in-depth knowledge of the Long Island market, Premier\'s seasoned professionals work together as a team to identify the best real estate opportunities for its clients.'))
+      children.push(body('From property sales and leasing to tax-advantaged 1031 exchanges and portfolio development, Premier applies the full force of its experience, know-how and network to effectively achieve the real estate goals of its clients.'))
+      children.push(spacer())
 
-    const salesW = [Math.floor(W*0.24), Math.floor(W*0.14), Math.floor(W*0.14), Math.floor(W*0.16), Math.floor(W*0.16), Math.floor(W*0.16)]
-    children.push(subhead("PCRE'S SAMPLE OF OUR RECENTLY COMPLETED SALES TRANSACTIONS"))
-    children.push(simpleTable([
-      tblHeaderRow(['Property Address','City','Property Type','Building Size (SF)','Sale Price','Transaction Date'], salesW),
-      ...FALLBACK_SALES.map((row, i) => tblDataRowWidths(row, salesW, i%2===1)),
-    ]))
-    children.push(spacer())
-    children.push(subhead("PCRE'S SAMPLE OF OUR RECENTLY COMPLETED LEASE TRANSACTIONS"))
-    children.push(simpleTable([
-      tblHeaderRow(['Property Address','City','Tenant','Leased SF','Lease Price (PSF)','Transaction Date'], salesW),
-      ...FALLBACK_LEASES.map((row, i) => tblDataRowWidths(row, salesW, i%2===1)),
-    ]))
-    children.push(spacer())
+      const salesW = [Math.floor(W*0.24), Math.floor(W*0.14), Math.floor(W*0.14), Math.floor(W*0.16), Math.floor(W*0.16), Math.floor(W*0.16)]
+      // Wider tenant column so long tenant names don't wrap onto several lines
+      const leaseW = [Math.floor(W*0.22), Math.floor(W*0.14), Math.floor(W*0.26), Math.floor(W*0.11), Math.floor(W*0.14), Math.floor(W*0.13)]
+      children.push(subhead("PCRE'S SAMPLE OF OUR RECENTLY COMPLETED SALES TRANSACTIONS"))
+      children.push(simpleTable([
+        tblHeaderRow(['Property Address','City','Property Type','Building Size (SF)','Sale Price','Transaction Date'], salesW),
+        ...recentSales.map((row, i) => tblDataRowWidths(row, salesW, i%2===1)),
+      ]))
+      children.push(spacer())
+      children.push(subhead("PCRE'S SAMPLE OF OUR RECENTLY COMPLETED LEASE TRANSACTIONS"))
+      children.push(simpleTable([
+        tblHeaderRow(['Property Address','City','Tenant','Leased SF','Lease Price (PSF)','Transaction Date'], leaseW),
+        ...recentLeases.map((row, i) => tblDataRowWidths(row, leaseW, i%2===1)),
+      ]))
+      children.push(spacer())
+    }
 
     // ══════════════════════════════════════════════════════════════════════
     // BROKER BIOS

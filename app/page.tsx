@@ -4389,7 +4389,7 @@ function OPVReport({subject,comps,leaseComps,leaseAvails=[],avails,analytics,aiT
                 for (const c of leaseComps) { if (!photos[c.id] && c.address) photos[c.id] = `/api/street-view?address=${svAddr(c.address,(c as any).town)}` }
                 for (const a of leaseAvails) { if (!photos[a.id] && a.address) photos[a.id] = `/api/street-view?address=${svAddr(a.address,(a as any).town)}` }
                 for (const a of avails) { if (!photos[a.id] && a.address) photos[a.id] = `/api/street-view?address=${svAddr(a.address,a.city)}` }
-                const body = JSON.stringify({ subject, comps, leaseComps, leaseAvails, avails, analytics, aiText, includeLeaseComps, includeAvails, includeMarketingStrategy, photoUrls: photos })
+                const body = JSON.stringify({ subject, comps, leaseComps, leaseAvails, avails, analytics, aiText, includeLeaseComps, includeAvails, includeMarketingStrategy, photoUrls: photos, pcreSales: RECENT_SALES, pcreLeases: RECENT_LEASES, includePcreProfile })
                 if (body.length > MAX_SAVE_BYTES) { alert('This report has too many large uploaded photos to export. Re-upload or remove a few of them and try again.'); return }
                 const res = await fetch('/api/generate-docx', { method:'POST', headers:{'Content-Type':'application/json'}, body })
                 if (!res.ok) {
