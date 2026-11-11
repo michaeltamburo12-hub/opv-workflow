@@ -3,10 +3,15 @@ import { NextRequest, NextResponse } from 'next/server'
 export function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl
 
-  // Always allow: login page, auth API, Next.js internals, static files
+  // Always allow: login page, auth API, Next.js internals, static files.
+  // The Claude connector (/api/mcp) and its sign-in (/api/oauth, /.well-known) check their own
+  // OAuth tokens instead of the app cookie.
   if (
     pathname.startsWith('/login') ||
     pathname.startsWith('/api/auth') ||
+    pathname === '/api/mcp' ||
+    pathname.startsWith('/api/oauth/') ||
+    pathname.startsWith('/.well-known/') ||
     pathname.startsWith('/_next') ||
     pathname.includes('.')
   ) {

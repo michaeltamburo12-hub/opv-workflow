@@ -1,7 +1,7 @@
 export const runtime = 'nodejs'
 
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
+import { supabaseAdmin as supabase } from '@/lib/supabase-server'
 import { hasSession } from '@/lib/session'
 
 // Server-side gateway for the browser's database reads and writes.
@@ -9,11 +9,6 @@ import { hasSession } from '@/lib/session'
 // database had to allow anyone holding that key to read and write every table. Now the
 // browser sends a small query description here (via lib/db-client.ts), this route checks
 // the login, validates the request, and runs it with the server-only service role key.
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-)
 
 const TABLES = new Set([
   'industrial_sale_comps',
