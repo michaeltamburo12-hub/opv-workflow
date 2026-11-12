@@ -307,11 +307,17 @@ export function buildServer(user: { sub: string }) {
     },
     annotations: { readOnlyHint: true },
   }, async (a) => {
-    let q = sb.from('opv_reports').select('id,address,saved_by,current_step,created_at,updated_at', { count: 'exact' })
+    let q = sb.from('opv_reports').select('id,address,saved_by,current_step,created_at,updated_at,assignment_json', { count: 'exact' })
     if (a.address) q = q.ilike('address', `%${safe(a.address)}%`)
     const { data, error, count } = await q.order('updated_at', { ascending: false, nullsFirst: false }).limit(a.limit ?? 20)
     if (error) return fail(error.message)
-    return ok({ total: count, opvs: data })
+    // label = the team's internal name for the saved OPV (e.g. "Version 2"); address = the report's subject
+    const opvs = (data || []).map(({ assignment_json, ...r }: Row) => {
+      let label = ''
+      try { label = String(JSON.parse(String(assignment_json || '{}'))?.opvLabel ?? '').trim() } catch { /* ignore */ }
+      return { ...r, label: label || null }
+    })
+    return ok({ total: count, opvs })
   })
 
   server.registerTool('get_opv', {

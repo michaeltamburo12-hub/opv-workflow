@@ -1,4 +1,5 @@
 'use client'
+import { toast } from '@/lib/toast'
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 
@@ -19,7 +20,7 @@ export default function NewAvailabilityPage() {
   const labelCls = "text-xs text-gray-500 font-medium uppercase tracking-wide"
 
   const save = async () => {
-    if (!form.address) return alert('Address is required')
+    if (!form.address) return toast('Address is required')
     setSaving(true)
     const body: Record<string, string | number | null> = {}
     Object.entries(form).forEach(([k, v]) => {
@@ -33,7 +34,7 @@ export default function NewAvailabilityPage() {
     body.status = 'Available'
     const res = await fetch('/api/availabilities', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
     if (res.ok) { router.push('/availabilities') }
-    else { alert('Error saving. Please try again.'); setSaving(false) }
+    else { toast('Error saving. Please try again.'); setSaving(false) }
   }
 
   return (

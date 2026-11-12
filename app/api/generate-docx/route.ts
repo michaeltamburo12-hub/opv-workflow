@@ -1,3 +1,5 @@
+import { acres, clearHeight, docksSentence, money2, pricePerSf, sprinklerSentence } from '@/lib/format'
+import { formatDay } from '@/lib/dates'
 export const runtime = 'nodejs'
 
 import { NextRequest, NextResponse } from 'next/server'
@@ -24,7 +26,7 @@ const noBorder   = { style: BorderStyle.NONE,   size: 0,  color: 'FFFFFF' }
 const allThin    = { top: thinBorder, bottom: thinBorder, left: thinBorder, right: thinBorder }
 const allNone    = { top: noBorder,   bottom: noBorder,   left: noBorder,   right: noBorder   }
 
-const fmtDate = (d: string) => d ? new Date(d+' ').toLocaleDateString('en-US',{month:'long',year:'numeric'}) : '—'
+const fmtDate = (d: string) => formatDay(d, { month: 'long', year: 'numeric' })
 const str     = (v: any) => (v!=null&&v!=='') ? String(v) : '—'
 
 // ── PCRE fallback transactions (from Generate Package) ─────────────────────
@@ -265,9 +267,7 @@ export async function POST(req: NextRequest) {
     // ── Computed values ────────────────────────────────────────────────────
     const bldgSF   = subject.size ? Number(subject.size) : 0
     const salePSFs = comps.map((c: any) => {
-      if (c.price_per_sf) return Number(c.price_per_sf)
-      if (c.sale_price && c.building_sf) return Number(c.sale_price) / Number(c.building_sf)
-      return 0
+      return pricePerSf(c)
     }).filter((p: number) => p > 0)
     const avgPsf    = salePSFs.length ? salePSFs.reduce((a: number, b: number) => a + b, 0) / salePSFs.length : 0
     const valLowPsf = analytics?.valueLow  && bldgSF ? analytics.valueLow  / bldgSF : 0
@@ -330,24 +330,38 @@ export async function POST(req: NextRequest) {
     children.push(center('TABLE OF CONTENTS', 28, true))
     children.push(spacer())
 
+    // Section numbers follow the sections actually included, so leaving one out doesn't skip a numeral.
+    const secNum = (() => {
+      const ROMAN = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII']
+      let k = 3
+      const next = (on: boolean) => (on ? ROMAN[k++] : '')
+      const hasLease = !!(includeLeaseComps && leaseComps.length > 0), hasSale = comps.length > 0
+      const first = next(isLease ? hasLease : hasSale)
+      const second = next(isLease ? hasSale : hasLease)
+      const avails_ = next(!!includeAvails && (isLease ? leaseAvails.length > 0 : avails.length > 0))
+      const marketing = next(!!includeMarketingStrategy)
+      const profile = next(!!includePcreProfile)
+      return { first, second, avails: avails_, marketing, profile }
+    })()
+
     const tocEntries_: string[] = [
       'I.  EXECUTIVE SUMMARY',
       'II.  BUILDING DESCRIPTION',
       'III.  OPINION OF VALUE',
       ...(isLease
         ? [
-            ...(includeLeaseComps && leaseComps.length > 0 ? ['IV.  RECENT LEASE TRANSACTIONS'] : []),
-            ...(comps.length > 0 ? ['V.  SUPPORTING SALE MARKET DATA'] : []),
+            ...(secNum.first ? [`${secNum.first}.  RECENT LEASE TRANSACTIONS`] : []),
+            ...(secNum.second ? [`${secNum.second}.  SUPPORTING SALE MARKET DATA`] : []),
           ]
         : [
-            ...(comps.length > 0 ? [`IV.  RECENT ${isInvest ? 'INVESTMENT' : 'SALE'} TRANSACTIONS`] : []),
-            ...(includeLeaseComps && leaseComps.length > 0 ? ['V.  RECENT LEASE TRANSACTIONS'] : []),
+            ...(secNum.first ? [`${secNum.first}.  RECENT ${isInvest ? 'INVESTMENT' : 'SALE'} TRANSACTIONS`] : []),
+            ...(secNum.second ? [`${secNum.second}.  RECENT LEASE TRANSACTIONS`] : []),
           ]
       ),
       ...(includeAvails && (isLease ? leaseAvails.length > 0 : avails.length > 0)
-        ? [isLease ? 'VI.  LEASE MARKET AVAILABILITIES' : 'VI.  MARKET AVAILABILITIES'] : []),
-      ...(includeMarketingStrategy ? ['VII.  MARKETING STRATEGY'] : []),
-      ...(includePcreProfile ? ['VIII.  PREMIER COMMERCIAL REAL ESTATE PROFILE'] : []),
+        ? [`${secNum.avails}.  ${isLease ? 'LEASE MARKET AVAILABILITIES' : 'MARKET AVAILABILITIES'}`] : []),
+      ...(includeMarketingStrategy ? [`${secNum.marketing}.  MARKETING STRATEGY`] : []),
+      ...(includePcreProfile ? [`${secNum.profile}.  PREMIER COMMERCIAL REAL ESTATE PROFILE`] : []),
     ]
     tocEntries_.forEach((e, i) => children.push(tocEntry(e, i + 2)))
 
@@ -371,13 +385,13 @@ export async function POST(req: NextRequest) {
     children.push(subhead('PROPERTY SUMMARY HIGHLIGHTS AND ASSUMPTIONS:'))
     const highlights = [
       subject.size ? `The building is approximately ${Number(subject.size).toLocaleString()} sq. ft. in total.` : null,
-      subject.ceiling ? `Ceiling height of ${subject.ceiling}' clear.` : null,
-      (subject.docks || subject.driveIn) ? `${subject.docks || '—'} loading dock(s) and ${subject.driveIn || '—'} drive-in door(s).` : null,
-      subject.sprinkler ? `${subject.sprinkler} sprinkler system.` : null,
+      subject.ceiling ? `Ceiling height of ${clearHeight(subject.ceiling, 'clear')}.` : null,
+      docksSentence(subject.docks, subject.driveIn),
+      sprinklerSentence(subject.sprinkler),
       subject.sewer ? `Sewer: ${subject.sewer}.` : null,
       subject.power ? `Electrical service: ${subject.power}.` : null,
-      subject.taxes ? `Real Estate Taxes are $${Number(subject.taxes).toLocaleString()} or approximately $${subject.size ? (Number(subject.taxes)/Number(subject.size)).toFixed(2) : '—'} PSF.` : null,
-      subject.lot ? `The building sits on a parcel of approximately ${subject.lot} acres.` : null,
+      subject.taxes ? `Real Estate Taxes are ${money2(subject.taxes)} or approximately $${subject.size ? (Number(subject.taxes)/Number(subject.size)).toFixed(2) : '—'} PSF.` : null,
+      subject.lot ? `The building sits on a parcel of approximately ${acres(subject.lot)} acres.` : null,
       subject.notes || null,
     ].filter(Boolean) as string[]
     highlights.forEach(h => children.push(bullet(h)))
@@ -399,8 +413,8 @@ export async function POST(req: NextRequest) {
       ['PROPERTY ADDRESS', `${subject.address}${subject.city ? ', '+subject.city : ''}`, false],
       ['TOTAL BUILDING SF', subject.size ? `${Number(subject.size).toLocaleString()} SF` : '—', true],
       ...(subject.officePct ? [['OFFICE', `${subject.officePct}%`, false] as LR3] : []),
-      ['TOTAL SITE ACREAGE', subject.lot ? `${subject.lot} AC` : '—', !subject.officePct as boolean],
-      ['CEILING HEIGHT', subject.ceiling ? `${subject.ceiling}' clear` : '—', !!subject.officePct as boolean],
+      ['TOTAL SITE ACREAGE', subject.lot ? `${acres(subject.lot)} AC` : '—', !subject.officePct as boolean],
+      ['CEILING HEIGHT', clearHeight(subject.ceiling, 'clear') || '—', !!subject.officePct as boolean],
       ['DRIVE-IN DOORS', str(subject.driveIn), !subject.officePct as boolean],
       ['LOADING DOCKS', str(subject.docks), true],
       ['HEAT', str(subject.heat), false],
@@ -409,7 +423,7 @@ export async function POST(req: NextRequest) {
       ['SPRINKLER SYSTEM', str(subject.sprinkler), true],
       ['SEWER CONNECTION', str(subject.sewer), false],
       ['ZONING', str(subject.zoning), true],
-      ['REAL ESTATE TAXES', subject.taxes ? `$${Number(subject.taxes).toLocaleString()}/yr${subject.size ? ` / $${(Number(subject.taxes)/Number(subject.size)).toFixed(2)} PSF` : ''}` : '—', false],
+      ['REAL ESTATE TAXES', subject.taxes ? `${money2(subject.taxes)}/yr${subject.size ? ` / $${(Number(subject.taxes)/Number(subject.size)).toFixed(2)} PSF` : ''}` : '—', false],
       ...(subject.yearBuilt ? [['YEAR BUILT', str(subject.yearBuilt), true] as LR3] : []),
       ...(subject.construction ? [['CONSTRUCTION', str(subject.construction), false] as LR3] : []),
       ...(subject.condition ? [['CONDITION', str(subject.condition), true] as LR3] : []),
@@ -421,7 +435,7 @@ export async function POST(req: NextRequest) {
     // ══════════════════════════════════════════════════════════════════════
     children.push(new Paragraph({ children: [new PageBreak()] }))
     children.push(heading('III.  OPINION OF VALUE'))
-    children.push(body('Based upon the aforementioned assumptions, our knowledge of current market conditions, and a review of the Comparables found in Section IV.'))
+    children.push(body(secNum.first ? `Based upon the aforementioned assumptions, our knowledge of current market conditions, and a review of the Comparables found in Section ${secNum.first}.` : 'Based upon the aforementioned assumptions, our knowledge of current market conditions, and a review of current market data.'))
     children.push(spacer())
 
     if (isLease) {
@@ -486,7 +500,7 @@ export async function POST(req: NextRequest) {
       children.push(simpleTable([
         tblHeaderRow(['Property Address','City','Building Size (SF)','Sale Price','Price PSF'], sW),
         ...comps.map((c: any, i: number) => {
-          const psf = c.price_per_sf || (c.sale_price && c.building_sf ? Number(c.sale_price)/Number(c.building_sf) : 0)
+          const psf = pricePerSf(c)
           return tblDataRowWidths([
             str(c.address), str(c.city),
             c.building_sf ? `${Number(c.building_sf).toLocaleString()} SF` : '—',
@@ -498,7 +512,7 @@ export async function POST(req: NextRequest) {
       children.push(body('Each comparable transaction is detailed on the following pages.', true))
 
       for (const [i, c] of comps.entries()) {
-        const psf = c.price_per_sf || (c.sale_price && c.building_sf ? Number(c.sale_price)/Number(c.building_sf) : 0)
+        const psf = pricePerSf(c)
         children.push(propCardHeader(
           `COMPARABLE ${i+1}  —  ${(c.address||'').toUpperCase()}${c.city ? ', '+c.city.toUpperCase() : ''}`,
           psf ? `$${Number(psf).toFixed(2)}/SF` : ''
@@ -507,8 +521,8 @@ export async function POST(req: NextRequest) {
         const rows: LR3[] = [
           ['PROPERTY ADDRESS', `${str(c.address)}${c.city ? ', '+c.city : ''}`, false],
           ['BUILDING SIZE', c.building_sf ? `${Number(c.building_sf).toLocaleString()} SF` : '—', true],
-          ['LOT SIZE', c.lot_size_ac ? `${c.lot_size_ac} Acres` : '—', false],
-          ['CEILING HEIGHT', c.ceiling_height ? `${c.ceiling_height} ft` : '—', true],
+          ['LOT SIZE', c.lot_size_ac ? `${acres(c.lot_size_ac)} Acres` : '—', false],
+          ['CEILING HEIGHT', clearHeight(c.ceiling_height) || '—', true],
           ['LOADING DOCKS', str(c.loading_docks), false],
           ['DRIVE INS', str(c.drive_ins), true],
           ['POWER', str(c.power), false],
@@ -517,7 +531,7 @@ export async function POST(req: NextRequest) {
           ['ZONING', str(c.zoning), true],
           ['SPRINKLERS', str(c.sprinkler), false],
           ['PARKING', str(c.parking), true],
-          ['REAL ESTATE TAXES', str(c.re_taxes), false],
+          ['REAL ESTATE TAXES', (money2(c.re_taxes) || '—'), false],
           ['SALE PRICE', `${c.sale_price ? '$'+Number(c.sale_price).toLocaleString() : '—'}${psf ? ` ($${Number(psf).toFixed(2)} PSF)` : ''}`, true],
           ['TRANSACTION DATE', fmtDate(c.sale_date), false],
           ['BUYER', str(c.buyer), true],
@@ -557,17 +571,17 @@ export async function POST(req: NextRequest) {
           ['PROPERTY ADDRESS', `${str(c.address)}${c.town ? ', '+c.town : ''}`, false],
           ...(c.property_type ? [['PROPERTY TYPE', str(c.property_type), true] as LR3] : []),
           ['BUILDING SIZE', c.building_sf ? `${Number(c.building_sf).toLocaleString()} SF` : '—', !c.property_type as boolean],
-          ['LOT SIZE', c.lot_size_ac ? `${c.lot_size_ac} Acres` : '—', false],
+          ['LOT SIZE', c.lot_size_ac ? `${acres(c.lot_size_ac)} Acres` : '—', false],
           ['OFFICE SIZE', c.office_sf ? `${Number(c.office_sf).toLocaleString()} SF` : '—', true],
           ['LOADING', c.loading_docks && c.drive_ins ? `${c.loading_docks} Docks / ${c.drive_ins} Drive-In` : c.loading_docks ? `${c.loading_docks} Docks` : c.drive_ins ? `${c.drive_ins} Drive-In` : '—', false],
-          ['CEILING HEIGHT', c.ceiling_height ? `${c.ceiling_height} ft` : '—', true],
+          ['CEILING HEIGHT', clearHeight(c.ceiling_height) || '—', true],
           ['POWER', str(c.power), false],
           ['HEAT', str(c.heat), true],
           ['SPRINKLERS', str(c.sprinkler), false],
           ['PARKING', str(c.parking), true],
           ['SEWER', str(c.sewer), false],
           ['ZONING', str(c.zoning), true],
-          ['RE TAXES', c.re_taxes ? `$${Number(c.re_taxes).toLocaleString()}/yr` : '—', false],
+          ['RE TAXES', c.re_taxes ? `${money2(c.re_taxes)}/yr` : '—', false],
           ['LEASE PRICE', c.deal_rent ? `$${Number(c.deal_rent).toFixed(2)} PSF/yr${c.rent_type ? ' — '+c.rent_type : ''}` : c.asking_rent ? `$${Number(c.asking_rent).toFixed(2)} PSF/yr (Ask)` : '—', true],
           ['TAXES', c.taxes ? `$${Number(c.taxes).toFixed(2)}/SF` : '—', false],
           ['TERM', c.lease_term_years ? `${c.lease_term_years} years` : '—', true],
@@ -585,11 +599,11 @@ export async function POST(req: NextRequest) {
 
     // Push in correct order
     if (!isLease) {
-      pushSaleComps('IV', `RECENT ${isInvest ? 'INVESTMENT' : 'SALE'} TRANSACTIONS`, false)
-      pushLeaseComps('V', 'RECENT LEASE TRANSACTIONS')
+      pushSaleComps(secNum.first, `RECENT ${isInvest ? 'INVESTMENT' : 'SALE'} TRANSACTIONS`, false)
+      pushLeaseComps(secNum.second, 'RECENT LEASE TRANSACTIONS')
     } else {
-      pushLeaseComps('IV', 'RECENT LEASE TRANSACTIONS')
-      pushSaleComps('V', 'SUPPORTING SALE MARKET DATA', true)
+      pushLeaseComps(secNum.first, 'RECENT LEASE TRANSACTIONS')
+      pushSaleComps(secNum.second, 'SUPPORTING SALE MARKET DATA', true)
     }
 
     // ══════════════════════════════════════════════════════════════════════
@@ -598,7 +612,7 @@ export async function POST(req: NextRequest) {
     if (includeAvails) {
       if (isLease && leaseAvails.length > 0) {
         children.push(new Paragraph({ children: [new PageBreak()] }))
-        children.push(heading('VI.  LEASE MARKET AVAILABILITIES'))
+        children.push(heading(`${secNum.avails}.  LEASE MARKET AVAILABILITIES`))
         children.push(body('Active lease listings in the market for comparison.', true))
 
         const laW = [Math.floor(W*0.27), Math.floor(W*0.15), Math.floor(W*0.15), Math.floor(W*0.13), Math.floor(W*0.17), Math.floor(W*0.13)]
@@ -607,7 +621,7 @@ export async function POST(req: NextRequest) {
           ...leaseAvails.map((a: any, i: number) => tblDataRowWidths([
             str(a.address), str(a.town),
             a.building_sf ? `${Number(a.building_sf).toLocaleString()} SF` : '—',
-            a.ceiling_height ? `${a.ceiling_height} ft` : '—',
+            clearHeight(a.ceiling_height) || '—',
             a.asking_rent ? `$${Number(a.asking_rent).toFixed(2)}/SF/yr` : '—',
             str(a.rent_type),
           ], laW, i%2===1)),
@@ -624,8 +638,8 @@ export async function POST(req: NextRequest) {
             ['PROPERTY ADDRESS', `${str(a.address)}${a.town ? ', '+a.town : ''}`, false],
             ...(a.property_type ? [['PROPERTY TYPE', str(a.property_type), true] as LR3] : []),
             ['BUILDING SIZE', a.building_sf ? `${Number(a.building_sf).toLocaleString()} SF` : '—', !a.property_type as boolean],
-            ['LOT SIZE', a.lot_size_ac ? `${a.lot_size_ac} Acres` : '—', false],
-            ['CEILING HEIGHT', a.ceiling_height ? `${a.ceiling_height} ft` : '—', true],
+            ['LOT SIZE', a.lot_size_ac ? `${acres(a.lot_size_ac)} Acres` : '—', false],
+            ['CEILING HEIGHT', clearHeight(a.ceiling_height) || '—', true],
             ['LOADING DOCKS', str(a.loading_docks), false],
             ['DRIVE-INS', str(a.drive_ins), true],
             ['POWER', str(a.power), false],
@@ -634,7 +648,7 @@ export async function POST(req: NextRequest) {
             ['PARKING', str(a.parking), true],
             ['SEWER', str(a.sewer), false],
             ['ZONING', str(a.zoning), true],
-            ...(a.re_taxes ? [['RE TAXES', `$${Number(a.re_taxes).toLocaleString()}/yr`, false] as LR3] : []),
+            ...(a.re_taxes ? [['RE TAXES', `${money2(a.re_taxes)}/yr`, false] as LR3] : []),
             ['ASKING RENT', a.asking_rent ? `$${Number(a.asking_rent).toFixed(2)}/SF/yr` : '—', true],
             ['RENT TYPE', str(a.rent_type), false],
             ['TAXES', a.taxes ? `$${Number(a.taxes).toFixed(2)}/SF` : '—', true],
@@ -645,17 +659,17 @@ export async function POST(req: NextRequest) {
         }
       } else if (!isLease && avails.length > 0) {
         children.push(new Paragraph({ children: [new PageBreak()] }))
-        children.push(heading('VI.  MARKET AVAILABILITIES'))
+        children.push(heading(`${secNum.avails}.  MARKET AVAILABILITIES`))
 
         const avW = [Math.floor(W*0.28), Math.floor(W*0.15), Math.floor(W*0.14), Math.floor(W*0.14), Math.floor(W*0.16), Math.floor(W*0.13)]
         children.push(simpleTable([
           tblHeaderRow(['Property Address','City','Bldg SF','Lot Size','Asking Price','Price PSF'], avW),
           ...avails.map((a: any, i: number) => {
-            const psf = a.price_per_sf || (a.asking_price && a.building_sf ? Number(a.asking_price)/Number(a.building_sf) : 0)
+            const psf = pricePerSf(a)
             return tblDataRowWidths([
               str(a.address), str(a.city),
               a.building_sf ? `${Number(a.building_sf).toLocaleString()} SF` : '—',
-              a.lot_size_ac ? `${a.lot_size_ac} AC` : '—',
+              a.lot_size_ac ? `${acres(a.lot_size_ac)} AC` : '—',
               a.asking_price ? `$${Number(a.asking_price).toLocaleString()}` : '—',
               psf ? `$${Number(psf).toFixed(2)}` : '—',
             ], avW, i%2===1)
@@ -664,7 +678,7 @@ export async function POST(req: NextRequest) {
         children.push(body('Each market availability is detailed on the following pages.', true))
 
         for (const [i, a] of avails.entries()) {
-          const psf = a.price_per_sf || (a.asking_price && a.building_sf ? Number(a.asking_price)/Number(a.building_sf) : 0)
+          const psf = pricePerSf(a)
           children.push(propCardHeader(
             `AVAILABILITY ${i+1}  —  ${(a.address||'').toUpperCase()}${a.city ? ', '+a.city.toUpperCase() : ''}`,
             psf ? `$${Number(psf).toFixed(2)}/SF` : ''
@@ -674,8 +688,8 @@ export async function POST(req: NextRequest) {
             ['PROPERTY ADDRESS', `${str(a.address)}${a.city ? ', '+a.city : ''}`, false],
             ...(a.property_type ? [['PROPERTY TYPE', str(a.property_type), true] as LR3] : []),
             ['BUILDING SIZE', a.building_sf ? `${Number(a.building_sf).toLocaleString()} SF` : '—', !a.property_type as boolean],
-            ['LOT SIZE', a.lot_size_ac ? `${a.lot_size_ac} Acres` : '—', false],
-            ['CEILING HEIGHT', a.ceiling_height ? `${a.ceiling_height} ft` : '—', true],
+            ['LOT SIZE', a.lot_size_ac ? `${acres(a.lot_size_ac)} Acres` : '—', false],
+            ['CEILING HEIGHT', clearHeight(a.ceiling_height) || '—', true],
             ['LOADING DOCKS', str(a.loading_docks), false],
             ['DRIVE INS', str(a.drive_ins), true],
             ['POWER', str(a.power), false],
@@ -687,7 +701,7 @@ export async function POST(req: NextRequest) {
             ['ASKING PRICE', a.asking_price ? `$${Number(a.asking_price).toLocaleString()}` : '—', false],
             ['ASKING $/SF', psf ? `$${Number(psf).toFixed(2)} PSF` : '—', true],
             ['PRICING GUIDANCE', str(a.pricing_guidance), false],
-            ['REAL ESTATE TAXES', str(a.re_taxes), true],
+            ['REAL ESTATE TAXES', (money2(a.re_taxes) || '—'), true],
           ]
           children.push(simpleTable(rows.map(([l,v,s]) => labelRow(l,v,s))))
         }
@@ -710,7 +724,7 @@ export async function POST(req: NextRequest) {
     // ══════════════════════════════════════════════════════════════════════
     if (includeMarketingStrategy) {
       children.push(new Paragraph({ children: [new PageBreak()] }))
-      children.push(heading('VII.  MARKETING STRATEGY'))
+      children.push(heading(`${secNum.marketing}.  MARKETING STRATEGY`))
       children.push(subhead('FOCUSED DEDICATION / HARD WORK… TO INCLUDE:'))
       children.push(bullet('PREMIER COMMERCIAL REAL ESTATE will prepare electronic marketing material and meet with selected "Highly qualified" buyers.'))
       children.push(bullet('PREMIER COMMERCIAL REAL ESTATE will distribute e-Blast marketing flyers to the local brokerage community (including the outer NYC Boroughs).'))
@@ -733,7 +747,7 @@ export async function POST(req: NextRequest) {
     // ══════════════════════════════════════════════════════════════════════
     if (includePcreProfile) {
       children.push(new Paragraph({ children: [new PageBreak()] }))
-      children.push(heading('VIII.  PREMIER COMMERCIAL REAL ESTATE PROFILE'))
+      children.push(heading(`${secNum.profile}.  PREMIER COMMERCIAL REAL ESTATE PROFILE`))
       children.push(body('Premier Commercial Real Estate, LLC is a full-service commercial real estate service provider offering personalized and strategic solutions for investors, property owners, tenants and diverse businesses. With a laser-sharp focus on, and in-depth knowledge of the Long Island market, Premier\'s seasoned professionals work together as a team to identify the best real estate opportunities for its clients.'))
       children.push(body('From property sales and leasing to tax-advantaged 1031 exchanges and portfolio development, Premier applies the full force of its experience, know-how and network to effectively achieve the real estate goals of its clients.'))
       children.push(spacer())

@@ -1,4 +1,5 @@
 'use client'
+import { toast } from '@/lib/toast'
 import { useState, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 
@@ -167,7 +168,7 @@ function OPVForm() {
             </div>
             <div className="mt-8 flex justify-end">
               <button
-                onClick={() => subject.address && subject.building_sf ? setStep(2) : alert('Please fill in Address and Building Size')}
+                onClick={() => subject.address && subject.building_sf ? setStep(2) : toast('Please fill in Address and Building Size')}
                 className="bg-blue-600 text-white px-8 py-3 rounded-lg font-medium hover:bg-blue-700 transition-colors"
               >
                 Next: Select Sale Comps →

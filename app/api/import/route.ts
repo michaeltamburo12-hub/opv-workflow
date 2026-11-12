@@ -680,7 +680,7 @@ export async function POST(req: NextRequest) {
                   val = nm ? nm[0] : ''
                 }
               }
-              else if (col === 'ceiling_height')       { const m = val.match(/(\d+(?:\.\d+)?)/); val = m ? m[1] : '' }
+              else if (col === 'ceiling_height')       { const r = val.match(/(\d+(?:\.\d+)?)\s*(?:'|ft\.?)?\s*(?:-|–|—|to)\s*(\d+(?:\.\d+)?)/i); const m = val.match(/(\d+(?:\.\d+)?)/); val = r ? `${r[1]}-${r[2]}` : m ? m[1] : '' }
               else if (col === 'lease_term_years')     { const m = val.match(/^(\d+(?:\.\d+)?)/); if (m) val = m[1] }
               else if (col === 'mgmt_fee_pct')         val = val.replace(/%/g,'').trim()
               else if (col === 'address')              val = val.replace(/,\s*$/, '').replace(/\s+/g,' ').trim()
@@ -689,7 +689,7 @@ export async function POST(req: NextRequest) {
               // Safety net: any numeric DB column must be a valid number before insert.
               // If the value isn't a clean number (e.g. "30' (IN 108,000 SF)"), extract
               // the first number from it so it lands in the right column with the right value.
-              const NUMERIC_COLS = new Set(['building_sf','lot_size_ac','ceiling_height','loading_docks',
+              const NUMERIC_COLS = new Set(['building_sf','lot_size_ac','loading_docks',
                                             'drive_ins','asking_rent','deal_rent','taxes',
                                             'lease_term_years','rent_concession_months','mgmt_fee_pct','ti_ll_work'])
               if (NUMERIC_COLS.has(col) && val) {

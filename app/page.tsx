@@ -1,5 +1,9 @@
 'use client'
-import { useState, useRef, useCallback, useEffect, Fragment } from 'react'
+import { toast } from '@/lib/toast'
+import { formatDay } from '@/lib/dates'
+import { splitOutliers } from '@/lib/stats'
+import { acres, clearHeight, docksSentence, money2, pricePerSf, withPricePerSf, sprinklerSentence } from '@/lib/format'
+import { useState, useRef, useCallback, useEffect, useMemo, Fragment } from 'react'
 // Database access goes through /api/db (login-checked, server-side) instead of the public anon key.
 import { db as supabase } from '@/lib/db-client'
 
@@ -74,10 +78,7 @@ const css = `
   }
 `
 
-const fmtDate = (d: string) => {
-  if (!d) return '—'
-  return new Date(d).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})
-}
+const fmtDate = (d: string) => formatDay(d)
 
 const Field = ({label, children, full, note}: {label:string,children:React.ReactNode,full?:boolean,note?:string}) => (
   <div style={{display:'flex',flexDirection:'column',gap:6,marginBottom:16,gridColumn:full?'1/-1':''}}>
@@ -202,7 +203,7 @@ type SubjectForm = {address:string,city:string,county:string,municipality:string
 type Comp = {id:string,address:string,city:string,county:string,building_sf:number,lot_size_ac:number,ceiling_height:string,loading_docks:string,drive_ins:string,power:string,sewer:string,zoning:string,sale_price:number,price_per_sf:number,sale_date:string,sale_type:string,buyer:string,seller:string,submarket:string,score?:number,[key:string]:unknown}
 type Avail = {id:string,address:string,city:string,county:string,building_sf:number,lot_size_ac:number,ceiling_height:string,loading_docks:string,drive_ins:string,power:string,sewer:string,zoning:string,asking_price:number,price_per_sf:number,pricing_guidance:string,listing_broker:string,loopnet_url:string,score?:number,[key:string]:unknown}
 type LeaseComp = {id:string,address:string,town:string,county:string,building_sf:number,lot_size_ac:number,ceiling_height:string,loading_docks:string,drive_ins:string,asking_rent:number,deal_rent:number,rent_type:string,taxes:number,lease_term_years:number,rent_concession_months:number,ti_ll_work:string,mgmt_fee_pct:number,tenant:string,landlord:string,transaction_date:string,status:string,notes:string,[key:string]:unknown}
-type AnalyticsData = {mean:number,median:number,std:number,weighted:number,min:number,max:number,low:number,market:number,high:number,suggested:number,aMean:number,count:number,leaseMeanDeal?:number,leaseMedianDeal?:number,leaseMeanAsk?:number,leaseCount?:number,leaseMin?:number,leaseMax?:number,leaseSuggested?:number}
+type AnalyticsData = {mean:number,median:number,std:number,weighted:number,min:number,max:number,low:number,market:number,high:number,suggested:number,aMean:number,aOutliers?:{address:string,psf:number}[],compOutliers?:{address:string,psf:number}[],count:number,leaseMeanDeal?:number,leaseMedianDeal?:number,leaseMeanAsk?:number,leaseCount?:number,leaseMin?:number,leaseMax?:number,leaseSuggested?:number}
 type OPVReportData = {id:number,subject:SubjectForm,comps:Comp[],avails:Avail[],analytics:AnalyticsData|null,date:string}
 type SavedOPV = {id:string, created_at:string, saved_by:string, address:string}
 
@@ -247,9 +248,9 @@ function ProgressStepper({current, completedSteps, labelOverrides}: {current:str
 }
 
 // ── ASSIGNMENT PAGE ───────────────────────────────────────────────────────────
-type AssignmentData = {clientName:string,propertyAddress:string,opvType:string,dueDate:string,preparedBy:string,notes:string}
+type AssignmentData = {clientName:string,propertyAddress:string,opvType:string,dueDate:string,preparedBy:string,notes:string,opvLabel?:string}
 
-function Dashboard({user,subject,comps,avails,leaseComps,analytics,savedOPVs,setPage,loadSavedOPVs,restoreOPV,onNewOPV}: {user:{name:string,role:string,init:string},subject:SubjectForm|null,comps:Comp[],avails:Avail[],leaseComps:LeaseComp[],analytics:AnalyticsData|null,savedOPVs:{id:string,address:string,current_step:string,updated_at:string,saved_by:string}[],setPage:(p:string)=>void,loadSavedOPVs:()=>void,restoreOPV:(id:string)=>void,onNewOPV:()=>void}) {
+function Dashboard({user,subject,comps,avails,leaseComps,analytics,savedOPVs,setPage,loadSavedOPVs,restoreOPV,onNewOPV}: {user:{name:string,role:string,init:string},subject:SubjectForm|null,comps:Comp[],avails:Avail[],leaseComps:LeaseComp[],analytics:AnalyticsData|null,savedOPVs:{id:string,address:string,label?:string|null,current_step:string,updated_at:string,saved_by:string}[],setPage:(p:string)=>void,loadSavedOPVs:()=>void,restoreOPV:(id:string)=>void,onNewOPV:()=>void}) {
   useEffect(()=>{loadSavedOPVs()},[])
   const hour = new Date().getHours()
   const hasActiveOPV = subject||comps.length>0
@@ -344,7 +345,7 @@ function Dashboard({user,subject,comps,avails,leaseComps,analytics,savedOPVs,set
                     onMouseEnter={e=>(e.currentTarget as HTMLDivElement).style.background=D.surface2}
                     onMouseLeave={e=>(e.currentTarget as HTMLDivElement).style.background='transparent'}>
                     <div style={{flex:1,minWidth:0}}>
-                      <div style={{fontSize:13,fontWeight:600,color:D.text,marginBottom:3,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' as const}}>{s.address||'Untitled OPV'}</div>
+                      <div style={{fontSize:13,fontWeight:600,color:D.text,marginBottom:3,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' as const}}>{s.label||s.address||'Untitled OPV'}{s.label&&s.address&&<span style={{fontWeight:400,color:D.textMuted}}> · {s.address}</span>}</div>
                       <div style={{fontSize:11,color:D.textMuted,display:'flex',gap:8,alignItems:'center'}}>
                         <span>{timeAgo}</span>
                         <span style={{opacity:.3}}>·</span>
@@ -364,7 +365,7 @@ function Dashboard({user,subject,comps,avails,leaseComps,analytics,savedOPVs,set
 
 function Assignment({assignmentData,setAssignmentData,user,setPage,setSubject,subject}: {assignmentData:AssignmentData,setAssignmentData:(a:AssignmentData)=>void,user:{name:string,role:string,init:string},setPage:(p:string)=>void,setSubject:(s:SubjectForm)=>void,subject:SubjectForm|null}) {
   const [form,setForm]=useState<AssignmentData>({...assignmentData,preparedBy:assignmentData.preparedBy||user.name})
-  const set=(k:string,v:string)=>setForm(f=>{const next={...f,[k]:v};setAssignmentData(next);return next})
+  const set=(k:string,v:string)=>{const next={...form,[k]:v};setForm(next);setAssignmentData(next)}
   // Follow changes that arrive from elsewhere (a teammate's save merged in, or loading an OPV)
   useEffect(()=>{
     const incoming = {...assignmentData,preparedBy:assignmentData.preparedBy||user.name}
@@ -374,7 +375,7 @@ function Assignment({assignmentData,setAssignmentData,user,setPage,setSubject,su
   const begin=()=>{
     setAssignmentData(form)
     if(!subject&&form.propertyAddress){
-      const blankSubject:SubjectForm={address:form.propertyAddress,city:'',county:'Nassau',municipality:'',parcelId:'',type:'Warehouse',opvType:form.opvType==='For Sale'?'sale':form.opvType==='For Lease'?'lease':'investment',size:'',lot:'',ceiling:'',docks:'',driveIn:'',power:'',heat:'Gas FHA',parking:'',sprinkler:'ESFR',sewer:'Municipal',zoning:'',taxes:'',yearBuilt:'',officePct:'',construction:'Masonry/Steel',condition:'Good',notes:'',highestBestUse:'',capRateLow:'',capRateHigh:'',leasePsfLow:'',leasePsfHigh:'',estimatedValueLow:'',estimatedValueHigh:'',preparedBy:form.preparedBy}
+      const blankSubject:SubjectForm={address:form.propertyAddress,city:'',county:'Nassau',municipality:'',parcelId:'',type:'Warehouse',opvType:form.opvType==='For Sale'?'sale':form.opvType==='For Lease'?'lease':'investment',size:'',lot:'',ceiling:'',docks:'',driveIn:'',power:'',heat:'Gas FHA',parking:'',sprinkler:'',sewer:'Municipal',zoning:'',taxes:'',yearBuilt:'',officePct:'',construction:'Masonry/Steel',condition:'Good',notes:'',highestBestUse:'',capRateLow:'',capRateHigh:'',leasePsfLow:'',leasePsfHigh:'',estimatedValueLow:'',estimatedValueHigh:'',preparedBy:form.preparedBy}
       setSubject(blankSubject)
     }
     setPage('subject')
@@ -393,6 +394,9 @@ function Assignment({assignmentData,setAssignmentData,user,setPage,setSubject,su
         <Field label="Client Name"><Input placeholder="e.g. John Smith / ABC Corporation" value={form.clientName} onChange={e=>set('clientName',e.target.value)}/></Field>
         <Field label="Property Address" full>
           <Input placeholder="e.g. 45 Orville Drive, Bohemia, NY 11716" value={form.propertyAddress} onChange={e=>set('propertyAddress',e.target.value)} style={{fontSize:15,padding:'13px 16px'}}/>
+        </Field>
+        <Field label="Saved OPV Label (optional)" full note="Only used to name this OPV in your saved list, e.g. Version 2 or Draft for client review. It never appears on the report.">
+          <Input placeholder="e.g. Version 2" value={form.opvLabel||''} onChange={e=>set('opvLabel',e.target.value)}/>
         </Field>
         <Field label="OPV Type">
           <div style={{display:'flex',gap:8}}>
@@ -526,7 +530,7 @@ function DataVerification({comps,avails,verificationStatus,setVerificationStatus
               {allItems.map((item,i)=>{
                 const c=item as Comp; const a=item as Avail
                 const s=verificationStatus[item.id]
-                const psf=item._type==='comp'?c.price_per_sf:(c.price_per_sf||(a.asking_price&&a.building_sf?Number(a.asking_price)/Number(a.building_sf):0))
+                const psf=pricePerSf(item._type==='comp'?c:a)
                 const dateOrListing=item._type==='comp'?fmtDate(c.sale_date):(a.pricing_guidance||'—')
                 return (
                   <tr key={item.id} style={{borderBottom:`1px solid ${D.border}`,background:i%2===0?'transparent':D.surface2}}>
@@ -569,7 +573,7 @@ function FolderManager({folders, setFolders, setPage, comps, setComps, avails, s
 
   const fetchPhoto = async (item: Comp|Avail) => {
     const url = (item as Comp).loopnet_url as string|undefined
-    if (!url) { alert('No LoopNet URL for this property.'); return }
+    if (!url) { toast('No LoopNet URL for this property.'); return }
     setFetchingPhoto(item.id)
     try {
       const res = await fetch(`/api/fetch-photo?url=${encodeURIComponent(url)}`)
@@ -579,8 +583,8 @@ function FolderManager({folders, setFolders, setPage, comps, setComps, avails, s
           ? {...f, items: f.items.map(i => i.id === item.id ? {...i, photo_url: data.photo_url} : i)}
           : f
         ))
-      } else { alert('Could not find a photo on LoopNet for this property.') }
-    } catch { alert('Photo fetch failed.') }
+      } else { toast('Could not find a photo on LoopNet for this property.') }
+    } catch { toast('Photo fetch failed.') }
     setFetchingPhoto(null)
   }
 
@@ -602,7 +606,7 @@ function FolderManager({folders, setFolders, setPage, comps, setComps, avails, s
     setFolders(folders.map(f=>f.id===folderId?{...f,items:f.items.filter(i=>i.id!==itemId)}:f))
   }
   const createManual = () => {
-    if (!manualName.trim()) { alert('Enter a folder name'); return }
+    if (!manualName.trim()) { toast('Enter a folder name'); return }
     const color = FOLDER_COLORS[folders.length % FOLDER_COLORS.length]
     setFolders([...folders, {id:Date.now().toString(), name:manualName.trim(), type:manualType, color, items:[], createdAt:Date.now()}])
     setManualName('')
@@ -724,7 +728,7 @@ function FolderManager({folders, setFolders, setPage, comps, setComps, avails, s
                           </div>
                           <div style={{display:'flex',gap:6,flexWrap:'wrap' as const,marginBottom:6}}>
                             {item.building_sf&&<Tag color={D.blue}>{Number(item.building_sf).toLocaleString()} SF</Tag>}
-                            {active.type==='comps'&&(c.price_per_sf||(c.sale_price&&c.building_sf))&&<Tag color={D.gold}>${(c.price_per_sf||Number(c.sale_price)/Number(c.building_sf)).toFixed(2)}/SF</Tag>}
+                            {active.type==='comps'&&!!pricePerSf(c)&&<Tag color={D.gold}>${pricePerSf(c).toFixed(2)}/SF</Tag>}
                             {active.type==='comps'&&c.sale_date&&<Tag color={D.textMuted}>{fmtDate(c.sale_date)}</Tag>}
                             {active.type==='avails'&&a.asking_price&&<Tag color={D.purple}>${Number(a.asking_price).toLocaleString()}</Tag>}
                           </div>
@@ -764,7 +768,7 @@ function FolderManager({folders, setFolders, setPage, comps, setComps, avails, s
                         const existing = avails.map(a=>a.id)
                         setAvails([...avails,...items.filter(i=>!existing.includes(i.id)) as Avail[]])
                       }
-                      alert(`${items.length} propert${items.length===1?'y':'ies'} added to your OPV.`)
+                      toast(`${items.length} propert${items.length===1?'y':'ies'} added to your OPV.`)
                     }} style={{flex:1,padding:'11px 16px',fontSize:13}}>
                       {selected.size===0?'Select properties to add':'➕ Add ' + selected.size + ' to OPV Report'}
                     </Btn>
@@ -892,7 +896,7 @@ function FileImport({autoTable}: {autoTable?: string}) {
     try {
       const res = await fetch(`/api/import?hint=${encodeURIComponent(targetTable)}`, {method:'POST', body:form})
       const data = await res.json()
-      if (data.error) { alert('Parse error: ' + data.error); setParsing(false); return }
+      if (data.error) { toast('Parse error: ' + data.error); setParsing(false); return }
       setParsed(data)
       // Auto-compute column mapping: exact + alias resolution, unknowns flagged for user review
       const initMap: Record<string,string> = {}
@@ -908,7 +912,7 @@ function FileImport({autoTable}: {autoTable?: string}) {
           return merged
         })
       }
-    } catch(e) { alert('Upload failed: ' + (e as Error).message) }
+    } catch(e) { toast('Upload failed: ' + (e as Error).message) }
     setParsing(false)
   }
   const handleDrop = (e: React.DragEvent) => {
@@ -919,7 +923,7 @@ function FileImport({autoTable}: {autoTable?: string}) {
   const runImport = async () => {
     if (!parsed) return
     const table = targetTable
-    if (!table) { alert('Select or name a table first'); return }
+    if (!table) { toast('Select or name a table first'); return }
     setImporting(true); setResult(null); setImportError(''); setImportProgress('')
     try {
       // Client-side column remap — catches bad names before they hit the server
@@ -1229,13 +1233,13 @@ function DatabaseManager() {
     if (!payload.sale_date) payload.sale_date = null
     let error; if (editingId) { ({error}=await supabase.from('industrial_sale_comps').update(payload).eq('id',editingId)) } else { ({error}=await supabase.from('industrial_sale_comps').insert([payload])) }
     setSaving(false)
-    if (error) { alert('Error: '+error.message); return }
-    alert(editingId?'✅ Sale comp updated!':'✅ Sale comp saved to Supabase!')
+    if (error) { toast('Error: '+error.message); return }
+    toast(editingId?'✅ Sale comp updated!':'✅ Sale comp saved to Supabase!')
     if (editingId) { setEditPanelOpen(false); loadBrowse(browseOffset, browseSearch, browseStatusFilter) }
     setEditingId(null); setCompForm({...blankComp})
   }
   const saveComp = async () => {
-    if (!compForm.address) { alert('Address is required'); return }
+    if (!compForm.address) { toast('Address is required'); return }
     await checkDupes('industrial_sale_comps', compForm.address, doSaveComp)
   }
 
@@ -1246,40 +1250,40 @@ function DatabaseManager() {
     nums.forEach(k=>{ if(payload[k]) payload[k]=parseFloat(payload[k] as string)||null; else payload[k]=null })
     let error; if (editingId) { ({error}=await supabase.from('market_availabilities').update(payload).eq('id',editingId)) } else { ({error}=await supabase.from('market_availabilities').insert([payload])) }
     setSaving(false)
-    if (error) { alert('Error: '+error.message); return }
-    alert(editingId?'✅ Availability updated!':'✅ Availability saved to Supabase!')
+    if (error) { toast('Error: '+error.message); return }
+    toast(editingId?'✅ Availability updated!':'✅ Availability saved to Supabase!')
     if (editingId) { setEditPanelOpen(false); loadBrowse(browseOffset, browseSearch, browseStatusFilter) }
     setEditingId(null); setAvailForm({...blankAvail})
   }
   const saveAvail = async () => {
-    if (!availForm.address) { alert('Address is required'); return }
+    if (!availForm.address) { toast('Address is required'); return }
     await checkDupes('market_availabilities', availForm.address, doSaveAvail)
   }
 
   const savePcreSale = async () => {
-    if (!pcreSaleForm.address) { alert('Address is required'); return }
+    if (!pcreSaleForm.address) { toast('Address is required'); return }
     setSaving(true)
     const payload: Record<string,unknown> = {...pcreSaleForm}
     payload.building_sf = pcreSaleForm.building_sf ? parseFloat(pcreSaleForm.building_sf)||null : null
     if (!pcreSaleForm.sale_date) payload.sale_date = null
     let error; if (editingId) { ({error}=await supabase.from('pcre_sale_transactions').update(payload).eq('id',editingId)) } else { ({error}=await supabase.from('pcre_sale_transactions').insert([payload])) }
     setSaving(false)
-    if (error) { alert('Error: '+error.message); return }
-    alert(editingId?'✅ PCRE sale updated!':'✅ PCRE sale transaction saved!')
+    if (error) { toast('Error: '+error.message); return }
+    toast(editingId?'✅ PCRE sale updated!':'✅ PCRE sale transaction saved!')
     if (editingId) { setEditPanelOpen(false); loadBrowse(browseOffset, browseSearch, browseStatusFilter) }
     setEditingId(null); setPcreSaleForm({...blankPcreSale})
   }
 
   const savePcreLease = async () => {
-    if (!pcreLeaseForm.address) { alert('Address is required'); return }
+    if (!pcreLeaseForm.address) { toast('Address is required'); return }
     setSaving(true)
     const payload: Record<string,unknown> = {...pcreLeaseForm}
     payload.building_sf = pcreLeaseForm.building_sf ? parseFloat(pcreLeaseForm.building_sf)||null : null
     if (!pcreLeaseForm.lease_date) payload.lease_date = null
     let error; if (editingId) { ({error}=await supabase.from('pcre_lease_transactions').update(payload).eq('id',editingId)) } else { ({error}=await supabase.from('pcre_lease_transactions').insert([payload])) }
     setSaving(false)
-    if (error) { alert('Error: '+error.message); return }
-    alert(editingId?'✅ PCRE lease updated!':'✅ PCRE lease transaction saved!')
+    if (error) { toast('Error: '+error.message); return }
+    toast(editingId?'✅ PCRE lease updated!':'✅ PCRE lease transaction saved!')
     if (editingId) { setEditPanelOpen(false); loadBrowse(browseOffset, browseSearch, browseStatusFilter) }
     setEditingId(null); setPcreLeaseForm({...blankPcreLease})
   }
@@ -1293,13 +1297,13 @@ function DatabaseManager() {
     payload.status = leaseAvailForm.status || 'Available'
     let error; if (editingId) { ({error}=await supabase.from('lease_market_availabilities').update(payload).eq('id',editingId)) } else { ({error}=await supabase.from('lease_market_availabilities').insert([payload])) }
     setSaving(false)
-    if (error) { alert('Error: '+error.message); return }
-    alert(editingId?'✅ Lease availability updated!':'✅ Lease availability saved to Supabase!')
+    if (error) { toast('Error: '+error.message); return }
+    toast(editingId?'✅ Lease availability updated!':'✅ Lease availability saved to Supabase!')
     if (editingId) { setEditPanelOpen(false); loadBrowse(browseOffset, browseSearch, browseStatusFilter) }
     setEditingId(null); setLeaseAvailForm({...blankLeaseAvail})
   }
   const saveLeaseAvail = async () => {
-    if (!leaseAvailForm.address) { alert('Address is required'); return }
+    if (!leaseAvailForm.address) { toast('Address is required'); return }
     await checkDupes('lease_market_availabilities', leaseAvailForm.address, doSaveLeaseAvail)
   }
 
@@ -1311,13 +1315,13 @@ function DatabaseManager() {
     if (!payload.transaction_date) payload.transaction_date = null
     let error; if (editingId) { ({error}=await supabase.from('lease_comps').update(payload).eq('id',editingId)) } else { ({error}=await supabase.from('lease_comps').insert([payload])) }
     setSaving(false)
-    if (error) { alert('Error: '+error.message); return }
-    alert(editingId?'✅ Lease comp updated!':'✅ Lease comp saved to Supabase!')
+    if (error) { toast('Error: '+error.message); return }
+    toast(editingId?'✅ Lease comp updated!':'✅ Lease comp saved to Supabase!')
     if (editingId) { setEditPanelOpen(false); loadBrowse(browseOffset, browseSearch, browseStatusFilter) }
     setEditingId(null); setLeaseCompForm({...blankLeaseComp})
   }
   const saveLeaseComp = async () => {
-    if (!leaseCompForm.address) { alert('Address is required'); return }
+    if (!leaseCompForm.address) { toast('Address is required'); return }
     await checkDupes('lease_comps', leaseCompForm.address, doSaveLeaseComp)
   }
 
@@ -1367,7 +1371,7 @@ function DatabaseManager() {
   }
   const handleImportPreview = () => {
     const rows = parseCSV(importText)
-    if (!rows.length) { alert('No data found.'); return }
+    if (!rows.length) { toast('No data found.'); return }
     setImportPreview(rows.slice(0,5))
   }
   const numFields = tab==='comps' ? ['building_sf','lot_size_ac','real_estate_taxes','sale_price','price_per_sf'] : tab==='avails' ? ['building_sf','lot_size_ac','real_estate_taxes','asking_price','price_per_sf'] : (tab==='lease-comps'||tab==='lease-avails') ? ['building_sf','lot_size_ac','asking_rent','deal_rent','taxes','lease_term_years','rent_concession_months','mgmt_fee_pct'] : ['building_sf']
@@ -1933,7 +1937,7 @@ function DatabaseManager() {
                   {!!row.building_sf&&<Tag color={D.blue}>{Number(row.building_sf).toLocaleString()} SF</Tag>}
                   {/* comps */}
                   {tab==='comps'&&!!(row as Record<string,unknown>).property_type&&<Tag color={D.purple}>{String((row as Record<string,unknown>).property_type)}</Tag>}
-                  {tab==='comps'&&!!row.price_per_sf&&<Tag color={D.gold}>${Number(row.price_per_sf).toFixed(2)}/SF</Tag>}
+                  {tab==='comps'&&!!pricePerSf(row)&&<Tag color={D.gold}>${pricePerSf(row).toFixed(2)}/SF</Tag>}
                   {tab==='comps'&&!!(row as Record<string,unknown>).sale_price&&<Tag color={'#22c55e'}>${Number((row as Record<string,unknown>).sale_price).toLocaleString()}</Tag>}
                   {tab==='comps'&&!!row.sale_date&&<Tag color={D.textMuted}>{fmtDate(String(row.sale_date))}</Tag>}
                   {tab==='comps'&&!!(row as Record<string,unknown>).ceiling_height&&<Tag color={'#0891B2'}>{String((row as Record<string,unknown>).ceiling_height)} clg</Tag>}
@@ -1942,7 +1946,7 @@ function DatabaseManager() {
                   {/* avails */}
                   {tab==='avails'&&!!(row as Record<string,unknown>).property_type&&<Tag color={D.purple}>{String((row as Record<string,unknown>).property_type)}</Tag>}
                   {tab==='avails'&&!!row.asking_price&&<Tag color={'#22c55e'}>${Number(row.asking_price).toLocaleString()}</Tag>}
-                  {tab==='avails'&&!!row.price_per_sf&&<Tag color={D.gold}>${Number(row.price_per_sf).toFixed(2)}/SF</Tag>}
+                  {tab==='avails'&&!!pricePerSf(row)&&<Tag color={D.gold}>${pricePerSf(row).toFixed(2)}/SF</Tag>}
                   {tab==='avails'&&!!(row as Record<string,unknown>).ceiling_height&&<Tag color={'#0891B2'}>{String((row as Record<string,unknown>).ceiling_height)} clg</Tag>}
                   {tab==='avails'&&!!(row as Record<string,unknown>).listing_broker&&<Tag color={D.textSec}>🔑 {String((row as Record<string,unknown>).listing_broker)}</Tag>}
                   {tab==='avails'&&<Tag color={row.status==='Available'?D.green:row.status==='Under Contract'?D.gold:row.status==='Sold'?D.red:D.textMuted}>{String(row.status||'Available')}</Tag>}
@@ -2287,7 +2291,7 @@ function Auth({onLogin}: {onLogin: (u:{name:string,role:string,init:string})=>vo
             <p style={{fontFamily:"'Cormorant Garamond',serif",fontSize:22,fontWeight:500,marginBottom:20,color:D.text}}>Welcome back</p>
             <Field label="Email"><Input type="email" placeholder="broker@firma.com" value={email} onChange={e=>setEmail(e.target.value)}/></Field>
             <Field label="Password"><Input type="password" placeholder="••••••••" value={pass} onChange={e=>setPass(e.target.value)}/></Field>
-            <Btn onClick={()=>{if(!email){alert('Enter email');return;}const n=email.split('@')[0].replace(/[^a-z]/gi,' ').trim()||'Broker';onLogin({name:n,role:'Commercial Broker',init:n.slice(0,2).toUpperCase()})}} style={{width:'100%',padding:12}}>Sign In</Btn>
+            <Btn onClick={()=>{if(!email){toast('Enter email');return;}const n=email.split('@')[0].replace(/[^a-z]/gi,' ').trim()||'Broker';onLogin({name:n,role:'Commercial Broker',init:n.slice(0,2).toUpperCase()})}} style={{width:'100%',padding:12}}>Sign In</Btn>
             <div style={{textAlign:'center' as const,fontSize:11,color:D.textMuted,margin:'14px 0'}}>or</div>
             <Btn onClick={()=>onLogin({name:'Alex Rivera',role:'Senior Broker',init:'AR'})} variant="ghost" style={{width:'100%',padding:11,fontSize:12}}>Continue with Demo Account</Btn>
           </div>
@@ -2299,7 +2303,7 @@ function Auth({onLogin}: {onLogin: (u:{name:string,role:string,init:string})=>vo
               <Field label="Last Name"><Input placeholder="Rivera" value={lname} onChange={e=>setLname(e.target.value)}/></Field>
             </div>
             <Field label="Email"><Input type="email" placeholder="you@brokerage.com" value={email} onChange={e=>setEmail(e.target.value)}/></Field>
-            <Btn onClick={()=>{if(!fname||!email){alert('Enter name and email');return;}onLogin({name:`${fname} ${lname}`.trim(),role:'Commercial Broker',init:(fname[0]+(lname[0]||'')).toUpperCase()})}} style={{width:'100%',padding:12}}>Create Account</Btn>
+            <Btn onClick={()=>{if(!fname||!email){toast('Enter name and email');return;}onLogin({name:`${fname} ${lname}`.trim(),role:'Commercial Broker',init:(fname[0]+(lname[0]||'')).toUpperCase()})}} style={{width:'100%',padding:12}}>Create Account</Btn>
           </div>
         )}
       </div>
@@ -2310,7 +2314,7 @@ function Auth({onLogin}: {onLogin: (u:{name:string,role:string,init:string})=>vo
 // ── SUBJECT PROPERTY ──────────────────────────────────────────────────────────
 function SubjectProperty({subject,setSubject,setPage,folders,setFolders,assignmentData}: {subject:SubjectForm|null,setSubject:(s:SubjectForm)=>void,setPage:(p:string)=>void,folders:Folder[],setFolders:(f:Folder[]|((prev:Folder[])=>Folder[]))=>void,assignmentData:AssignmentData}) {
   const defaultOpvType = assignmentData.opvType==='For Lease'?'lease':assignmentData.opvType==='Investment Sale'?'investment':'sale'
-  const [form,setForm]=useState<SubjectForm>(subject||{address:assignmentData.propertyAddress||'',city:'',county:'Nassau',municipality:'',parcelId:'',type:'Warehouse',opvType:defaultOpvType,size:'',lot:'',ceiling:'',docks:'',driveIn:'',power:'',heat:'Gas FHA',parking:'',sprinkler:'ESFR',sewer:'Municipal',zoning:'',taxes:'',yearBuilt:'',officePct:'',construction:'Masonry/Steel',condition:'Good',notes:'',highestBestUse:'',capRateLow:'',capRateHigh:'',leasePsfLow:'',leasePsfHigh:'',estimatedValueLow:'',estimatedValueHigh:'',preparedBy:assignmentData.preparedBy||''})
+  const [form,setForm]=useState<SubjectForm>(subject||{address:assignmentData.propertyAddress||'',city:'',county:'Nassau',municipality:'',parcelId:'',type:'Warehouse',opvType:defaultOpvType,size:'',lot:'',ceiling:'',docks:'',driveIn:'',power:'',heat:'Gas FHA',parking:'',sprinkler:'',sewer:'Municipal',zoning:'',taxes:'',yearBuilt:'',officePct:'',construction:'Masonry/Steel',condition:'Good',notes:'',highestBestUse:'',capRateLow:'',capRateHigh:'',leasePsfLow:'',leasePsfHigh:'',estimatedValueLow:'',estimatedValueHigh:'',preparedBy:assignmentData.preparedBy||''})
   const set=(k:string,v:string)=>setForm((f:SubjectForm)=>{const next={...f,[k]:v};setSubject(next);return next})
   // Follow changes that arrive from elsewhere (a teammate's save merged in, or loading an OPV)
   useEffect(()=>{
@@ -2353,7 +2357,7 @@ function SubjectProperty({subject,setSubject,setPage,folders,setFolders,assignme
           <div style={G2}>
             <Field label="Building Size (SF)"><Input type="number" placeholder="28500" value={form.size} onChange={e=>set('size',e.target.value)}/></Field>
             <Field label="Lot Size"><Input placeholder="2.1 acres" value={form.lot} onChange={e=>set('lot',e.target.value)}/></Field>
-            <Field label="Clear Ceiling Height (ft)"><Input type="number" placeholder="22" value={form.ceiling} onChange={e=>set('ceiling',e.target.value)}/></Field>
+            <Field label="Clear Ceiling Height (ft)"><Input placeholder="22 or 14-16" value={form.ceiling} onChange={e=>set('ceiling',e.target.value)}/></Field>
             <Field label="Year Built"><Input type="number" placeholder="2001" value={form.yearBuilt} onChange={e=>set('yearBuilt',e.target.value)}/></Field>
             <Field label="Loading Docks"><Input type="number" placeholder="2" value={form.docks} onChange={e=>set('docks',e.target.value)}/></Field>
             <Field label="Drive-In Doors"><Input type="number" placeholder="1" value={form.driveIn} onChange={e=>set('driveIn',e.target.value)}/></Field>
@@ -2364,7 +2368,7 @@ function SubjectProperty({subject,setSubject,setPage,folders,setFolders,assignme
           <div style={G2}>
             <Field label="Electrical Power"><Input placeholder="400A/3ph" value={form.power} onChange={e=>set('power',e.target.value)}/></Field>
             <Field label="Heat"><Sel value={form.heat} onChange={e=>set('heat',e.target.value)}><option>Gas FHA</option><option>Gas Unit Heaters</option><option>Electric</option><option>Oil</option><option>None</option></Sel></Field>
-            <Field label="Sprinkler System"><Sel value={form.sprinkler} onChange={e=>set('sprinkler',e.target.value)}><option>ESFR</option><option>Wet</option><option>Dry</option><option>None</option></Sel></Field>
+            <Field label="Sprinkler System"><Sel value={form.sprinkler} onChange={e=>set('sprinkler',e.target.value)}><option value="">Select...</option><option>ESFR</option><option>Wet</option><option>Dry</option><option>None</option></Sel></Field>
             <Field label="Sewer"><Sel value={form.sewer} onChange={e=>set('sewer',e.target.value)}><option>Municipal</option><option>Septic</option></Sel></Field>
             <Field label="Construction Type"><Sel value={form.construction} onChange={e=>set('construction',e.target.value)}><option>Masonry/Steel</option><option>Tilt-up Concrete</option><option>Steel Frame</option><option>Masonry</option></Sel></Field>
             <Field label="Condition"><Sel value={form.condition} onChange={e=>set('condition',e.target.value)}><option>Excellent</option><option>Good</option><option>Average</option><option>Fair</option><option>Poor</option></Sel></Field>
@@ -2396,12 +2400,12 @@ function SubjectProperty({subject,setSubject,setPage,folders,setFolders,assignme
             )}
           </div>
           <Field label="Prepared By"><Input placeholder="Broker name" value={form.preparedBy} onChange={e=>set('preparedBy',e.target.value)}/></Field>
-          <Btn onClick={()=>{if(!form.address||!form.size){alert('Address and building size are required.');return;}setSubject(form);autoCreateFolders(form.address);setPage(form.opvType==='lease'?'lease-comp-search':'comp-search')}} style={{width:'100%',padding:12,marginTop:4}}>{form.opvType==='lease'?'Save & Search Lease Comps →':'Save & Search Comps →'}</Btn>
+          <Btn onClick={()=>{if(!form.address||!form.size){toast('Address and building size are required.');return;}setSubject(form);autoCreateFolders(form.address);setPage(form.opvType==='lease'?'lease-comp-search':'comp-search')}} style={{width:'100%',padding:12,marginTop:4}}>{form.opvType==='lease'?'Save & Search Lease Comps →':'Save & Search Comps →'}</Btn>
         </Card>
         <div>
           <Card style={{border:`1px solid rgba(217,119,6,0.25)`}}>
             <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:15,color:D.gold,marginBottom:14}}>Subject Property Preview</div>
-            {([['Address',form.address||'—'],['County',form.county],['Type',form.type],['Building Size',form.size?`${parseInt(form.size).toLocaleString()} SF`:'—'],['Lot Size',form.lot||'—'],['Clear Height',form.ceiling?`${form.ceiling} ft`:'—'],['Docks',form.docks||'—'],['Drive-In',form.driveIn||'—'],['Power',form.power||'—'],['Sprinkler',form.sprinkler],['Sewer',form.sewer],['Zoning',form.zoning||'—'],['Year Built',form.yearBuilt||'—'],['Taxes',form.taxes?`$${parseInt(form.taxes).toLocaleString()}/yr`:'—']] as [string,string][]).map(([l,v])=>(
+            {([['Address',form.address||'—'],['County',form.county],['Type',form.type],['Building Size',form.size?`${parseInt(form.size).toLocaleString()} SF`:'—'],['Lot Size',form.lot||'—'],['Clear Height',clearHeight(form.ceiling)||'—'],['Docks',form.docks||'—'],['Drive-In',form.driveIn||'—'],['Power',form.power||'—'],['Sprinkler',form.sprinkler||'—'],['Sewer',form.sewer],['Zoning',form.zoning||'—'],['Year Built',form.yearBuilt||'—'],['Taxes',form.taxes?`$${parseInt(form.taxes).toLocaleString()}/yr`:'—']] as [string,string][]).map(([l,v])=>(
               <div key={l} style={{display:'flex',justifyContent:'space-between',padding:'6px 0',borderBottom:`1px solid ${D.border}`,fontSize:12}}>
                 <span style={{color:D.textSec}}>{l}</span>
                 <span style={{fontWeight:500,textAlign:'right' as const,maxWidth:'55%',color:D.text}}>{v}</span>
@@ -2488,8 +2492,8 @@ function CompSearch({subject,comps,setComps,setPage,folders,setFolders}: {subjec
       const res=await fetch('/api/promote',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({direction:'comp-to-avail',id})})
       if (res.ok) {
         setResults(prev=>prev.map(r=>r.id===id?{...r,status:'Back on Market'}:r))
-        alert('✅ New availability created! Property is now listed as Back on Market.')
-      } else { const d=await res.json(); alert('Error: '+d.error) }
+        toast('✅ New availability created! Property is now listed as Back on Market.')
+      } else { const d=await res.json(); toast('Error: '+d.error) }
     } finally { setStatusChanging(prev=>{const n=new Set(prev);n.delete(id);return n}) }
   }
 
@@ -2515,7 +2519,7 @@ function CompSearch({subject,comps,setComps,setPage,folders,setFolders}: {subjec
     if (filters.max_date) q = q.lte('sale_date', filters.max_date)
     q = q.order('sale_date', {ascending:false}).limit(2000)
     const {data,error} = await q
-    if (error) { alert('Search error: ' + error.message); setLoading(false); return }
+    if (error) { toast('Search error: ' + error.message); setLoading(false); return }
     // Client-side SF filter — strip commas so "30,000" parses correctly
     const parseSF = (v: string) => parseFloat(v.replace(/,/g,'').trim()) || 0
     let filtered = data || []
@@ -2538,7 +2542,7 @@ function CompSearch({subject,comps,setComps,setPage,folders,setFolders}: {subjec
           {subject&&<Card style={{marginBottom:14,border:`1px solid rgba(217,119,6,0.25)`}}>
             <SL>Subject Property</SL>
             <div style={{fontFamily:"'Cormorant Garamond',serif",fontSize:13,color:D.gold,marginBottom:10}}>{subject.address}</div>
-            {([['Size',subject.size?`${Number(subject.size).toLocaleString()} SF`:'—'],['Ceiling',subject.ceiling?`${subject.ceiling} ft`:'—'],['County',subject.county]] as [string,string][]).map(([l,v])=>(
+            {([['Size',subject.size?`${Number(subject.size).toLocaleString()} SF`:'—'],['Ceiling',clearHeight(subject.ceiling)||'—'],['County',subject.county]] as [string,string][]).map(([l,v])=>(
               <div key={l} style={{display:'flex',justifyContent:'space-between',padding:'5px 0',borderBottom:`1px solid ${D.border}`,fontSize:11}}>
                 <span style={{color:D.textSec}}>{l}</span><span style={{fontWeight:600,color:D.text}}>{v}</span>
               </div>
@@ -2576,7 +2580,7 @@ function CompSearch({subject,comps,setComps,setPage,folders,setFolders}: {subjec
               {results.length>0&&(
                 <div style={{display:'flex',flexDirection:'column' as const,gap:10}}>
                   {results.map((r,idx)=>{
-                    const psf=r.price_per_sf||(r.sale_price&&r.building_sf?Number(r.sale_price)/Number(r.building_sf):0)
+                    const psf=pricePerSf(r)
                     const isAdded=comps.some(c=>c.id===r.id)
                     const sc=(label:string,val:unknown)=>(
                       <div key={label}>
@@ -2610,7 +2614,7 @@ function CompSearch({subject,comps,setComps,setPage,folders,setFolders}: {subjec
                             </div>
                             <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:'10px 16px',marginBottom:12}}>
                               {sc('Building SF', r.building_sf?Number(r.building_sf).toLocaleString()+' SF':null)}
-                              {sc('Lot Size', r.lot_size_ac?r.lot_size_ac+' AC':null)}
+                              {sc('Lot Size', r.lot_size_ac?acres(r.lot_size_ac)+' AC':null)}
                               {sc('Sale Price', r.sale_price?'$'+Number(r.sale_price).toLocaleString():null)}
                               {sc('Price / SF', psf?'$'+Number(psf).toFixed(2):null)}
                               {sc('Ceiling Height', r.ceiling_height)}
@@ -2622,7 +2626,7 @@ function CompSearch({subject,comps,setComps,setPage,folders,setFolders}: {subjec
                               {sc('Sewer', r.sewer)}
                               {sc('Parking', (r as Comp&{parking?:string}).parking)}
                               {sc('Zoning', r.zoning)}
-                              {sc('RE Taxes', (r as Comp&{real_estate_taxes?:number}).real_estate_taxes?'$'+Number((r as Comp&{real_estate_taxes?:number}).real_estate_taxes).toLocaleString():null)}
+                              {sc('RE Taxes', (r as Comp&{real_estate_taxes?:number}).real_estate_taxes?money2((r as Comp&{real_estate_taxes?:number}).real_estate_taxes):null)}
                               {sc('Cap Rate', (r as Comp&{actual_cap_rate?:number}).actual_cap_rate?(r as Comp&{actual_cap_rate?:number}).actual_cap_rate+'%':null)}
                               {sc('Sale Type', r.sale_type)}
                               {sc('Buyer', r.buyer)}
@@ -2640,7 +2644,7 @@ function CompSearch({subject,comps,setComps,setPage,folders,setFolders}: {subjec
                                       <div key={f.id} onClick={()=>{
                                         const alreadyIn=f.items.find(i=>i.id===r.id)
                                         if (!alreadyIn) setFolders(folders.map(fl=>fl.id===f.id?{...fl,items:[...fl.items,r]}:fl))
-                                        setFolderDropdown(null); alert(alreadyIn?'Already in this folder!':`Added to "${f.name}"`)
+                                        setFolderDropdown(null); toast(alreadyIn?'Already in this folder!':`Added to "${f.name}"`)
                                       }} style={{display:'flex',alignItems:'center',gap:8,padding:'8px 10px',borderRadius:6,cursor:'pointer',fontSize:12,color:D.text}}>
                                         <div style={{width:8,height:8,borderRadius:'50%',background:f.color,flexShrink:0}}/>{f.name}
                                       </div>
@@ -2712,8 +2716,8 @@ function AvailSearch({subject,avails,setAvails,leaseAvails,setLeaseAvails,setPag
       const res=await fetch('/api/promote',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({direction:'avail-to-comp',id,salePrice,saleDate,buyer,seller})})
       if (res.ok) {
         setResults(prev=>prev.map(r=>r.id===id?{...r,status:'Sold'}:r))
-        alert('✅ Marked as Sold and added to Sale Comps!')
-      } else { const d=await res.json(); alert('Error: '+d.error) }
+        toast('✅ Marked as Sold and added to Sale Comps!')
+      } else { const d=await res.json(); toast('Error: '+d.error) }
     } finally { setStatusChanging(prev=>{const n=new Set(prev);n.delete(id);return n}); setSellModal(null) }
   }
 
@@ -2744,7 +2748,7 @@ function AvailSearch({subject,avails,setAvails,leaseAvails,setLeaseAvails,setPag
     if (isLease) {
       // Lease mode: query lease_comps where status=Available
       const {data,error} = await buildLeaseAvailQuery()
-      if (error) { alert('Search error: ' + error.message); setLoading(false); return }
+      if (error) { toast('Search error: ' + error.message); setLoading(false); return }
       // Client-side SF filter — strip commas so "30,000" parses correctly
       const parseSFa = (v: string) => parseFloat(v.replace(/,/g,'').trim()) || 0
       let filtered = data || []
@@ -2758,7 +2762,7 @@ function AvailSearch({subject,avails,setAvails,leaseAvails,setLeaseAvails,setPag
         const result = await buildQuery(false)
         data = result.data; error = result.error
       }
-      if (error) { alert('Search error: ' + error.message); setLoading(false); return }
+      if (error) { toast('Search error: ' + error.message); setLoading(false); return }
       // Client-side SF filter — strip commas so "30,000" parses correctly
       const parseSFb = (v: string) => parseFloat(v.replace(/,/g,'').trim()) || 0
       let filtered = data || []
@@ -2774,11 +2778,11 @@ function AvailSearch({subject,avails,setAvails,leaseAvails,setLeaseAvails,setPag
 
   const doSaveNewAvail = async () => {
     const {data,error} = await supabase.from('market_availabilities').insert([{...newAvail,building_sf:parseFloat(newAvail.building_sf)||null,asking_price:parseFloat(newAvail.asking_price)||null,status:'Available'}]).select()
-    if (error) { alert('Save error: ' + error.message); return }
+    if (error) { toast('Save error: ' + error.message); return }
     if (data) { setResults(prev=>[data[0],...prev]); setShowAdd(false); setNewAvail({address:'',city:'',county:'Nassau',building_sf:'',ceiling_height:'',loading_docks:'',drive_ins:'',asking_price:'',pricing_guidance:'',sewer:'Municipal',zoning:'',loopnet_url:''}) }
   }
   const saveNewAvail = async () => {
-    if (!newAvail.address) { alert('Address required'); return }
+    if (!newAvail.address) { toast('Address required'); return }
     const {data} = await supabase.from('market_availabilities').select('id,address,city,asking_price,building_sf').ilike('address',`%${newAvail.address.trim()}%`).limit(5)
     if (data && data.length>0) { setAvailDupModal({matches:data,onConfirm:()=>{setAvailDupModal(null);doSaveNewAvail()}}); return }
     doSaveNewAvail()
@@ -2936,8 +2940,8 @@ function AvailSearch({subject,avails,setAvails,leaseAvails,setLeaseAvails,setPag
                           </div>
                           <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:'10px 16px',marginBottom:12}}>
                             {sc('Building SF', r.building_sf?Number(r.building_sf).toLocaleString()+' SF':null)}
-                            {sc('Lot Size', r.lot_size_ac?r.lot_size_ac+' AC':null)}
-                            {sc('Ceiling Height', r.ceiling_height?r.ceiling_height+' ft':null)}
+                            {sc('Lot Size', r.lot_size_ac?acres(r.lot_size_ac)+' AC':null)}
+                            {sc('Ceiling Height', clearHeight(r.ceiling_height)||null)}
                             {sc('Loading Docks', r.loading_docks)}
                             {sc('Drive-In Doors', r.drive_ins)}
                             {sc('Power', (r as Record<string,unknown>).power as string)}
@@ -2962,7 +2966,7 @@ function AvailSearch({subject,avails,setAvails,leaseAvails,setLeaseAvails,setPag
                                     <div key={f.id} onClick={()=>{
                                       const alreadyIn=f.items.find(i=>i.id===r.id)
                                       if (!alreadyIn) setFolders(folders.map(fl=>fl.id===f.id?{...fl,items:[...fl.items,r as unknown as Avail]}:fl))
-                                      setFolderDropdown(null); alert(alreadyIn?'Already in this folder!':`Added to "${f.name}"`)
+                                      setFolderDropdown(null); toast(alreadyIn?'Already in this folder!':`Added to "${f.name}"`)
                                     }} style={{display:'flex',alignItems:'center',gap:8,padding:'8px 10px',borderRadius:6,cursor:'pointer',fontSize:12,color:D.text}}>
                                       <div style={{width:8,height:8,borderRadius:'50%',background:f.color,flexShrink:0}}/>{f.name}
                                     </div>
@@ -2989,7 +2993,7 @@ function AvailSearch({subject,avails,setAvails,leaseAvails,setLeaseAvails,setPag
               {results.length===0?<Card style={{textAlign:'center' as const,padding:'48px 20px'}}><p style={{color:D.textSec}}>No availabilities found.</p></Card>:
               <div style={{display:'flex',flexDirection:'column' as const,gap:10}}>
                 {results.map((r,idx)=>{
-                  const psf=r.price_per_sf||(r.asking_price&&r.building_sf?Number(r.asking_price)/Number(r.building_sf):0)
+                  const psf=pricePerSf(r)
                   const sc=(label:string,val:unknown)=>(
                     <div key={label}>
                       <div style={{fontSize:10,fontWeight:600,color:D.textMuted,textTransform:'uppercase' as const,letterSpacing:'.06em',marginBottom:2}}>{label}</div>
@@ -3022,9 +3026,9 @@ function AvailSearch({subject,avails,setAvails,leaseAvails,setLeaseAvails,setPag
                           </div>
                           <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:'10px 16px',marginBottom:12}}>
                             {sc('Building SF', r.building_sf?Number(r.building_sf).toLocaleString()+' SF':null)}
-                            {sc('Lot Size', r.lot_size_ac?r.lot_size_ac+' AC':null)}
+                            {sc('Lot Size', r.lot_size_ac?acres(r.lot_size_ac)+' AC':null)}
                             {sc('Pricing Guidance', r.pricing_guidance)}
-                            {sc('RE Taxes', (r as Avail&{real_estate_taxes?:number}).real_estate_taxes?'$'+Number((r as Avail&{real_estate_taxes?:number}).real_estate_taxes).toLocaleString():null)}
+                            {sc('RE Taxes', (r as Avail&{real_estate_taxes?:number}).real_estate_taxes?money2((r as Avail&{real_estate_taxes?:number}).real_estate_taxes):null)}
                             {sc('Ceiling Height', r.ceiling_height)}
                             {sc('Loading Docks', r.loading_docks)}
                             {sc('Drive-In Doors', r.drive_ins)}
@@ -3049,7 +3053,7 @@ function AvailSearch({subject,avails,setAvails,leaseAvails,setLeaseAvails,setPag
                                     <div key={f.id} onClick={()=>{
                                       const alreadyIn=f.items.find(i=>i.id===r.id)
                                       if (!alreadyIn) setFolders(folders.map(fl=>fl.id===f.id?{...fl,items:[...fl.items,r]}:fl))
-                                      setFolderDropdown(null); alert(alreadyIn?'Already in this folder!':`Added to "${f.name}"`)
+                                      setFolderDropdown(null); toast(alreadyIn?'Already in this folder!':`Added to "${f.name}"`)
                                     }} style={{display:'flex',alignItems:'center',gap:8,padding:'8px 10px',borderRadius:6,cursor:'pointer',fontSize:12,color:D.text}}>
                                       <div style={{width:8,height:8,borderRadius:'50%',background:f.color,flexShrink:0}}/>{f.name}
                                     </div>
@@ -3131,7 +3135,7 @@ function LeaseCompSearch({subject,leaseComps,setLeaseComps,setPage,folders,setFo
     if (filters.max_date) q = q.lte('transaction_date', filters.max_date)
     q = q.order('transaction_date', {ascending:false}).limit(2000)
     const {data,error} = await q
-    if (error) { alert('Search error: ' + error.message); setLoading(false); return }
+    if (error) { toast('Search error: ' + error.message); setLoading(false); return }
     // Client-side SF filter — strip commas so "30,000" parses correctly
     const parseSFc = (v: string) => parseFloat(v.replace(/,/g,'').trim()) || 0
     let filtered = data || []
@@ -3142,8 +3146,8 @@ function LeaseCompSearch({subject,leaseComps,setLeaseComps,setPage,folders,setFo
   const sf = (k:string,v:string) => setFilters(f=>({...f,[k]:v}))
   const sm = (k:string,v:string) => setManual(m=>({...m,[k]:v}))
   const addManual = () => {
-    if (!manual.address) { alert('Address required'); return }
-    setLeaseComps([...leaseComps, {...manual, id:`manual_${Date.now()}`} as LeaseComp]); setManual({}); setShowManual(false); alert('Lease comp added manually.')
+    if (!manual.address) { toast('Address required'); return }
+    setLeaseComps([...leaseComps, {...manual, id:`manual_${Date.now()}`} as LeaseComp]); setManual({}); setShowManual(false); toast('Lease comp added manually.')
   }
   return (
     <div className="anim-in">
@@ -3264,8 +3268,8 @@ function LeaseCompSearch({subject,leaseComps,setLeaseComps,setPage,folders,setFo
                             {sc('Asking Rent', r.asking_rent?'$'+Number(r.asking_rent).toFixed(2)+'/SF/yr':'—')}
                             {sc('Rent Type', r.rent_type||'—')}
                             {sc('Building SF', r.building_sf?Number(r.building_sf).toLocaleString()+' SF':'—')}
-                            {sc('Lot Size', r.lot_size_ac?r.lot_size_ac+' AC':'—')}
-                            {sc('Ceiling Height', r.ceiling_height?r.ceiling_height+' ft':'—')}
+                            {sc('Lot Size', r.lot_size_ac?acres(r.lot_size_ac)+' AC':'—')}
+                            {sc('Ceiling Height', clearHeight(r.ceiling_height)||'—')}
                             {sc('Loading Docks', r.loading_docks||'—')}
                             {sc('Drive-Ins', r.drive_ins||'—')}
                             {sc('Taxes', r.taxes?'$'+Number(r.taxes).toFixed(2)+'/SF':'—')}
@@ -3288,7 +3292,7 @@ function LeaseCompSearch({subject,leaseComps,setLeaseComps,setPage,folders,setFo
                                     <div key={f.id} onClick={()=>{
                                       const alreadyIn=f.items.find(i=>i.id===r.id)
                                       if (!alreadyIn) setFolders(folders.map(fl=>fl.id===f.id?{...fl,items:[...fl.items,r]}:fl))
-                                      setFolderDropdown(null); alert(alreadyIn?'Already in this folder!':`Added to "${f.name}"`)
+                                      setFolderDropdown(null); toast(alreadyIn?'Already in this folder!':`Added to "${f.name}"`)
                                     }} style={{display:'flex',alignItems:'center',gap:8,padding:'8px 10px',borderRadius:6,cursor:'pointer',fontSize:12,color:D.text}}>
                                       <div style={{width:8,height:8,borderRadius:'50%',background:f.color,flexShrink:0}}/>{f.name}
                                     </div>
@@ -3384,7 +3388,7 @@ function Analytics({comps,avails,analytics,setAnalytics,setPage,subject,leaseCom
     if (isLease) {
       // ── LEASE OPV: primary metrics from deal rent ──
       const dealRents=leaseComps.filter(c=>c.deal_rent>0).map(c=>c.deal_rent)
-      if (dealRents.length===0) { alert('Add lease comps with deal rent values first. Without deal rents the lease analysis cannot be calculated.'); return }
+      if (dealRents.length===0) { toast('Add lease comps with deal rent values first. Without deal rents the lease analysis cannot be calculated.'); return }
       const askRents=leaseComps.filter(c=>c.asking_rent>0).map(c=>c.asking_rent)
       const leaseMeanDeal=dealRents.length>0?dealRents.reduce((a,b)=>a+b,0)/dealRents.length:0
       const sorted=[...dealRents].sort((a,b)=>a-b)
@@ -3401,29 +3405,37 @@ function Analytics({comps,avails,analytics,setAnalytics,setPage,subject,leaseCom
       const sstd=psfs.length>0?Math.sqrt(psfs.map(p=>(p-smean)**2).reduce((a,b)=>a+b,0)/psfs.length):0
       const totalSF=comps.filter(c=>c.building_sf&&c.price_per_sf).reduce((a,c)=>a+c.building_sf,0)
       const weighted=totalSF>0?comps.filter(c=>c.building_sf&&c.price_per_sf).reduce((a,c)=>a+c.price_per_sf*c.building_sf,0)/totalSF:smean
-      const aPsfs=avails.filter(a=>a.price_per_sf>0).map(a=>a.price_per_sf)
+      // Listings far from the median (e.g. a size missing a zero) are left out of the average and listed instead.
+      const aSplit=splitOutliers(avails.map(a=>({item:a,value:pricePerSf(a)})))
+      const aPsfs=aSplit.kept.map(x=>x.value)
       const aMean=aPsfs.length>0?aPsfs.reduce((a,b)=>a+b,0)/aPsfs.length:0
+      const aOutliers=aSplit.outliers.map(x=>({address:x.item.address,psf:x.value}))
+      const compOutliers=splitOutliers(comps.map(c=>({item:c,value:pricePerSf(c)}))).outliers.map(x=>({address:x.item.address,psf:x.value}))
       setAnalytics({
         mean:smean,median:smedian,std:sstd,weighted,min:psfs.length>0?Math.min(...psfs):0,max:psfs.length>0?Math.max(...psfs):0,
         low:smean-sstd*0.5,market:smean,high:smean+sstd*0.5,suggested:smean?Math.round(smean*1.05/5)*5:0,
-        aMean,count:comps.length,
+        aMean,aOutliers,compOutliers,count:comps.length,
         leaseMeanDeal,leaseMedianDeal,leaseMeanAsk,leaseCount:dealRents.length,leaseMin,leaseMax,leaseSuggested,
       })
     } else {
       // ── SALE OPV: primary metrics from sale price PSF ──
       const psfs=comps.filter(c=>c.price_per_sf>0).map(c=>c.price_per_sf)
-      if (psfs.length===0) { alert('Add comps with sale prices first.'); return }
+      if (psfs.length===0) { toast('Add comps with sale prices first.'); return }
       const mean=psfs.reduce((a,b)=>a+b,0)/psfs.length
       const sorted=[...psfs].sort((a,b)=>a-b)
       const median=sorted[Math.floor(sorted.length/2)]
       const std=Math.sqrt(psfs.map(p=>(p-mean)**2).reduce((a,b)=>a+b,0)/psfs.length)
       const totalSF=comps.filter(c=>c.building_sf&&c.price_per_sf).reduce((a,c)=>a+c.building_sf,0)
       const weighted=totalSF>0?comps.filter(c=>c.building_sf&&c.price_per_sf).reduce((a,c)=>a+c.price_per_sf*c.building_sf,0)/totalSF:mean
-      const aPsfs=avails.filter(a=>a.price_per_sf>0).map(a=>a.price_per_sf)
+      // Listings far from the median (e.g. a size missing a zero) are left out of the average and listed instead.
+      const aSplit=splitOutliers(avails.map(a=>({item:a,value:pricePerSf(a)})))
+      const aPsfs=aSplit.kept.map(x=>x.value)
       const aMean=aPsfs.length>0?aPsfs.reduce((a,b)=>a+b,0)/aPsfs.length:0
+      const aOutliers=aSplit.outliers.map(x=>({address:x.item.address,psf:x.value}))
+      const compOutliers=splitOutliers(comps.map(c=>({item:c,value:pricePerSf(c)}))).outliers.map(x=>({address:x.item.address,psf:x.value}))
       const low=mean-std*0.5,market=mean,high=mean+std*0.5
       const suggested=Math.round(market*1.05/5)*5
-      setAnalytics({mean,median,std,weighted,min:Math.min(...psfs),max:Math.max(...psfs),low,market,high,suggested,aMean,count:comps.length})
+      setAnalytics({mean,median,std,weighted,min:Math.min(...psfs),max:Math.max(...psfs),low,market,high,suggested,aMean,aOutliers,compOutliers,count:comps.length})
     }
     setRan(true)
   }
@@ -3504,7 +3516,11 @@ function Analytics({comps,avails,analytics,setAnalytics,setPage,subject,leaseCom
           </Card>
           <Card>
             <SL>Market Benchmarks</SL>
-            <Stat l="Avg Asking Price/SF (Listings)" v={analytics.aMean>0?`$${analytics.aMean.toFixed(2)}`:'No listings yet'} c={D.blue}/>
+            <Stat l="Avg Asking Price/SF (Listings)" v={analytics.aMean>0?`$${analytics.aMean.toFixed(2)}`:'No listings yet'} c={D.blue}
+              note={analytics.aOutliers?.length?`Excludes likely data errors: ${analytics.aOutliers.map(o=>`${o.address} ($${o.psf.toFixed(2)}/SF)`).join('; ')}. Check price and SF on these listings.`:undefined}/>
+            {!!analytics.compOutliers?.length&&<div style={{fontSize:11,color:D.gold,background:D.surface2,borderRadius:8,padding:'10px 12px',marginBottom:8,lineHeight:1.5}}>
+              Check these comps, their $/SF is far from the rest: {analytics.compOutliers.map(o=>`${o.address} ($${o.psf.toFixed(2)}/SF)`).join('; ')}. They are still included in the value range above.
+            </div>}
             <SL style={{marginTop:16}}>Price Distribution</SL>
             {comps.filter(c=>c.price_per_sf>0).map((c,i)=>(
               <div key={i} style={{display:'flex',alignItems:'center',gap:8,marginBottom:6}}>
@@ -4020,7 +4036,7 @@ function OPVReport({subject,comps,leaseComps,leaseAvails=[],avails,analytics,aiT
     setEditingKey(null)
   }
   const handleFileUpload = (key: string, file: File) => {
-    resizeImageFile(file).then(url => setCustomPhoto(key, url)).catch(() => alert('Could not read that image file.'))
+    resizeImageFile(file).then(url => setCustomPhoto(key, url)).catch(() => toast('Could not read that image file.'))
   }
   const clearPhoto = (key: string) => {
     setEditingKey(null)
@@ -4255,7 +4271,7 @@ function OPVReport({subject,comps,leaseComps,leaseAvails=[],avails,analytics,aiT
   }, [])
 
   const downloadPDF = () => {
-    if (!preparePrint()) { alert('Please view the OPV report before printing.'); return }
+    if (!preparePrint()) { toast('Please view the OPV report before printing.'); return }
     window.print()
     // afterprint normally cleans up; this is a fallback for browsers that don't fire it
     setTimeout(cleanupPrint, 2000)
@@ -4308,7 +4324,7 @@ function OPVReport({subject,comps,leaseComps,leaseAvails=[],avails,analytics,aiT
   const bldgSF = parseInt(subject.size||'0')
   const valLowPsf  = parseFloat(subject.estimatedValueLow||'0')
   const valHighPsf = parseFloat(subject.estimatedValueHigh||'0')
-  const avgPsf = analytics?.market || (comps.length ? comps.reduce((s,c)=>s+(c.price_per_sf||0),0)/comps.length : 0)
+  const avgPsf = analytics?.market || (comps.length ? comps.reduce((s,c)=>s+pricePerSf(c),0)/comps.length : 0)
 
   const FALLBACK_SALES = [
     ['128 Spagnoli Rd','Melville','Redevelopment','150,000','$21,000,000','3rd Qtr 2025'],
@@ -4333,6 +4349,19 @@ function OPVReport({subject,comps,leaseComps,leaseAvails=[],avails,analytics,aiT
   ]
   const RECENT_SALES = pcreSalesData.length > 0 ? pcreSalesData : FALLBACK_SALES
   const RECENT_LEASES = pcreLeaseData.length > 0 ? pcreLeaseData : FALLBACK_LEASES
+  // Section numbers follow the sections actually included, so leaving one out doesn't skip a numeral.
+  const isLeaseOpv = subject.opvType==='lease'
+  const secNum = (()=>{
+    const ROMAN=['I','II','III','IV','V','VI','VII','VIII']
+    let k=3
+    const next=(on:boolean)=>on?ROMAN[k++]:''
+    const first=next(isLeaseOpv?(includeLeaseComps&&leaseComps.length>0):comps.length>0)
+    const second=next(isLeaseOpv?comps.length>0:(includeLeaseComps&&leaseComps.length>0))
+    const availsN=next(includeAvails&&(isLeaseOpv?leaseAvails.length>0:avails.length>0))
+    const marketing=next(includeMarketingStrategy)
+    const profile=next(includePcreProfile)
+    return {first,second,avails:availsN,marketing,profile}
+  })()
 
   return (
     <div className="anim-in">
@@ -4364,7 +4393,7 @@ function OPVReport({subject,comps,leaseComps,leaseAvails=[],avails,analytics,aiT
               📕 Print / Save PDF
             </Btn>
             <Btn onClick={async()=>{
-              if (!subject) { alert('No subject property — complete the OPV first'); return }
+              if (!subject) { toast('No subject property — complete the OPV first'); return }
               try {
                 // Send photo *links*; the server fetches them. (Sending the images themselves
                 // exceeded Vercel's 4.5 MB request limit on larger reports.) Only photos uploaded
@@ -4386,11 +4415,11 @@ function OPVReport({subject,comps,leaseComps,leaseAvails=[],avails,analytics,aiT
                 for (const a of leaseAvails) { if (!photos[a.id] && a.address) photos[a.id] = `/api/street-view?address=${svAddr(a.address,(a as any).town)}` }
                 for (const a of avails) { if (!photos[a.id] && a.address) photos[a.id] = `/api/street-view?address=${svAddr(a.address,a.city)}` }
                 const body = JSON.stringify({ subject, comps, leaseComps, leaseAvails, avails, analytics, aiText, includeLeaseComps, includeAvails, includeMarketingStrategy, photoUrls: photos, pcreSales: RECENT_SALES, pcreLeases: RECENT_LEASES, includePcreProfile })
-                if (body.length > MAX_SAVE_BYTES) { alert('This report has too many large uploaded photos to export. Re-upload or remove a few of them and try again.'); return }
+                if (body.length > MAX_SAVE_BYTES) { toast('This report has too many large uploaded photos to export. Re-upload or remove a few of them and try again.'); return }
                 const res = await fetch('/api/generate-docx', { method:'POST', headers:{'Content-Type':'application/json'}, body })
                 if (!res.ok) {
                   const e = await res.json().catch(()=>({error:`HTTP ${res.status}`}))
-                  alert('Word doc failed: '+e.error); return
+                  toast('Word doc failed: '+e.error); return
                 }
                 const blob = await res.blob()
                 const fileName = /filename="([^"]+)"/.exec(res.headers.get('Content-Disposition')||'')?.[1] || 'OPV.docx'
@@ -4402,7 +4431,7 @@ function OPVReport({subject,comps,leaseComps,leaseAvails=[],avails,analytics,aiT
                 a.click()
                 a.remove()
                 setTimeout(()=>URL.revokeObjectURL(url), 5000)
-              } catch(e:any) { alert('Word doc failed: '+e.message) }
+              } catch(e:any) { toast('Word doc failed: '+e.message) }
             }} style={{padding:'9px 20px',fontSize:12,background:'rgba(59,130,246,0.10)',color:D.blue,border:`1px solid rgba(59,130,246,0.3)`}}>
               📄 Word Doc
             </Btn>
@@ -4584,17 +4613,17 @@ function OPVReport({subject,comps,leaseComps,leaseAvails=[],avails,analytics,aiT
             'III.  OPINION OF VALUE',
             ...(subject.opvType==='lease'
               ? [
-                  ...(includeLeaseComps&&leaseComps.length>0?['IV.  RECENT LEASE TRANSACTIONS']:[]),
-                  ...(comps.length>0?['V.  SUPPORTING SALE MARKET DATA']:[]),
+                  ...(secNum.first?[`${secNum.first}.  RECENT LEASE TRANSACTIONS`]:[]),
+                  ...(secNum.second?[`${secNum.second}.  SUPPORTING SALE MARKET DATA`]:[]),
                 ]
               : [
-                  ...(comps.length>0?['IV.  RECENT '+(subject.opvType==='investment'?'INVESTMENT':'SALE')+' TRANSACTIONS']:[]),
-                  ...(includeLeaseComps&&leaseComps.length>0?['V.  RECENT LEASE TRANSACTIONS']:[]),
+                  ...(secNum.first?[`${secNum.first}.  RECENT ${subject.opvType==='investment'?'INVESTMENT':'SALE'} TRANSACTIONS`]:[]),
+                  ...(secNum.second?[`${secNum.second}.  RECENT LEASE TRANSACTIONS`]:[]),
                 ]
             ),
-            ...(includeAvails&&(subject?.opvType==='lease'?leaseAvails.length>0:avails.length>0)?[subject?.opvType==='lease'?'VI.  LEASE MARKET AVAILABILITIES':'VI.  MARKET AVAILABILITIES']:[]),
-            ...(includeMarketingStrategy?['VII.  MARKETING STRATEGY']:[]),
-            ...(includePcreProfile?['VIII.  PREMIER COMMERCIAL REAL ESTATE PROFILE']:[]),
+            ...(includeAvails&&(subject?.opvType==='lease'?leaseAvails.length>0:avails.length>0)?[`${secNum.avails}.  ${subject?.opvType==='lease'?'LEASE MARKET AVAILABILITIES':'MARKET AVAILABILITIES'}`]:[]),
+            ...(includeMarketingStrategy?[`${secNum.marketing}.  MARKETING STRATEGY`]:[]),
+            ...(includePcreProfile?[`${secNum.profile}.  PREMIER COMMERCIAL REAL ESTATE PROFILE`]:[]),
           ].map((entry,i)=>(
             <div key={i} style={{display:'flex',justifyContent:'space-between',padding:'10px 0',borderBottom:'1px dotted #ccc',fontSize:13}}>
               <span>{entry}</span>
@@ -4624,13 +4653,13 @@ function OPVReport({subject,comps,leaseComps,leaseAvails=[],avails,analytics,aiT
           <SubHead>PROPERTY SUMMARY HIGHLIGHTS AND ASSUMPTIONS:</SubHead>
           {[
             subject.size?`The building is approximately ${Number(subject.size).toLocaleString()} sq. ft. in total.`:null,
-            subject.ceiling?`Ceiling height of ${subject.ceiling}' clear.`:null,
-            (subject.docks||subject.driveIn)?`${subject.docks||'—'} loading dock(s) and ${subject.driveIn||'—'} drive-in door(s).`:null,
-            subject.sprinkler?`${subject.sprinkler} sprinkler system.`:null,
+            subject.ceiling?`Ceiling height of ${clearHeight(subject.ceiling,'clear')}.`:null,
+            docksSentence(subject.docks, subject.driveIn),
+            sprinklerSentence(subject.sprinkler),
             subject.sewer?`Sewer: ${subject.sewer}.`:null,
             subject.power?`Electrical service: ${subject.power}.`:null,
-            subject.taxes?`Real Estate Taxes are $${Number(subject.taxes).toLocaleString()} or approximately $${subject.size?(Number(subject.taxes)/Number(subject.size)).toFixed(2):'—'} PSF.`:null,
-            subject.lot?`The building sits on a parcel of approximately ${subject.lot} acres.`:null,
+            subject.taxes?`Real Estate Taxes are ${money2(subject.taxes)} or approximately $${subject.size?(Number(subject.taxes)/Number(subject.size)).toFixed(2):'—'} PSF.`:null,
+            subject.lot?`The building sits on a parcel of approximately ${acres(subject.lot)} acres.`:null,
             subject.notes||null,
           ].filter(Boolean).map((t,i)=><Bullet key={i}>{t as string}</Bullet>)}
           <SubHead>HIGHEST AND BEST USE:</SubHead>
@@ -4645,8 +4674,8 @@ function OPVReport({subject,comps,leaseComps,leaseAvails=[],avails,analytics,aiT
           <LabelRow label="PROPERTY ADDRESS" value={`${subject.address}${subject.city?', '+subject.city:''}`}/>
           <LabelRow label="TOTAL BUILDING SF" value={fmt(subject.size,'',' SF')} shade/>
           {subject.officePct&&<LabelRow label="OFFICE" value={`${subject.officePct}%`}/>}
-          <LabelRow label="TOTAL SITE ACREAGE" value={subject.lot?`${subject.lot} AC`:'—'} shade={!subject.officePct}/>
-          <LabelRow label="CEILING HEIGHT" value={subject.ceiling?`${subject.ceiling}' clear`:'—'} shade={!!subject.officePct}/>
+          <LabelRow label="TOTAL SITE ACREAGE" value={subject.lot?`${acres(subject.lot)} AC`:'—'} shade={!subject.officePct}/>
+          <LabelRow label="CEILING HEIGHT" value={clearHeight(subject.ceiling,'clear')||'—'} shade={!!subject.officePct}/>
           <LabelRow label="DRIVE-IN DOORS" value={subject.driveIn||'—'} shade={!subject.officePct}/>
           <LabelRow label="LOADING DOCKS" value={subject.docks||'—'} shade/>
           <LabelRow label="HEAT" value={subject.heat||'—'}/>
@@ -4655,7 +4684,7 @@ function OPVReport({subject,comps,leaseComps,leaseAvails=[],avails,analytics,aiT
           <LabelRow label="SPRINKLER SYSTEM" value={subject.sprinkler||'—'} shade/>
           <LabelRow label="SEWER CONNECTION" value={subject.sewer||'—'}/>
           <LabelRow label="ZONING" value={subject.zoning||'—'} shade/>
-          <LabelRow label="REAL ESTATE TAXES" value={subject.taxes?`$${Number(subject.taxes).toLocaleString()}/yr${subject.size?` / $${(Number(subject.taxes)/Number(subject.size)).toFixed(2)} PSF`:''}`:  '—'}/>
+          <LabelRow label="REAL ESTATE TAXES" value={subject.taxes?`${money2(subject.taxes)}/yr${subject.size?` / $${(Number(subject.taxes)/Number(subject.size)).toFixed(2)} PSF`:''}`:  '—'}/>
           {subject.yearBuilt&&<LabelRow label="YEAR BUILT" value={subject.yearBuilt} shade/>}
           {subject.construction&&<LabelRow label="CONSTRUCTION" value={subject.construction}/>}
           {subject.condition&&<LabelRow label="CONDITION" value={subject.condition} shade/>}
@@ -4663,7 +4692,7 @@ function OPVReport({subject,comps,leaseComps,leaseAvails=[],avails,analytics,aiT
 
         {/* ── SECTION III: OPINION OF VALUE ── */}
         <SecHeading num="III" title="OPINION OF VALUE"/>
-        <p style={{fontSize:13,marginBottom:16,lineHeight:1.7}}><E k="opv_intro" d="Based upon the aforementioned assumptions, our knowledge of current market conditions, and a review of the Comparables found in Section IV." multi style={{width:'100%'}}/></p>
+        <p style={{fontSize:13,marginBottom:16,lineHeight:1.7}}><E k="opv_intro" d={secNum.first?`Based upon the aforementioned assumptions, our knowledge of current market conditions, and a review of the Comparables found in Section ${secNum.first}.`:'Based upon the aforementioned assumptions, our knowledge of current market conditions, and a review of current market data.'} multi style={{width:'100%'}}/></p>
         {subject.opvType==='lease'?(
           /* ── LEASE OPV: rental rate conclusion — matches template format ── */
           <div style={{border:'1px solid #ccc',marginBottom:24}}>
@@ -4732,19 +4761,19 @@ function OPVReport({subject,comps,leaseComps,leaseAvails=[],avails,analytics,aiT
         {/* LEASE OPV → Section IV: LEASE COMPS (primary), Section V: SALE COMPS (supporting) */}
 
         {subject.opvType!=='lease'&&comps.length>0&&<>
-          <SecHeading num="IV" title={subject.opvType==='investment'?'RECENT INVESTMENT TRANSACTIONS':'RECENT SALE TRANSACTIONS'}/>
+          <SecHeading num={secNum.first} title={subject.opvType==='investment'?'RECENT INVESTMENT TRANSACTIONS':'RECENT SALE TRANSACTIONS'}/>
           <div style={{border:'1px solid #ccc',marginBottom:16}}>
             <TblHeader cols={['Property Address','City','Building Size (SF)','Sale Price','Price PSF']}/>
             {comps.map((c,i)=><TblRow key={c.id} shade={i%2===1} cells={[
               c.address,c.city||'',
               c.building_sf?`${Number(c.building_sf).toLocaleString()} SF`:'—',
               c.sale_price?`$${Number(c.sale_price).toLocaleString()}`:'—',
-              (c.price_per_sf||(c.sale_price&&c.building_sf?Number(c.sale_price)/Number(c.building_sf):0))?`$${(c.price_per_sf||Number(c.sale_price)/Number(c.building_sf)).toFixed(2)}`:'—',
+              pricePerSf(c)?`$${pricePerSf(c).toFixed(2)}`:'—',
             ]}/>)}
           </div>
           <p style={{fontSize:12,color:'#555',marginBottom:24,fontStyle:'italic'}}>Each comparable transaction is detailed on the following pages.</p>
           {comps.map((c,i)=>{
-            const psf = c.price_per_sf||(c.sale_price&&c.building_sf?Number(c.sale_price)/Number(c.building_sf):0)
+            const psf = pricePerSf(c)
             return (
               <div key={c.id} className="prop-card" style={{marginBottom:48,paddingBottom:48,borderBottom:'2px dashed #ddd'}}>
                 <div className="prop-card-header" style={{fontWeight:700,fontSize:14,paddingBottom:8,borderBottom:`2px solid ${gold}`,marginBottom:16,display:'flex',justifyContent:'space-between',alignItems:'baseline'}}>
@@ -4755,8 +4784,8 @@ function OPVReport({subject,comps,leaseComps,leaseAvails=[],avails,analytics,aiT
                 <div style={{border:'1px solid #ccc'}}>
                   <LabelRow label="PROPERTY ADDRESS" value={`${c.address||'—'}${c.city?', '+c.city:''}`}/>
                   <LabelRow label="BUILDING SIZE" value={fmt(c.building_sf,'',c.building_sf?' SF':'')||'—'} shade/>
-                  <LabelRow label="LOT SIZE" value={c.lot_size_ac?`${c.lot_size_ac} Acres`:'—'}/>
-                  <LabelRow label="CEILING HEIGHT" value={c.ceiling_height?`${c.ceiling_height} ft`:'—'} shade/>
+                  <LabelRow label="LOT SIZE" value={c.lot_size_ac?`${acres(c.lot_size_ac)} Acres`:'—'}/>
+                  <LabelRow label="CEILING HEIGHT" value={clearHeight(c.ceiling_height)||'—'} shade/>
                   <LabelRow label="LOADING DOCKS" value={c.loading_docks||'—'}/>
                   <LabelRow label="DRIVE INS" value={c.drive_ins||'—'} shade/>
                   <LabelRow label="POWER" value={(c as any).power?String((c as any).power):'—'}/>
@@ -4765,9 +4794,9 @@ function OPVReport({subject,comps,leaseComps,leaseAvails=[],avails,analytics,aiT
                   <LabelRow label="ZONING" value={c.zoning||'—'} shade/>
                   <LabelRow label="SPRINKLERS" value={(c as any).sprinkler?String((c as any).sprinkler):'—'}/>
                   <LabelRow label="PARKING" value={(c as any).parking?String((c as any).parking):'—'} shade/>
-                  <LabelRow label="REAL ESTATE TAXES" value={(c as any).re_taxes?String((c as any).re_taxes):'—'}/>
+                  <LabelRow label="REAL ESTATE TAXES" value={money2((c as any).re_taxes)||'—'}/>
                   <LabelRow label="SALE PRICE" value={`${fmt(c.sale_price,'$')||'—'}${psf?` ($${Number(psf).toFixed(2)} PSF)`:''}`} shade/>
-                  <LabelRow label="TRANSACTION DATE" value={c.sale_date?new Date(c.sale_date).toLocaleDateString('en-US',{month:'long',year:'numeric'}):'—'}/>
+                  <LabelRow label="TRANSACTION DATE" value={formatDay(c.sale_date,{month:'long',year:'numeric'})}/>
                   <LabelRow label="BUYER" value={c.buyer||'—'} shade/>
                   <LabelRow label="SELLER" value={c.seller||'—'}/>
                 </div>
@@ -4778,7 +4807,7 @@ function OPVReport({subject,comps,leaseComps,leaseAvails=[],avails,analytics,aiT
 
         {/* LEASE OPV: Lease Comps as Section IV (primary) */}
         {subject.opvType==='lease'&&includeLeaseComps&&leaseComps.length>0&&<>
-          <SecHeading num="IV" title="RECENT LEASE TRANSACTIONS"/>
+          <SecHeading num={secNum.first} title="RECENT LEASE TRANSACTIONS"/>
           <div style={{border:'1px solid #ccc',marginBottom:16}}>
             <TblHeader cols={['Property Address','Town','Building Size (SF)','Rent PSF (Type)','Term (yrs)']}/>
             {leaseComps.map((c,i)=><TblRow key={c.id} shade={i%2===1} cells={[
@@ -4800,17 +4829,17 @@ function OPVReport({subject,comps,leaseComps,leaseAvails=[],avails,analytics,aiT
                 <LabelRow label="PROPERTY ADDRESS" value={`${c.address||'—'}${c.town?', '+c.town:''}`}/>
                 {(c as any).property_type&&<LabelRow label="PROPERTY TYPE" value={String((c as any).property_type)} shade/>}
                 <LabelRow label="BUILDING SIZE" value={fmt(c.building_sf,'',c.building_sf?' SF':'')} shade={!(c as any).property_type}/>
-                <LabelRow label="LOT SIZE" value={c.lot_size_ac?`${c.lot_size_ac} Acres`:'—'}/>
+                <LabelRow label="LOT SIZE" value={c.lot_size_ac?`${acres(c.lot_size_ac)} Acres`:'—'}/>
                 <LabelRow label="OFFICE SIZE" value={(c as any).office_sf?`${Number((c as any).office_sf).toLocaleString()} SF`:'—'} shade/>
                 <LabelRow label="LOADING" value={c.loading_docks&&c.drive_ins?`${c.loading_docks} Docks / ${c.drive_ins} Drive-In`:c.loading_docks?`${c.loading_docks} Docks`:c.drive_ins?`${c.drive_ins} Drive-In`:'—'}/>
-                <LabelRow label="CEILING HEIGHT" value={c.ceiling_height?`${c.ceiling_height} ft`:'—'} shade/>
+                <LabelRow label="CEILING HEIGHT" value={clearHeight(c.ceiling_height)||'—'} shade/>
                 <LabelRow label="POWER" value={(c as any).power?String((c as any).power):'—'}/>
                 <LabelRow label="HEAT" value={(c as any).heat?String((c as any).heat):'—'} shade/>
                 <LabelRow label="SPRINKLERS" value={(c as any).sprinkler?String((c as any).sprinkler):'—'}/>
                 <LabelRow label="PARKING" value={(c as any).parking?String((c as any).parking):'—'} shade/>
                 <LabelRow label="SEWER" value={(c as any).sewer?String((c as any).sewer):'—'}/>
                 <LabelRow label="ZONING" value={(c as any).zoning?String((c as any).zoning):'—'} shade/>
-                <LabelRow label="RE TAXES" value={(c as any).re_taxes?`$${Number((c as any).re_taxes).toLocaleString()}/yr`:'—'}/>
+                <LabelRow label="RE TAXES" value={(c as any).re_taxes?`${money2((c as any).re_taxes)}/yr`:'—'}/>
                 <LabelRow label="LEASE PRICE" value={c.deal_rent?`$${Number(c.deal_rent).toFixed(2)} PSF/yr${c.rent_type?' — '+c.rent_type:''}`:c.asking_rent?`$${Number(c.asking_rent).toFixed(2)} PSF/yr (Ask)`:'—'} shade/>
                 <LabelRow label="TAXES" value={c.taxes?`$${Number(c.taxes).toFixed(2)}/SF`:'—'}/>
                 <LabelRow label="TERM" value={c.lease_term_years?`${c.lease_term_years} years`:'—'} shade/>
@@ -4819,7 +4848,7 @@ function OPVReport({subject,comps,leaseComps,leaseAvails=[],avails,analytics,aiT
                 <LabelRow label="LANDLORD WORK" value={c.ti_ll_work?String(c.ti_ll_work):'—'}/>
                 <LabelRow label="TENANT NAME" value={c.tenant?String(c.tenant):'—'} shade/>
                 <LabelRow label="LANDLORD NAME" value={c.landlord?String(c.landlord):'—'}/>
-                <LabelRow label="TRANSACTION DATE" value={c.transaction_date?new Date(c.transaction_date).toLocaleDateString('en-US',{month:'long',year:'numeric'}):'—'} shade/>
+                <LabelRow label="TRANSACTION DATE" value={formatDay(c.transaction_date,{month:'long',year:'numeric'})} shade/>
                 {c.notes&&<LabelRow label="ADDITIONAL COMMENTS" value={String(c.notes)}/>}
               </div>
             </div>
@@ -4828,7 +4857,7 @@ function OPVReport({subject,comps,leaseComps,leaseAvails=[],avails,analytics,aiT
 
         {/* LEASE OPV: Sale Comps as Section V (supporting) */}
         {subject.opvType==='lease'&&comps.length>0&&<>
-          <SecHeading num="V" title="SUPPORTING SALE MARKET DATA"/>
+          <SecHeading num={secNum.second} title="SUPPORTING SALE MARKET DATA"/>
           <p style={{fontSize:12,color:'#555',marginBottom:12,fontStyle:'italic'}}>The following sale transactions are provided as supporting market context.</p>
           <div style={{border:'1px solid #ccc',marginBottom:16}}>
             <TblHeader cols={['Property Address','City','Building Size (SF)','Sale Price','Price PSF']}/>
@@ -4836,11 +4865,11 @@ function OPVReport({subject,comps,leaseComps,leaseAvails=[],avails,analytics,aiT
               c.address,c.city||'',
               c.building_sf?`${Number(c.building_sf).toLocaleString()} SF`:'—',
               c.sale_price?`$${Number(c.sale_price).toLocaleString()}`:'—',
-              (c.price_per_sf||(c.sale_price&&c.building_sf?Number(c.sale_price)/Number(c.building_sf):0))?`$${(c.price_per_sf||Number(c.sale_price)/Number(c.building_sf)).toFixed(2)}`:'—',
+              pricePerSf(c)?`$${pricePerSf(c).toFixed(2)}`:'—',
             ]}/>)}
           </div>
           {comps.map((c,i)=>{
-            const psf = c.price_per_sf||(c.sale_price&&c.building_sf?Number(c.sale_price)/Number(c.building_sf):0)
+            const psf = pricePerSf(c)
             return (
               <div key={c.id} className="prop-card" style={{marginBottom:48,paddingBottom:48,borderBottom:'2px dashed #ddd'}}>
                 <div className="prop-card-header" style={{fontWeight:700,fontSize:14,paddingBottom:8,borderBottom:`2px solid #aaa`,marginBottom:16,display:'flex',justifyContent:'space-between',alignItems:'baseline'}}>
@@ -4851,13 +4880,13 @@ function OPVReport({subject,comps,leaseComps,leaseAvails=[],avails,analytics,aiT
                 <div style={{border:'1px solid #ccc'}}>
                   <LabelRow label="PROPERTY ADDRESS" value={`${c.address||'—'}${c.city?', '+c.city:''}`}/>
                   <LabelRow label="BUILDING SIZE" value={fmt(c.building_sf,'',c.building_sf?' SF':'')} shade/>
-                  {c.lot_size_ac&&<LabelRow label="LOT SIZE" value={`${c.lot_size_ac} Acres`}/>}
-                  <LabelRow label="CEILING HEIGHT" value={c.ceiling_height?`${c.ceiling_height} ft`:'—'} shade={!!c.lot_size_ac}/>
+                  {c.lot_size_ac&&<LabelRow label="LOT SIZE" value={`${acres(c.lot_size_ac)} Acres`}/>}
+                  <LabelRow label="CEILING HEIGHT" value={clearHeight(c.ceiling_height)||'—'} shade={!!c.lot_size_ac}/>
                   <LabelRow label="LOADING DOCKS" value={c.loading_docks||'—'} shade={!c.lot_size_ac}/>
                   <LabelRow label="DRIVE INS" value={c.drive_ins||'—'} shade={!!c.lot_size_ac}/>
                   {c.zoning&&<LabelRow label="ZONING" value={c.zoning} shade={!c.lot_size_ac}/>}
                   <LabelRow label="SALE PRICE" value={`${fmt(c.sale_price,'$')}${psf?` ($${Number(psf).toFixed(2)} PSF)`:''}`}/>
-                  <LabelRow label="TRANSACTION DATE" value={c.sale_date?new Date(c.sale_date).toLocaleDateString('en-US',{month:'long',year:'numeric'}):'—'} shade/>
+                  <LabelRow label="TRANSACTION DATE" value={formatDay(c.sale_date,{month:'long',year:'numeric'})} shade/>
                   {c.buyer&&<LabelRow label="BUYER" value={c.buyer}/>}
                   {c.seller&&<LabelRow label="SELLER" value={c.seller} shade/>}
                 </div>
@@ -4868,7 +4897,7 @@ function OPVReport({subject,comps,leaseComps,leaseAvails=[],avails,analytics,aiT
 
         {/* SALE OPV: Lease Comps as Section V (if included) */}
         {subject.opvType!=='lease'&&includeLeaseComps&&leaseComps.length>0&&<>
-          <SecHeading num="V" title="RECENT LEASE TRANSACTIONS"/>
+          <SecHeading num={secNum.second} title="RECENT LEASE TRANSACTIONS"/>
           <div style={{border:'1px solid #ccc',marginBottom:16}}>
             <TblHeader cols={['Property Address','Town','Building Size (SF)','Deal Rent (PSF)','Rent Type','Term (yrs)']}/>
             {leaseComps.map((c,i)=><TblRow key={c.id} shade={i%2===1} cells={[
@@ -4889,8 +4918,8 @@ function OPVReport({subject,comps,leaseComps,leaseAvails=[],avails,analytics,aiT
                 <LabelRow label="PROPERTY ADDRESS" value={`${c.address||'—'}${c.town?', '+c.town:''}`}/>
                 {(c as any).property_type&&<LabelRow label="PROPERTY TYPE" value={String((c as any).property_type)} shade/>}
                 <LabelRow label="BUILDING SIZE" value={fmt(c.building_sf,'',c.building_sf?' SF':'')} shade={!(c as any).property_type}/>
-                {c.lot_size_ac&&<LabelRow label="LOT SIZE" value={`${c.lot_size_ac} Acres`}/>}
-                <LabelRow label="CEILING HEIGHT" value={c.ceiling_height?`${c.ceiling_height} ft`:'—'} shade/>
+                {c.lot_size_ac&&<LabelRow label="LOT SIZE" value={`${acres(c.lot_size_ac)} Acres`}/>}
+                <LabelRow label="CEILING HEIGHT" value={clearHeight(c.ceiling_height)||'—'} shade/>
                 <LabelRow label="LOADING DOCKS" value={c.loading_docks||'—'}/>
                 <LabelRow label="DRIVE-INS" value={c.drive_ins||'—'} shade/>
                 <LabelRow label="POWER" value={(c as any).power?String((c as any).power):'—'}/>
@@ -4899,7 +4928,7 @@ function OPVReport({subject,comps,leaseComps,leaseAvails=[],avails,analytics,aiT
                 <LabelRow label="PARKING" value={(c as any).parking?String((c as any).parking):'—'} shade/>
                 <LabelRow label="SEWER" value={(c as any).sewer?String((c as any).sewer):'—'}/>
                 <LabelRow label="ZONING" value={(c as any).zoning?String((c as any).zoning):'—'} shade/>
-                {(c as any).re_taxes&&<LabelRow label="RE TAXES" value={`$${Number((c as any).re_taxes).toLocaleString()}/yr`}/>}
+                {(c as any).re_taxes&&<LabelRow label="RE TAXES" value={`${money2((c as any).re_taxes)}/yr`}/>}
                 <LabelRow label="ASKING RENT" value={c.asking_rent?`$${Number(c.asking_rent).toFixed(2)} PSF/yr`:'—'} shade/>
                 <LabelRow label="DEAL RENT" value={c.deal_rent?`$${Number(c.deal_rent).toFixed(2)} PSF/yr`:'—'}/>
                 {c.rent_type&&<LabelRow label="RENT TYPE" value={String(c.rent_type)} shade/>}
@@ -4920,14 +4949,14 @@ function OPVReport({subject,comps,leaseComps,leaseAvails=[],avails,analytics,aiT
         {/* For lease OPV: show lease availabilities; for sale OPV: show for-sale availabilities */}
         {subject.opvType==='lease'?(
           includeAvails&&leaseAvails.length>0&&<>
-            <SecHeading num="VI" title="LEASE MARKET AVAILABILITIES"/>
+            <SecHeading num={secNum.avails} title="LEASE MARKET AVAILABILITIES"/>
             <p style={{fontSize:12,color:'#555',marginBottom:12,fontStyle:'italic'}}>Active lease listings in the market for comparison.</p>
             <div style={{border:'1px solid #ccc',marginBottom:16}}>
               <TblHeader cols={['Property Address','Town','Bldg SF','Ceiling','Asking Rent','Rent Type']}/>
               {leaseAvails.map((a,i)=><TblRow key={a.id} shade={i%2===1} cells={[
                 a.address, a.town||'',
                 a.building_sf?`${Number(a.building_sf).toLocaleString()} SF`:'—',
-                a.ceiling_height?`${a.ceiling_height} ft`:'—',
+                clearHeight(a.ceiling_height)||'—',
                 a.asking_rent?`$${Number(a.asking_rent).toFixed(2)}/SF/yr`:'—',
                 a.rent_type||'—',
               ]}/>)}
@@ -4944,8 +4973,8 @@ function OPVReport({subject,comps,leaseComps,leaseAvails=[],avails,analytics,aiT
                   <LabelRow label="PROPERTY ADDRESS" value={`${a.address||'—'}${a.town?', '+a.town:''}`}/>
                   {(a as any).property_type&&<LabelRow label="PROPERTY TYPE" value={String((a as any).property_type)} shade/>}
                   <LabelRow label="BUILDING SIZE" value={fmt(a.building_sf,'',a.building_sf?' SF':'')||'—'} shade={!(a as any).property_type}/>
-                  <LabelRow label="LOT SIZE" value={a.lot_size_ac?`${a.lot_size_ac} Acres`:'—'}/>
-                  <LabelRow label="CEILING HEIGHT" value={a.ceiling_height?`${a.ceiling_height} ft`:'—'} shade/>
+                  <LabelRow label="LOT SIZE" value={a.lot_size_ac?`${acres(a.lot_size_ac)} Acres`:'—'}/>
+                  <LabelRow label="CEILING HEIGHT" value={clearHeight(a.ceiling_height)||'—'} shade/>
                   <LabelRow label="LOADING DOCKS" value={a.loading_docks||'—'}/>
                   <LabelRow label="DRIVE-INS" value={a.drive_ins||'—'} shade/>
                   <LabelRow label="POWER" value={(a as any).power?String((a as any).power):'—'}/>
@@ -4954,7 +4983,7 @@ function OPVReport({subject,comps,leaseComps,leaseAvails=[],avails,analytics,aiT
                   <LabelRow label="PARKING" value={(a as any).parking?String((a as any).parking):'—'} shade/>
                   <LabelRow label="SEWER" value={(a as any).sewer?String((a as any).sewer):'—'}/>
                   <LabelRow label="ZONING" value={(a as any).zoning?String((a as any).zoning):'—'} shade/>
-                  {(a as any).re_taxes&&<LabelRow label="RE TAXES" value={`$${Number((a as any).re_taxes).toLocaleString()}/yr`}/>}
+                  {(a as any).re_taxes&&<LabelRow label="RE TAXES" value={`${money2((a as any).re_taxes)}/yr`}/>}
                   <LabelRow label="ASKING RENT" value={a.asking_rent?`$${Number(a.asking_rent).toFixed(2)}/SF/yr`:'—'} shade/>
                   <LabelRow label="RENT TYPE" value={a.rent_type?String(a.rent_type):'—'}/>
                   <LabelRow label="TAXES" value={a.taxes?`$${Number(a.taxes).toFixed(2)}/SF`:'—'} shade/>
@@ -4966,20 +4995,20 @@ function OPVReport({subject,comps,leaseComps,leaseAvails=[],avails,analytics,aiT
           </>
         ):(
           includeAvails&&avails.length>0&&<>
-            <SecHeading num="VI" title="MARKET AVAILABILITIES"/>
+            <SecHeading num={secNum.avails} title="MARKET AVAILABILITIES"/>
             <div style={{border:'1px solid #ccc',marginBottom:16}}>
               <TblHeader cols={['Property Address','City','Bldg SF','Lot Size','Asking Price','Price PSF']}/>
               {avails.map((a,i)=><TblRow key={a.id} shade={i%2===1} cells={[
                 a.address,a.city||'',
                 a.building_sf?`${Number(a.building_sf).toLocaleString()} SF`:'—',
-                a.lot_size_ac?`${a.lot_size_ac} AC`:'—',
+                a.lot_size_ac?`${acres(a.lot_size_ac)} AC`:'—',
                 a.asking_price?`$${Number(a.asking_price).toLocaleString()}`:'—',
-                a.asking_price&&a.building_sf?`$${(Number(a.asking_price)/Number(a.building_sf)).toFixed(2)}`:'—',
+                pricePerSf(a)?`$${pricePerSf(a).toFixed(2)}`:'—',
               ]}/>)}
             </div>
             <p style={{fontSize:12,color:'#555',marginBottom:24,fontStyle:'italic'}}>Each market availability is detailed on the following pages.</p>
             {avails.map((a,i)=>{
-              const psf = a.price_per_sf||(a.asking_price&&a.building_sf?Number(a.asking_price)/Number(a.building_sf):0)
+              const psf = pricePerSf(a)
               return (
                 <div key={a.id} className="prop-card" style={{marginBottom:48,paddingBottom:48,borderBottom:'2px dashed #ddd'}}>
                   <div className="prop-card-header" style={{fontWeight:700,fontSize:14,paddingBottom:8,borderBottom:`2px solid ${gold}`,marginBottom:16,display:'flex',justifyContent:'space-between',alignItems:'baseline'}}>
@@ -4991,8 +5020,8 @@ function OPVReport({subject,comps,leaseComps,leaseAvails=[],avails,analytics,aiT
                     <LabelRow label="PROPERTY ADDRESS" value={`${a.address||'—'}${a.city?', '+a.city:''}`}/>
                     {(a as any).property_type&&<LabelRow label="PROPERTY TYPE" value={String((a as any).property_type)} shade/>}
                     <LabelRow label="BUILDING SIZE" value={fmt(a.building_sf,'',a.building_sf?' SF':'')||'—'} shade={!(a as any).property_type}/>
-                    <LabelRow label="LOT SIZE" value={a.lot_size_ac?`${a.lot_size_ac} Acres`:'—'}/>
-                    <LabelRow label="CEILING HEIGHT" value={a.ceiling_height?`${a.ceiling_height} ft`:'—'} shade/>
+                    <LabelRow label="LOT SIZE" value={a.lot_size_ac?`${acres(a.lot_size_ac)} Acres`:'—'}/>
+                    <LabelRow label="CEILING HEIGHT" value={clearHeight(a.ceiling_height)||'—'} shade/>
                     <LabelRow label="LOADING DOCKS" value={a.loading_docks||'—'}/>
                     <LabelRow label="DRIVE INS" value={a.drive_ins||'—'} shade/>
                     <LabelRow label="POWER" value={a.power||'—'}/>
@@ -5004,7 +5033,7 @@ function OPVReport({subject,comps,leaseComps,leaseAvails=[],avails,analytics,aiT
                     <LabelRow label="ASKING PRICE" value={a.asking_price?`$${Number(a.asking_price).toLocaleString()}`:'—'}/>
                     <LabelRow label="ASKING $/SF" value={psf?`$${Number(psf).toFixed(2)} PSF`:'—'} shade/>
                     <LabelRow label="PRICING GUIDANCE" value={a.pricing_guidance||'—'}/>
-                    <LabelRow label="REAL ESTATE TAXES" value={(a as any).re_taxes?String((a as any).re_taxes):'—'} shade/>
+                    <LabelRow label="REAL ESTATE TAXES" value={money2((a as any).re_taxes)||'—'} shade/>
                   </div>
                 </div>
               )
@@ -5020,7 +5049,7 @@ function OPVReport({subject,comps,leaseComps,leaseAvails=[],avails,analytics,aiT
 
         {/* ── SECTION VII: MARKETING STRATEGY ── */}
         {includeMarketingStrategy&&<>
-          <SecHeading num="VII" title="MARKETING STRATEGY"/>
+          <SecHeading num={secNum.marketing} title="MARKETING STRATEGY"/>
           <SubHead>FOCUSED DEDICATION / HARD WORK… TO INCLUDE:</SubHead>
           <Bullet><E k="mkt1" d='PREMIER COMMERCIAL REAL ESTATE will prepare electronic marketing material and meet with selected "Highly qualified" buyers.'/></Bullet>
           <Bullet><E k="mkt2" d="PREMIER COMMERCIAL REAL ESTATE will distribute e-Blast marketing flyers to the local brokerage community (including the outer NYC Boroughs)."/></Bullet>
@@ -5040,7 +5069,7 @@ function OPVReport({subject,comps,leaseComps,leaseAvails=[],avails,analytics,aiT
 
         {/* ── SECTION VIII: PCRE PROFILE ── */}
         {includePcreProfile&&<>
-          <SecHeading num="VIII" title="PREMIER COMMERCIAL REAL ESTATE PROFILE" pageBreak/>
+          <SecHeading num={secNum.profile} title="PREMIER COMMERCIAL REAL ESTATE PROFILE" pageBreak/>
           <p style={{fontSize:13,lineHeight:1.8,marginBottom:12}}><E k="pcre_p1" d="Premier Commercial Real Estate, LLC is a full-service commercial real estate service provider offering personalized and strategic solutions for investors, property owners, tenants and diverse businesses. With a laser-sharp focus on, and in-depth knowledge of the Long Island market, Premier's seasoned professionals work together as a team to identify the best real estate opportunities for its clients." multi style={{width:'100%'}}/></p>
           <p style={{fontSize:13,lineHeight:1.8,marginBottom:24}}><E k="pcre_p2" d="From property sales and leasing to tax-advantaged 1031 exchanges and portfolio development, Premier applies the full force of its experience, know-how and network to effectively achieve the real estate goals of its clients." multi style={{width:'100%'}}/></p>
           <SubHead>PCRE'S SAMPLE OF OUR RECENTLY COMPLETED SALES TRANSACTIONS</SubHead>
@@ -5179,14 +5208,17 @@ export default function App() {
     if(typeof window==='undefined') return null
     try{return JSON.parse(localStorage.getItem('opv_subject')||'null')}catch{return null}
   })
-  const [comps,setComps]=useState<Comp[]>(()=>{
+  const [rawComps,setComps]=useState<Comp[]>(()=>{
     if(typeof window==='undefined') return []
     try{return JSON.parse(localStorage.getItem('opv_comps')||'[]')}catch{return []}
   })
-  const [avails,setAvails]=useState<Avail[]>(()=>{
+  const [rawAvails,setAvails]=useState<Avail[]>(()=>{
     if(typeof window==='undefined') return []
     try{return JSON.parse(localStorage.getItem('opv_avails')||'[]')}catch{return []}
   })
+  // $/SF always follows price ÷ SF (stored values could be stale)
+  const comps=useMemo(()=>rawComps.map(withPricePerSf),[rawComps])
+  const avails=useMemo(()=>rawAvails.map(withPricePerSf),[rawAvails])
   const [leaseComps,setLeaseComps]=useState<LeaseComp[]>(()=>{
     if(typeof window==='undefined') return []
     try{return JSON.parse(localStorage.getItem('opv_lease_comps')||'[]')}catch{return []}
@@ -5228,7 +5260,7 @@ export default function App() {
   })
   const [lastSaved,setLastSaved]=useState<Date|null>(null)
   const [saving,setSaving]=useState(false)
-  const [savedOPVs,setSavedOPVs]=useState<{id:string,address:string,current_step:string,updated_at:string,saved_by:string}[]>([])
+  const [savedOPVs,setSavedOPVs]=useState<{id:string,address:string,label?:string|null,current_step:string,updated_at:string,saved_by:string}[]>([])
   const [showSavedPanel,setShowSavedPanel]=useState(false)
   // Frozen report HTML (Edit Text mode), report photo swaps and inline text edits all live in the
   // database with the OPV; they're loaded by restoreOPV on startup.
@@ -5461,7 +5493,7 @@ export default function App() {
 
   const saveReport=async(silent=false)=>{
     const fields = currentFieldsRef.current
-    if(!fields.subject){if(!silent)alert('Enter a subject property address first.');return}
+    if(!fields.subject){if(!silent)toast('Enter a subject property address first.');return}
     const existingId = savedOPVIdRef.current
     if (existingId && !readyRef.current) return
     if (busyRef.current) { if(!silent) setTimeout(()=>saveReportRef.current(false), 700); return }
@@ -5503,10 +5535,10 @@ export default function App() {
       setLastSaved(new Date())
       setSaveError(null)
       setReports(r=>[{id:Date.now(),subject:fields.subject,comps:fields.comps,avails:fields.avails,analytics:fields.analytics,date:new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})},...r])
-      if(!silent) alert('✓ OPV progress saved.')
+      if(!silent) toast('✓ OPV progress saved.')
     } catch(e) {
       setSaveError((e as Error).message)
-      if(!silent) alert('Save failed: '+(e as Error).message)
+      if(!silent) toast('Save failed: '+(e as Error).message)
     } finally {
       busyRef.current = false
       setSaving(false)
@@ -5601,7 +5633,7 @@ export default function App() {
         setPage(data.currentStep||'subject')
       }
     } catch(e) {
-      if (!opts?.background) alert('Load failed: '+(e as Error).message)
+      if (!opts?.background) toast('Load failed: '+(e as Error).message)
     } finally {
       busyRef.current = false
     }
@@ -5762,7 +5794,7 @@ export default function App() {
                 <div style={{display:'flex',alignItems:'center',gap:6,background:'rgba(0,0,0,0.15)',borderRadius:6,padding:'6px 8px'}}>
                   <span style={{fontSize:10,color:D.textMuted,flexShrink:0}}>Session ID:</span>
                   <span style={{fontSize:10,fontFamily:'monospace',color:D.text,flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{savedOPVId}</span>
-                  <button onClick={()=>{navigator.clipboard.writeText(savedOPVId);alert('Session ID copied! Share it so others can load this OPV.')}} style={{background:D.blue,border:'none',color:'#fff',fontSize:9,fontWeight:700,padding:'3px 7px',borderRadius:4,cursor:'pointer',flexShrink:0}}>COPY</button>
+                  <button onClick={()=>{navigator.clipboard.writeText(savedOPVId);toast('Session ID copied! Share it so others can load this OPV.')}} style={{background:D.blue,border:'none',color:'#fff',fontSize:9,fontWeight:700,padding:'3px 7px',borderRadius:4,cursor:'pointer',flexShrink:0}}>COPY</button>
                 </div>
               </div>}
               {/* Load by Session ID */}
@@ -5770,7 +5802,7 @@ export default function App() {
                 <div style={{fontSize:11,color:D.textSec,fontWeight:600,marginBottom:6}}>🔗 Load Shared Session</div>
                 <div style={{display:'flex',gap:6}}>
                   <input id="shared-session-input" placeholder="Paste Session ID…" style={{flex:1,background:'rgba(255,255,255,0.06)',border:`1px solid ${D.border}`,borderRadius:6,padding:'6px 10px',fontSize:11,color:D.text,fontFamily:'monospace',outline:'none'}}/>
-                  <button onClick={async()=>{const input=document.getElementById('shared-session-input') as HTMLInputElement;const id=input?.value?.trim();if(!id){alert('Paste a Session ID first');return}await restoreOPV(id);setShowSavedPanel(false)}} style={{background:D.blue,border:'none',color:'#fff',fontSize:11,fontWeight:700,padding:'6px 14px',borderRadius:6,cursor:'pointer',flexShrink:0}}>Load</button>
+                  <button onClick={async()=>{const input=document.getElementById('shared-session-input') as HTMLInputElement;const id=input?.value?.trim();if(!id){toast('Paste a Session ID first');return}await restoreOPV(id);setShowSavedPanel(false)}} style={{background:D.blue,border:'none',color:'#fff',fontSize:11,fontWeight:700,padding:'6px 14px',borderRadius:6,cursor:'pointer',flexShrink:0}}>Load</button>
                 </div>
               </div>
               <div style={{padding:'16px 24px',flex:1}}>
@@ -5791,7 +5823,8 @@ export default function App() {
                       <div style={{padding:'14px 16px',background:isCurrent?`rgba(59,130,246,0.08)`:'transparent'}}>
                         <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',gap:8,marginBottom:6}}>
                           <div>
-                            <div style={{fontSize:13,fontWeight:700,marginBottom:2,color:D.text}}>{s.address||'No address'}</div>
+                            <div style={{fontSize:13,fontWeight:700,marginBottom:2,color:D.text}}>{s.label||s.address||'No address'}</div>
+                            {s.label&&s.address&&<div style={{fontSize:11,color:D.textSec,marginBottom:2}}>{s.address}</div>}
                             <div style={{fontSize:10,color:D.textSec}}>By {s.saved_by} · {timeAgo}</div>
                           </div>
                           {isCurrent&&<Tag color={D.blue}>Current</Tag>}

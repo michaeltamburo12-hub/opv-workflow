@@ -49,11 +49,16 @@ export async function GET(req: NextRequest) {
   }
   const { data, error } = await supabaseAdmin
     .from(TABLE)
-    .select('id, created_at, updated_at, saved_by, address, current_step')
+    .select('id, created_at, updated_at, saved_by, address, current_step, assignment_json')
     .order('updated_at', { ascending: false })
     .limit(50)
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  return NextResponse.json({ reports: data })
+  // The saved-list label lives with the assignment details; the cover address stays subject.address.
+  const reports = (data || []).map(({ assignment_json, ...r }) => {
+    const label = String(parse(assignment_json, {})?.opvLabel ?? '').trim()
+    return { ...r, label: label || null }
+  })
+  return NextResponse.json({ reports })
 }
 
 // POST — save a new OPV, or update an existing one.
