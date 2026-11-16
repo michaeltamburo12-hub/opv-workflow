@@ -29,9 +29,10 @@ const COUNTIES = ['Nassau', 'Suffolk']
 const PROP_TYPES = ['Warehouse','Manufacturing','Flex','Distribution','Industrial']
 
 const css = `
-  @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500&family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
+  @import url('https://rsms.me/inter/inter.css');
+  @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500&family=JetBrains+Mono:wght@400;500&display=swap');
   *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-  body{font-family:'Inter',sans-serif;background:#080C18;color:#F1F5F9;-webkit-font-smoothing:antialiased;letter-spacing:-.01em}
+  body{font-family:'Inter',sans-serif;font-feature-settings:'cv05';background:#080C18;color:#F1F5F9;-webkit-font-smoothing:antialiased;letter-spacing:-.01em}
   input,select,textarea{font-family:'Inter',sans-serif;background:#080C18;color:#F1F5F9}
   input:hover:not(:focus),select:hover:not(:focus),textarea:hover:not(:focus){border-color:#2D4057!important}
   input:focus,select:focus,textarea:focus{outline:none;border-color:#3B82F6!important;box-shadow:0 0 0 3px rgba(59,130,246,0.12)}
