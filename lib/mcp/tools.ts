@@ -1,46 +1,34 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
+import { ok, fail, datasetArg, uuid, safe, fetchAll, logWrite } from './util'
+import { registerCleanupTools } from './cleanup-tools'
+import { registerOpvTools } from './opv-tools'
 import { supabaseAdmin as sb } from '@/lib/supabase-server'
 import {
   DATASETS, DATASET_NAMES, STATS_DATASETS, DatasetName, Row,
   cleanValues, ds, fillPricePerSf, normalizeAddress,
 } from './datasets'
 
-// The Claude connector's actions. Deliberately no delete: removing records stays in the app.
+// The Claude connector's actions. Clean-up (duplicates, merge, delete) is in cleanup-tools.ts and
+// building OPVs in opv-tools.ts.
 
 const INSTRUCTIONS = `This is the OPV Workflow database of Premier Commercial Real Estate (PCRE), an industrial real estate brokerage on Long Island, NY (Nassau and Suffolk counties). It holds sale comps, lease comps, for-sale and for-lease listings, PCRE's own closed transactions, and saved OPVs (opinions of value).
 
 - Prices are US dollars; price_per_sf is $/SF; rents are $/SF/year.
-- Before adding or changing records, show the user what you'll write and get their OK. create_records checks for duplicates by address; if one exists, offer update_record instead.
+- Before adding, changing, merging or deleting records, show the user what you'll write and get their OK. create_records checks for duplicates by address; if one exists, offer update_record instead.
 - When adding records from a file or email, map its fields onto the dataset's fields (see describe_datasets) and put anything that doesn't fit in notes.
-- Records cannot be deleted through this connector; tell the user to delete in the OPV app.`
 
-type Json = Record<string, unknown> | unknown[]
-const ok = (data: Json) => ({ content: [{ type: 'text' as const, text: JSON.stringify(data, null, 1) }] })
-const fail = (message: string) => ({ isError: true, content: [{ type: 'text' as const, text: message }] })
+Cleaning up records:
+- Duplicates: find_duplicates, then show each group side by side and ask which record to keep. If the duplicate has details the kept record lacks, list them and ask before merge_records. Then ask before delete_records.
+- Records are otherwise only deleted when a listing is taken off the market. delete_records is permanent: always list the records and get an explicit OK.
 
-const datasetArg = z.enum(DATASET_NAMES).describe(
-  'Which records: ' + DATASET_NAMES.map(n => `${n} = ${DATASETS[n].label}`).join('; '),
-)
-const uuid = z.string().uuid()
-
-// Strip characters that have meaning in PostgREST filter syntax.
-const safe = (s: string) => s.replace(/[,()*%\\]/g, ' ').trim()
-
-const PAGE = 1000
-const MAX_SCAN = 20000
-
-// Reads every matching row (in pages) — used for stats and duplicate checks. Tables are small.
-async function fetchAll(table: string, columns: string, apply: (q: any) => any = q => q): Promise<Row[]> { // eslint-disable-line @typescript-eslint/no-explicit-any
-  const out: Row[] = []
-  for (let from = 0; from < MAX_SCAN; from += PAGE) {
-    const { data, error } = await apply(sb.from(table).select(columns)).order('id').range(from, from + PAGE - 1)
-    if (error) throw new Error(error.message)
-    out.push(...(data as Row[]))
-    if (!data || data.length < PAGE) break
-  }
-  return out
-}
+Creating an OPV end to end:
+1. Collect the full assignment (client, OPV type, due date, prepared by), the subject property specs, and the search parameters for comps and listings. create_opv.
+2. For each dataset the user wants (sale comps, sale listings; lease comps and lease listings for lease OPVs), search_records with their parameters and show a short numbered list (address, town, SF, price or rent, $/SF, date). Let the user choose; don't choose for them.
+3. set_opv_records with the chosen ids. Report the analysis and any outliers.
+4. Draft the broker narrative and the value range from the analysis and the subject, show them to the user, then save with update_opv. The user may edit them afterwards.
+5. export_opv_pdf and give the user the download link. The OPV can also be opened in the app with the open_in_app link.
+Existing OPVs: list_opvs / get_opv, then update_opv or set_opv_records to edit.`
 
 type Filters = {
   town?: string; county?: string; address?: string; text?: string
@@ -87,11 +75,8 @@ const titleCase = (s: string) => s.toLowerCase().replace(/\b\w/g, c => c.toUpper
 const sizeBand = (sf: number | null) =>
   sf == null ? 'unknown' : sf < 10000 ? 'under 10k SF' : sf < 25000 ? '10k–25k SF' : sf < 50000 ? '25k–50k SF' : sf < 100000 ? '50k–100k SF' : '100k+ SF'
 
-function logWrite(sub: string, action: string, dataset: string, ids: string[]) {
-  console.log(JSON.stringify({ event: 'mcp_write', via: 'claude-connector', user: sub, action, dataset, ids }))
-}
 
-export function buildServer(user: { sub: string }) {
+export function buildServer(user: { sub: string }, origin: string) {
   const server = new McpServer(
     { name: 'opv-workflow', version: '1.0.0' },
     { instructions: INSTRUCTIONS },
@@ -109,7 +94,7 @@ export function buildServer(user: { sub: string }) {
       const { count } = await sb.from(d.table).select('id', { count: 'exact', head: true })
       out[name] = { description: d.label, records: count, town_field: d.town, date_field: d.date, fields: d.columns }
     }
-    out.opvs = { description: 'Saved OPVs (opinions of value). Use list_opvs / get_opv. Read-only here.' }
+    out.opvs = { description: 'Saved OPVs (opinions of value). list_opvs / get_opv to read; create_opv, set_opv_records, update_opv and export_opv_pdf to build and edit.' }
     return ok(out)
   })
 
@@ -350,5 +335,7 @@ export function buildServer(user: { sub: string }) {
     })
   })
 
+  registerCleanupTools(server, user)
+  registerOpvTools(server, user, origin)
   return server
 }

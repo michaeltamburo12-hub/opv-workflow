@@ -21,7 +21,7 @@ export async function POST(req: NextRequest) {
   const user = authenticate(req)
   if (!user) return unauthorized(req)
 
-  const server = buildServer(user)
+  const server = buildServer(user, req.nextUrl.origin)
   const transport = new WebStandardStreamableHTTPServerTransport({
     sessionIdGenerator: undefined, // stateless: no sessions to keep between serverless invocations
     enableJsonResponse: true,

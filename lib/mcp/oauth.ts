@@ -12,7 +12,7 @@ export const ACCESS_TTL = 60 * 60 // 1 hour
 export const REFRESH_TTL = 60 * 60 * 24 * 30 // 30 days
 export const CODE_TTL = 120 // 2 minutes
 
-type TokenType = 'client' | 'code' | 'access' | 'refresh'
+type TokenType = 'client' | 'code' | 'access' | 'refresh' | 'pdf'
 
 export type ClientPayload = { typ: 'client'; r: string[]; n: string }
 export type CodePayload = { typ: 'code'; cid: string; r: string; cc: string; sub: string; exp: number }

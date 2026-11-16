@@ -1,7 +1,7 @@
 'use client'
 import { toast } from '@/lib/toast'
 import { formatDay } from '@/lib/dates'
-import { splitOutliers } from '@/lib/stats'
+import { computeAnalytics, OUTLIER_RULE } from '@/lib/analytics'
 import { acres, clearHeight, docksSentence, money2, pricePerSf, withPricePerSf, sprinklerSentence } from '@/lib/format'
 import { useState, useRef, useCallback, useEffect, useMemo, Fragment } from 'react'
 // Database access goes through /api/db (login-checked, server-side) instead of the public anon key.
@@ -203,7 +203,7 @@ type SubjectForm = {address:string,city:string,county:string,municipality:string
 type Comp = {id:string,address:string,city:string,county:string,building_sf:number,lot_size_ac:number,ceiling_height:string,loading_docks:string,drive_ins:string,power:string,sewer:string,zoning:string,sale_price:number,price_per_sf:number,sale_date:string,sale_type:string,buyer:string,seller:string,submarket:string,score?:number,[key:string]:unknown}
 type Avail = {id:string,address:string,city:string,county:string,building_sf:number,lot_size_ac:number,ceiling_height:string,loading_docks:string,drive_ins:string,power:string,sewer:string,zoning:string,asking_price:number,price_per_sf:number,pricing_guidance:string,listing_broker:string,loopnet_url:string,score?:number,[key:string]:unknown}
 type LeaseComp = {id:string,address:string,town:string,county:string,building_sf:number,lot_size_ac:number,ceiling_height:string,loading_docks:string,drive_ins:string,asking_rent:number,deal_rent:number,rent_type:string,taxes:number,lease_term_years:number,rent_concession_months:number,ti_ll_work:string,mgmt_fee_pct:number,tenant:string,landlord:string,transaction_date:string,status:string,notes:string,[key:string]:unknown}
-type AnalyticsData = {mean:number,median:number,std:number,weighted:number,min:number,max:number,low:number,market:number,high:number,suggested:number,aMean:number,aOutliers?:{address:string,psf:number}[],compOutliers?:{address:string,psf:number}[],count:number,leaseMeanDeal?:number,leaseMedianDeal?:number,leaseMeanAsk?:number,leaseCount?:number,leaseMin?:number,leaseMax?:number,leaseSuggested?:number}
+type AnalyticsData = {mean:number,median:number,std:number,weighted:number,min:number,max:number,low:number,market:number,high:number,suggested:number,aMean:number,aOutliers?:{address:string,psf:number}[],compOutliers?:{address:string,psf:number}[],count:number,leaseMeanDeal?:number,leaseMedianDeal?:number,leaseMeanAsk?:number,leaseCount?:number,leaseMin?:number,leaseMax?:number,leaseSuggested?:number,leaseOutliers?:{address:string,psf:number}[]}
 type OPVReportData = {id:number,subject:SubjectForm,comps:Comp[],avails:Avail[],analytics:AnalyticsData|null,date:string}
 type SavedOPV = {id:string, created_at:string, saved_by:string, address:string}
 
@@ -375,7 +375,7 @@ function Assignment({assignmentData,setAssignmentData,user,setPage,setSubject,su
   const begin=()=>{
     setAssignmentData(form)
     if(!subject&&form.propertyAddress){
-      const blankSubject:SubjectForm={address:form.propertyAddress,city:'',county:'Nassau',municipality:'',parcelId:'',type:'Warehouse',opvType:form.opvType==='For Sale'?'sale':form.opvType==='For Lease'?'lease':'investment',size:'',lot:'',ceiling:'',docks:'',driveIn:'',power:'',heat:'Gas FHA',parking:'',sprinkler:'',sewer:'Municipal',zoning:'',taxes:'',yearBuilt:'',officePct:'',construction:'Masonry/Steel',condition:'Good',notes:'',highestBestUse:'',capRateLow:'',capRateHigh:'',leasePsfLow:'',leasePsfHigh:'',estimatedValueLow:'',estimatedValueHigh:'',preparedBy:form.preparedBy}
+      const blankSubject:SubjectForm={address:form.propertyAddress,city:'',county:'Nassau',municipality:'',parcelId:'',type:'Warehouse',opvType:form.opvType==='For Sale'?'sale':form.opvType==='For Lease'?'lease':'investment',size:'',lot:'',ceiling:'',docks:'',driveIn:'',power:'',heat:'',parking:'',sprinkler:'',sewer:'',zoning:'',taxes:'',yearBuilt:'',officePct:'',construction:'',condition:'',notes:'',highestBestUse:'',capRateLow:'',capRateHigh:'',leasePsfLow:'',leasePsfHigh:'',estimatedValueLow:'',estimatedValueHigh:'',preparedBy:form.preparedBy}
       setSubject(blankSubject)
     }
     setPage('subject')
@@ -2314,7 +2314,7 @@ function Auth({onLogin}: {onLogin: (u:{name:string,role:string,init:string})=>vo
 // ── SUBJECT PROPERTY ──────────────────────────────────────────────────────────
 function SubjectProperty({subject,setSubject,setPage,folders,setFolders,assignmentData}: {subject:SubjectForm|null,setSubject:(s:SubjectForm)=>void,setPage:(p:string)=>void,folders:Folder[],setFolders:(f:Folder[]|((prev:Folder[])=>Folder[]))=>void,assignmentData:AssignmentData}) {
   const defaultOpvType = assignmentData.opvType==='For Lease'?'lease':assignmentData.opvType==='Investment Sale'?'investment':'sale'
-  const [form,setForm]=useState<SubjectForm>(subject||{address:assignmentData.propertyAddress||'',city:'',county:'Nassau',municipality:'',parcelId:'',type:'Warehouse',opvType:defaultOpvType,size:'',lot:'',ceiling:'',docks:'',driveIn:'',power:'',heat:'Gas FHA',parking:'',sprinkler:'',sewer:'Municipal',zoning:'',taxes:'',yearBuilt:'',officePct:'',construction:'Masonry/Steel',condition:'Good',notes:'',highestBestUse:'',capRateLow:'',capRateHigh:'',leasePsfLow:'',leasePsfHigh:'',estimatedValueLow:'',estimatedValueHigh:'',preparedBy:assignmentData.preparedBy||''})
+  const [form,setForm]=useState<SubjectForm>(subject||{address:assignmentData.propertyAddress||'',city:'',county:'Nassau',municipality:'',parcelId:'',type:'Warehouse',opvType:defaultOpvType,size:'',lot:'',ceiling:'',docks:'',driveIn:'',power:'',heat:'',parking:'',sprinkler:'',sewer:'',zoning:'',taxes:'',yearBuilt:'',officePct:'',construction:'',condition:'',notes:'',highestBestUse:'',capRateLow:'',capRateHigh:'',leasePsfLow:'',leasePsfHigh:'',estimatedValueLow:'',estimatedValueHigh:'',preparedBy:assignmentData.preparedBy||''})
   const set=(k:string,v:string)=>setForm((f:SubjectForm)=>{const next={...f,[k]:v};setSubject(next);return next})
   // Follow changes that arrive from elsewhere (a teammate's save merged in, or loading an OPV)
   useEffect(()=>{
@@ -2367,11 +2367,11 @@ function SubjectProperty({subject,setSubject,setPage,folders,setFolders,assignme
           <Divider label="Systems & Infrastructure"/>
           <div style={G2}>
             <Field label="Electrical Power"><Input placeholder="400A/3ph" value={form.power} onChange={e=>set('power',e.target.value)}/></Field>
-            <Field label="Heat"><Sel value={form.heat} onChange={e=>set('heat',e.target.value)}><option>Gas FHA</option><option>Gas Unit Heaters</option><option>Electric</option><option>Oil</option><option>None</option></Sel></Field>
+            <Field label="Heat"><Sel value={form.heat} onChange={e=>set('heat',e.target.value)}><option value="">Select...</option><option>Gas FHA</option><option>Gas Unit Heaters</option><option>Electric</option><option>Oil</option><option>None</option></Sel></Field>
             <Field label="Sprinkler System"><Sel value={form.sprinkler} onChange={e=>set('sprinkler',e.target.value)}><option value="">Select...</option><option>ESFR</option><option>Wet</option><option>Dry</option><option>None</option></Sel></Field>
-            <Field label="Sewer"><Sel value={form.sewer} onChange={e=>set('sewer',e.target.value)}><option>Municipal</option><option>Septic</option></Sel></Field>
-            <Field label="Construction Type"><Sel value={form.construction} onChange={e=>set('construction',e.target.value)}><option>Masonry/Steel</option><option>Tilt-up Concrete</option><option>Steel Frame</option><option>Masonry</option></Sel></Field>
-            <Field label="Condition"><Sel value={form.condition} onChange={e=>set('condition',e.target.value)}><option>Excellent</option><option>Good</option><option>Average</option><option>Fair</option><option>Poor</option></Sel></Field>
+            <Field label="Sewer"><Sel value={form.sewer} onChange={e=>set('sewer',e.target.value)}><option value="">Select...</option><option>Municipal</option><option>Septic</option></Sel></Field>
+            <Field label="Construction Type"><Sel value={form.construction} onChange={e=>set('construction',e.target.value)}><option value="">Select...</option><option>Masonry/Steel</option><option>Tilt-up Concrete</option><option>Steel Frame</option><option>Masonry</option></Sel></Field>
+            <Field label="Condition"><Sel value={form.condition} onChange={e=>set('condition',e.target.value)}><option value="">Select...</option><option>Excellent</option><option>Good</option><option>Average</option><option>Fair</option><option>Poor</option></Sel></Field>
             <Field label="Zoning"><Input placeholder="M1 / Industrial" value={form.zoning} onChange={e=>set('zoning',e.target.value)}/></Field>
             <Field label="Real Estate Taxes ($/yr)"><Input type="number" placeholder="62400" value={form.taxes} onChange={e=>set('taxes',e.target.value)}/></Field>
           </div>
@@ -3385,58 +3385,9 @@ function Analytics({comps,avails,analytics,setAnalytics,setPage,subject,leaseCom
   const isLease = subject?.opvType==='lease'
   const [ran,setRan]=useState(!!analytics)
   const run = () => {
-    if (isLease) {
-      // ── LEASE OPV: primary metrics from deal rent ──
-      const dealRents=leaseComps.filter(c=>c.deal_rent>0).map(c=>c.deal_rent)
-      if (dealRents.length===0) { toast('Add lease comps with deal rent values first. Without deal rents the lease analysis cannot be calculated.'); return }
-      const askRents=leaseComps.filter(c=>c.asking_rent>0).map(c=>c.asking_rent)
-      const leaseMeanDeal=dealRents.length>0?dealRents.reduce((a,b)=>a+b,0)/dealRents.length:0
-      const sorted=[...dealRents].sort((a,b)=>a-b)
-      const leaseMedianDeal=sorted.length>0?sorted[Math.floor(sorted.length/2)]:0
-      const leaseMeanAsk=askRents.length>0?askRents.reduce((a,b)=>a+b,0)/askRents.length:0
-      const leaseMin=dealRents.length>0?Math.min(...dealRents):0
-      const leaseMax=dealRents.length>0?Math.max(...dealRents):0
-      const leaseSuggested=leaseMeanAsk>0?Math.round(leaseMeanAsk*1.05*4)/4:leaseMax>0?Math.round(leaseMax*1.05*4)/4:0
-      // Also run sale stats (secondary)
-      const psfs=comps.filter(c=>c.price_per_sf>0).map(c=>c.price_per_sf)
-      const smean=psfs.length>0?psfs.reduce((a,b)=>a+b,0)/psfs.length:0
-      const ssorted=[...psfs].sort((a,b)=>a-b)
-      const smedian=ssorted.length>0?ssorted[Math.floor(ssorted.length/2)]:0
-      const sstd=psfs.length>0?Math.sqrt(psfs.map(p=>(p-smean)**2).reduce((a,b)=>a+b,0)/psfs.length):0
-      const totalSF=comps.filter(c=>c.building_sf&&c.price_per_sf).reduce((a,c)=>a+c.building_sf,0)
-      const weighted=totalSF>0?comps.filter(c=>c.building_sf&&c.price_per_sf).reduce((a,c)=>a+c.price_per_sf*c.building_sf,0)/totalSF:smean
-      // Listings far from the median (e.g. a size missing a zero) are left out of the average and listed instead.
-      const aSplit=splitOutliers(avails.map(a=>({item:a,value:pricePerSf(a)})))
-      const aPsfs=aSplit.kept.map(x=>x.value)
-      const aMean=aPsfs.length>0?aPsfs.reduce((a,b)=>a+b,0)/aPsfs.length:0
-      const aOutliers=aSplit.outliers.map(x=>({address:x.item.address,psf:x.value}))
-      const compOutliers=splitOutliers(comps.map(c=>({item:c,value:pricePerSf(c)}))).outliers.map(x=>({address:x.item.address,psf:x.value}))
-      setAnalytics({
-        mean:smean,median:smedian,std:sstd,weighted,min:psfs.length>0?Math.min(...psfs):0,max:psfs.length>0?Math.max(...psfs):0,
-        low:smean-sstd*0.5,market:smean,high:smean+sstd*0.5,suggested:smean?Math.round(smean*1.05/5)*5:0,
-        aMean,aOutliers,compOutliers,count:comps.length,
-        leaseMeanDeal,leaseMedianDeal,leaseMeanAsk,leaseCount:dealRents.length,leaseMin,leaseMax,leaseSuggested,
-      })
-    } else {
-      // ── SALE OPV: primary metrics from sale price PSF ──
-      const psfs=comps.filter(c=>c.price_per_sf>0).map(c=>c.price_per_sf)
-      if (psfs.length===0) { toast('Add comps with sale prices first.'); return }
-      const mean=psfs.reduce((a,b)=>a+b,0)/psfs.length
-      const sorted=[...psfs].sort((a,b)=>a-b)
-      const median=sorted[Math.floor(sorted.length/2)]
-      const std=Math.sqrt(psfs.map(p=>(p-mean)**2).reduce((a,b)=>a+b,0)/psfs.length)
-      const totalSF=comps.filter(c=>c.building_sf&&c.price_per_sf).reduce((a,c)=>a+c.building_sf,0)
-      const weighted=totalSF>0?comps.filter(c=>c.building_sf&&c.price_per_sf).reduce((a,c)=>a+c.price_per_sf*c.building_sf,0)/totalSF:mean
-      // Listings far from the median (e.g. a size missing a zero) are left out of the average and listed instead.
-      const aSplit=splitOutliers(avails.map(a=>({item:a,value:pricePerSf(a)})))
-      const aPsfs=aSplit.kept.map(x=>x.value)
-      const aMean=aPsfs.length>0?aPsfs.reduce((a,b)=>a+b,0)/aPsfs.length:0
-      const aOutliers=aSplit.outliers.map(x=>({address:x.item.address,psf:x.value}))
-      const compOutliers=splitOutliers(comps.map(c=>({item:c,value:pricePerSf(c)}))).outliers.map(x=>({address:x.item.address,psf:x.value}))
-      const low=mean-std*0.5,market=mean,high=mean+std*0.5
-      const suggested=Math.round(market*1.05/5)*5
-      setAnalytics({mean,median,std,weighted,min:Math.min(...psfs),max:Math.max(...psfs),low,market,high,suggested,aMean,aOutliers,compOutliers,count:comps.length})
-    }
+    const result=computeAnalytics({isLease,comps,avails,leaseComps})
+    if (typeof result==='string') { toast(result); return }
+    setAnalytics(result)
     setRan(true)
   }
   const Stat=({l,v,c,note}: {l:string,v:string,c?:string,note?:string})=>(
@@ -3459,7 +3410,8 @@ function Analytics({comps,avails,analytics,setAnalytics,setPage,subject,leaseCom
         <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:20}} className="anim-in">
           <Card>
             <SL>Lease Comp Statistics ({analytics.leaseCount??0} comps)</SL>
-            <Stat l="Avg Deal Rent/SF/yr" v={analytics.leaseMeanDeal?`$${analytics.leaseMeanDeal.toFixed(2)}`:'—'}/>
+            <Stat l="Avg Deal Rent/SF/yr" v={analytics.leaseMeanDeal?`${analytics.leaseMeanDeal.toFixed(2)}`:'—'}
+              note={analytics.leaseOutliers?.length?`Excludes outliers: ${analytics.leaseOutliers.map(o=>`${o.address} (${o.psf.toFixed(2)}/SF/yr)`).join('; ')}. ${OUTLIER_RULE.replace('$/SF','deal rent')}`:undefined}/>
             <Stat l="Median Deal Rent/SF/yr" v={analytics.leaseMedianDeal?`$${analytics.leaseMedianDeal.toFixed(2)}`:'—'}/>
             <Stat l="Avg Asking Rent/SF/yr" v={analytics.leaseMeanAsk?`$${analytics.leaseMeanAsk.toFixed(2)}`:'—'} c={D.blue}/>
             <Stat l="Min Deal Rent" v={analytics.leaseMin?`$${analytics.leaseMin.toFixed(2)}`:'—'} c={D.red}/>
@@ -3480,7 +3432,7 @@ function Analytics({comps,avails,analytics,setAnalytics,setPage,subject,leaseCom
             {leaseComps.filter(c=>c.deal_rent>0).map((c,i)=>(
               <div key={i} style={{display:'flex',alignItems:'center',gap:8,marginBottom:6}}>
                 <div style={{width:80,fontSize:10,color:D.textSec,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' as const}}>{c.address?.split(',')[0]||'—'}</div>
-                <div style={{flex:1,height:4,background:D.surface2,borderRadius:2}}><div style={{height:'100%',background:D.gold,borderRadius:2,width:`${analytics.leaseMax&&analytics.leaseMin&&analytics.leaseMax>analytics.leaseMin?((c.deal_rent-analytics.leaseMin!)/(analytics.leaseMax!-analytics.leaseMin!)*100).toFixed(0):'50'}%`}}/></div>
+                <div style={{flex:1,height:4,background:D.surface2,borderRadius:2}}><div style={{height:'100%',background:D.gold,borderRadius:2,width:`${analytics.leaseMax&&analytics.leaseMin&&analytics.leaseMax>analytics.leaseMin?Math.min(100,Math.max(0,(c.deal_rent-analytics.leaseMin!)/(analytics.leaseMax!-analytics.leaseMin!)*100)).toFixed(0):'50'}%`}}/></div>
                 <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:10,color:D.text,width:52,textAlign:'right' as const}}>${Number(c.deal_rent).toFixed(2)}</div>
               </div>
             ))}
@@ -3517,15 +3469,15 @@ function Analytics({comps,avails,analytics,setAnalytics,setPage,subject,leaseCom
           <Card>
             <SL>Market Benchmarks</SL>
             <Stat l="Avg Asking Price/SF (Listings)" v={analytics.aMean>0?`$${analytics.aMean.toFixed(2)}`:'No listings yet'} c={D.blue}
-              note={analytics.aOutliers?.length?`Excludes likely data errors: ${analytics.aOutliers.map(o=>`${o.address} ($${o.psf.toFixed(2)}/SF)`).join('; ')}. Check price and SF on these listings.`:undefined}/>
+              note={analytics.aOutliers?.length?`Excludes outliers: ${analytics.aOutliers.map(o=>`${o.address} (${o.psf.toFixed(2)}/SF)`).join('; ')}. Check price and SF on these listings.`:undefined}/>
             {!!analytics.compOutliers?.length&&<div style={{fontSize:11,color:D.gold,background:D.surface2,borderRadius:8,padding:'10px 12px',marginBottom:8,lineHeight:1.5}}>
-              Check these comps, their $/SF is far from the rest: {analytics.compOutliers.map(o=>`${o.address} ($${o.psf.toFixed(2)}/SF)`).join('; ')}. They are still included in the value range above.
+              Outlier comps: {analytics.compOutliers.map(o=>`${o.address} ($${o.psf.toFixed(2)}/SF)`).join('; ')}. They are left out of the averages and the value range above. {OUTLIER_RULE}
             </div>}
             <SL style={{marginTop:16}}>Price Distribution</SL>
             {comps.filter(c=>c.price_per_sf>0).map((c,i)=>(
               <div key={i} style={{display:'flex',alignItems:'center',gap:8,marginBottom:6}}>
                 <div style={{width:80,fontSize:10,color:D.textSec,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' as const}}>{c.address?.split(',')[0]||'—'}</div>
-                <div style={{flex:1,height:4,background:D.surface2,borderRadius:2}}><div style={{height:'100%',background:D.gold,borderRadius:2,width:`${analytics.max>analytics.min?((c.price_per_sf-analytics.min)/(analytics.max-analytics.min)*100).toFixed(0):'50'}%`}}/></div>
+                <div style={{flex:1,height:4,background:D.surface2,borderRadius:2}}><div style={{height:'100%',background:D.gold,borderRadius:2,width:`${analytics.max>analytics.min?Math.min(100,Math.max(0,(c.price_per_sf-analytics.min)/(analytics.max-analytics.min)*100)).toFixed(0):'50'}%`}}/></div>
                 <div style={{fontFamily:"'JetBrains Mono',monospace",fontSize:10,color:D.text,width:48,textAlign:'right' as const}}>${Number(c.price_per_sf).toFixed(0)}</div>
               </div>
             ))}
@@ -3540,20 +3492,9 @@ function Analytics({comps,avails,analytics,setAnalytics,setPage,subject,leaseCom
 // ── BROKER REVIEW ─────────────────────────────────────────────────────────────
 function BrokerReview({subject,comps,analytics,setAnalytics,aiText,setAiText,setPage,setSubject}: {subject:SubjectForm|null,comps:Comp[],analytics:AnalyticsData|null,setAnalytics:(a:AnalyticsData)=>void,aiText:string,setAiText:(t:string)=>void,setPage:(p:string)=>void,setSubject:(s:SubjectForm)=>void}) {
   const isLease = subject?.opvType==='lease'
-  const computeAnalytics = () => {
-    const psfs=comps.filter(c=>c.price_per_sf>0).map(c=>c.price_per_sf)
-    if (psfs.length===0) return null
-    const mean=psfs.reduce((a,b)=>a+b,0)/psfs.length
-    const sorted=[...psfs].sort((a,b)=>a-b)
-    const median=sorted[Math.floor(sorted.length/2)]
-    const std=Math.sqrt(psfs.map(p=>(p-mean)**2).reduce((a,b)=>a+b,0)/psfs.length)
-    const totalSF=comps.filter(c=>c.building_sf&&c.price_per_sf).reduce((a,c)=>a+c.building_sf,0)
-    const weighted=totalSF>0?comps.filter(c=>c.building_sf&&c.price_per_sf).reduce((a,c)=>a+c.price_per_sf*c.building_sf,0)/totalSF:mean
-    const low=mean-std*0.5, market=mean, high=mean+std*0.5
-    const suggested=Math.round(market*1.05/5)*5
-    return {mean,median,std,weighted,min:Math.min(...psfs),max:Math.max(...psfs),low,market,high,suggested,aMean:0,count:comps.length}
-  }
-  const a: AnalyticsData|null = analytics || computeAnalytics()
+  // Fallback when Analytics hasn't been run yet: same calculation, from the sale comps alone
+  const fallback = () => { const r=computeAnalytics({isLease:false,comps,avails:[],leaseComps:[]}); return typeof r==='string'?null:r }
+  const a: AnalyticsData|null = analytics || fallback()
   const updateSubjectValue = (k: string, v: string) => {
     if (!subject) return
     setSubject({...subject, [k]: v})
@@ -4269,6 +4210,23 @@ function OPVReport({subject,comps,leaseComps,leaseAvails=[],avails,analytics,aiT
       cleanupPrint()
     }
   }, [])
+
+  // Server-side PDF export (/api/opv-pdf) loads /?opv=<id>&view=report&pdf=1 in a headless browser,
+  // waits for window.__opvPdfReady, then prints. Same print copy as the Print button.
+  useEffect(() => {
+    if (!subject || !new URLSearchParams(window.location.search).get('pdf')) return
+    let cancelled = false
+    const t = setTimeout(async () => {
+      const imgs = Array.from(document.querySelectorAll<HTMLImageElement>('.print-area img'))
+      await Promise.race([
+        Promise.all(imgs.map(img => img.complete ? null : new Promise(r => { img.onload = img.onerror = r }))),
+        new Promise(r => setTimeout(r, 15000)),
+      ])
+      if (cancelled) return
+      if (preparePrint()) (window as unknown as { __opvPdfReady?: boolean }).__opvPdfReady = true
+    }, 1500)
+    return () => { cancelled = true; clearTimeout(t) }
+  }, [subject])
 
   const downloadPDF = () => {
     if (!preparePrint()) { toast('Please view the OPV report before printing.'); return }
@@ -5492,6 +5450,8 @@ export default function App() {
   }
 
   const saveReport=async(silent=false)=>{
+    // The PDF export's headless browser only reads; it must never save over the OPV
+    if (new URLSearchParams(window.location.search).get('pdf')) return
     const fields = currentFieldsRef.current
     if(!fields.subject){if(!silent)toast('Enter a subject property address first.');return}
     const existingId = savedOPVIdRef.current
@@ -5580,6 +5540,15 @@ export default function App() {
   const restoreOPVRef = useRef<(id: string, opts?: { keepPage?: boolean, background?: boolean }) => Promise<void>>(async () => {})
   useEffect(() => { restoreOPVRef.current = restoreOPV })
   useEffect(() => {
+    // Deep link from the Claude connector: /?opv=<id> opens that OPV, &view=report jumps to the report
+    const params = new URLSearchParams(window.location.search)
+    const linkedId = params.get('opv')
+    if (linkedId) {
+      const view = params.get('view')
+      restoreOPVRef.current(linkedId).then(() => { if (view === 'report') setPage('opv-report') }).finally(() => { readyRef.current = true })
+      window.history.replaceState(null, '', params.get('pdf') ? window.location.href : window.location.pathname)
+      return
+    }
     const storedId = localStorage.getItem('opv_saved_id')
     if (!storedId) { readyRef.current = true; return }
     restoreOPVRef.current(storedId, { keepPage: true, background: true }).finally(() => { readyRef.current = true })
